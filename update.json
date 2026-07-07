@@ -1,0 +1,32 @@
+{
+  "channel": "studio-preview",
+  "latestVersion": "2.2.2-studio-preview.5.2",
+  "versionCode": 20502,
+  "title": "CDBox Studio Preview 5.2",
+  "releaseDate": "2026-07-07",
+  "mandatory": false,
+  "package": {
+    "fileName": "CDBox_Studio_Preview_5.2.zip",
+    "size": 6486522,
+    "sha256": "FA49FEB7A6657CAEA209BF53D0BCA089389DA59541EDB82CF655FCAD238593EF",
+    "urls": [
+      {
+        "name": "Gitee",
+        "url": "https://gitee.com/chaun-skye/CDBox/releases/download/CDBox-Studio-Preview-4.3/CDBox_Studio_Preview_5.2.zip"
+      },
+      {
+        "name": "GitCode",
+        "url": "https://gitcode.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-4.3/CDBox_Studio_Preview_5.2.zip"
+      },
+      {
+        "name": "GitHub备用",
+        "url": "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-4.3/CDBox_Studio_Preview_5.2.zip"
+      }
+    ]
+  },
+  "notes": [
+    "完善插件内联网更新系统",
+    "增加多源下载和 SHA256 校验",
+    "优化属性默认表 WebView2 页面"
+  ]
+}
