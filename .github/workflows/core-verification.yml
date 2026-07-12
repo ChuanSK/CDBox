@@ -1,0 +1,40 @@
+name: Core verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: Updater build and core tests
+    runs-on: windows-2022
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore independent projects
+        shell: pwsh
+        run: |
+          dotnet restore CDBoxUpdater/CDBoxUpdater.csproj
+          dotnet restore tests/CDBox.CoreTests/CDBox.CoreTests.csproj
+
+      - name: Build updater
+        run: dotnet build CDBoxUpdater/CDBoxUpdater.csproj -c Release --no-restore
+
+      - name: Run core tests
+        run: dotnet run --project tests/CDBox.CoreTests/CDBox.CoreTests.csproj -c Release --no-restore

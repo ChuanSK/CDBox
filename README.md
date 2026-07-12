@@ -43,6 +43,8 @@ dotnet run --project tests\CDBox.CoreTests\CDBox.CoreTests.csproj -c Debug
 
 任一断言失败时进程返回非零退出码，适合放入后续 CI。涉及 AutoCAD Database、Editor、WebView2 或 CASS 的流程仍需宿主内集成测试和人工回归。
 
+仓库已配置 `.github/workflows/core-verification.yml`：每次 push、Pull Request 或手动触发时，使用 Windows runner 构建独立更新器并运行 Release 核心测试。该流程不需要安装 AutoCAD；宿主相关验证仍按下述脚本和人工回归清单执行。
+
 AutoCAD 2023 Core Console 宿主冒烟测试：
 
 ```powershell
