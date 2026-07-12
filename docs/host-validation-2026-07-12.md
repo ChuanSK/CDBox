@@ -28,14 +28,16 @@
 
 ## 交互式启动结果
 
-自动脚本成功创建隔离图纸并启动 `acad.exe`，但当前自动化执行会话中的 AutoCAD 停在 Autodesk 自身的授权/初始化阶段，没有创建可见顶层窗口，也没有执行到插件 Studio 日志。确认进程无窗口后，仅终止了本次测试创建的 AutoCAD 进程；没有发现遗留的 `acad`、`accoreconsole` 或 `CDBoxUpdater` 进程。
+自动化执行会话中的首次 GUI 启动曾停在 Autodesk 自身的授权/初始化阶段，因此仅终止了该次测试创建的后台 AutoCAD 进程。随后从用户桌面会话正常启动 AutoCAD 2023，并完成交互式验证。
 
-这不属于插件加载失败：同一 Release DLL 已在 AutoCAD Core Console 中成功加载并完成全部宿主检查。可视化 Studio、CASS 命令和交互式 CAD 操作仍需从用户桌面正常启动 AutoCAD 后，按照 `docs\manual-regression.md` 继续验证。
+用户确认以下项目工作正常：
 
-## 下一步人工入口
+| 交互检查项 | 结果 |
+|---|---|
+| CDBox Studio 窗口显示与 WebView2 初始化 | PASS |
+| 图层管理功能 | PASS |
+| 标注相关功能 | PASS |
+| 工程量动态看板 | PASS |
+| 其他已检查的 Studio 页面与入口 | PASS |
 
-1. 从桌面正常启动 AutoCAD 2023，确认 Autodesk 授权完成。
-2. 执行 `NETLOAD`，选择 `bin\Release\net48\CDBox.dll`。
-3. 执行 `CDSELFTEST`，确认命令行末尾为 `CDBOX_SELFTEST_RESULT=PASS`。
-4. 执行 `CDSTUDIO`，检查总览、图层管理、标注设置、工程量看板和设置页。
-5. 使用测试 DWG 完成 CASS 表面积标注、工程量属性、GCL 和实时看板回归。
+至此，Preview 6 已同时通过核心逻辑测试、AutoCAD Core Console 只读宿主自检和桌面 AutoCAD 交互式验证。后续针对具体业务算法的修改，仍应按 `docs\manual-regression.md` 对受影响模块做定向回归。
