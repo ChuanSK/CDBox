@@ -589,6 +589,12 @@ namespace TCPipeAutoDraw.Commands
             ShowQuantityPipeAttributeEditor();
         }
 
+        [CommandMethod("SXLEGACY", CommandFlags.Modal | CommandFlags.UsePickSet)]
+        public void ShowLegacyQuantityPipeAttributeEditor()
+        {
+            ShowQuantityPipeAttributeEditor(true);
+        }
+
         [CommandMethod("SXQC", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void ClearQuantityAttributesByShortName()
         {
@@ -933,6 +939,11 @@ namespace TCPipeAutoDraw.Commands
 
         private void ShowQuantityPipeAttributeEditor()
         {
+            ShowQuantityPipeAttributeEditor(false);
+        }
+
+        private void ShowQuantityPipeAttributeEditor(bool legacy)
+        {
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
@@ -951,6 +962,12 @@ namespace TCPipeAutoDraw.Commands
                     if (info == null)
                     {
                         MessageBox.Show("所选对象无法识别为主管、支管或节点/检查井，未填入属性。\n请先在图层管理中设置父属性/标签，或选择正确对象。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    if (!legacy)
+                    {
+                        CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, QuantityDashboardService.GetDocumentId(doc));
                         return;
                     }
 

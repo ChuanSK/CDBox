@@ -81,6 +81,7 @@ Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一�
 - `TCGL`：图层管理器
 - `BZSZ`：统一标注设置
 - `SX`：工程量属性编辑器
+- `SXLEGACY`：旧版 WinForms 工程量属性编辑器
 - `GCL`：正式工程量表
 - `CDQBOARD`：工程量动态看板独立窗口
 - `CDSELFTEST`：只读宿主环境自检

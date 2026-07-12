@@ -25,6 +25,7 @@ namespace CDBox.CoreTests
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("Studio 收藏与最近使用", TestStudioState);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
+            Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
 
@@ -157,6 +158,19 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
             True(standalone.IndexOf("data-theme=\"fresh\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
             True(standalone.IndexOf("class=\"no-animations\"", StringComparison.Ordinal) >= 0, "独立页应继承动画设置");
+        }
+
+        private static void TestQuantityAttributeEditorSharedPage()
+        {
+            string embedded = CDBoxStudioQuantityAttributeEditorPage.BuildEmbeddedSection();
+            string standalone = CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(
+                new CDBoxStudioSettings { Theme = "dark", AnimationsEnabled = false }, "test.log", "drawing.dwg", "A1");
+
+            True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
+            True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
+            True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
+            True(standalone.IndexOf("Preview 9", StringComparison.Ordinal) >= 0, "页面应显示 Preview 9 身份");
+            True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
         }
 
         private static void TestUpdaterRejectsZipTraversal()

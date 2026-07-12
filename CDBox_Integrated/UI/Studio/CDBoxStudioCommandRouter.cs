@@ -45,6 +45,9 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioRouteResult quantityDashboardResult;
             if (CDBoxStudioQuantityDashboardRoutes.TryRoute(request, out quantityDashboardResult)) return quantityDashboardResult;
 
+            CDBoxStudioRouteResult quantityAttributeResult;
+            if (CDBoxStudioQuantityAttributeEditorRoutes.TryRoute(request, out quantityAttributeResult)) return quantityAttributeResult;
+
             CDBoxStudioRouteResult layerManagerResult;
             if (CDBoxStudioLayerManagerRoutes.TryRoute(request, false, out layerManagerResult)) return layerManagerResult;
 
@@ -101,6 +104,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "openquantitydashboardwindow":
                     return RouteOpenQuantityDashboardWindow();
+
+                case "openquantityattributeeditorwindow":
+                    return RouteOpenQuantityAttributeEditorWindow(request.Argument);
 
                 case "layermanageropened":
                     return RouteLayerManagerOpened();
@@ -489,6 +495,33 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioLogger.Error("打开工程量动态看板独立 WebView2 窗口失败。", ex);
             }
             return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenQuantityAttributeEditorWindow(string payload)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioQuantityAttributeEditorRequest request = CDBoxStudioQuantityAttributeEditorApi.Deserialize<CDBoxStudioQuantityAttributeEditorRequest>(payload) ?? new CDBoxStudioQuantityAttributeEditorRequest();
+                Autodesk.AutoCAD.ApplicationServices.Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
+                QuantityPipeSelectionInfo info = doc == null || string.IsNullOrWhiteSpace(request.handle) ? null : QuantityPipeAttributeService.ReadPipe(doc, ResolveHandle(doc, request.handle));
+                CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, request.documentId);
+                result.ToastMessage = "已打开属性编辑器独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开属性编辑器 Preview 9 独立窗口失败。", ex);
+            }
+            return result;
+        }
+
+        private static Autodesk.AutoCAD.DatabaseServices.ObjectId ResolveHandle(Autodesk.AutoCAD.ApplicationServices.Document doc, string handle)
+        {
+            long value;
+            if (doc == null || !long.TryParse(handle, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out value)) return Autodesk.AutoCAD.DatabaseServices.ObjectId.Null;
+            try { return doc.Database.GetObjectId(false, new Autodesk.AutoCAD.DatabaseServices.Handle(value), 0); }
+            catch { return Autodesk.AutoCAD.DatabaseServices.ObjectId.Null; }
         }
 
         public void Dispose()

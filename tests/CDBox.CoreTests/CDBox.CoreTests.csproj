@@ -16,6 +16,7 @@
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioState.cs" Link="Source\CDBoxStudioState.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallException.cs" Link="Source\Updater\BundleInstallException.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallOutcome.cs" Link="Source\Updater\BundleInstallOutcome.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstaller.cs" Link="Source\Updater\BundleInstaller.cs" />
