@@ -5,6 +5,10 @@ VisualStudioVersion = 18.6.11822.322
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBox", "CDBox.csproj", "{19F16DB7-C3B9-B299-B71F-82AE02A750FD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBoxUpdater", "CDBoxUpdater\CDBoxUpdater.csproj", "{B7E0A8A1-4F21-4B62-9F4B-6D1E552E53A3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBox.CoreTests", "tests\CDBox.CoreTests\CDBox.CoreTests.csproj", "{7C41D47E-4498-44FC-A121-15A563745F11}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,15 @@ Global
 		{19F16DB7-C3B9-B299-B71F-82AE02A750FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{19F16DB7-C3B9-B299-B71F-82AE02A750FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{19F16DB7-C3B9-B299-B71F-82AE02A750FD}.Release|Any CPU.Build.0 = Release|Any CPU
+
+		{B7E0A8A1-4F21-4B62-9F4B-6D1E552E53A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7E0A8A1-4F21-4B62-9F4B-6D1E552E53A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7E0A8A1-4F21-4B62-9F4B-6D1E552E53A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7E0A8A1-4F21-4B62-9F4B-6D1E552E53A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C41D47E-4498-44FC-A121-15A563745F11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C41D47E-4498-44FC-A121-15A563745F11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C41D47E-4498-44FC-A121-15A563745F11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C41D47E-4498-44FC-A121-15A563745F11}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

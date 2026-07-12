@@ -1,7 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Windows.Forms;
+using TCPipeAutoDraw.Modules.LayerManager;
+using TCPipeAutoDraw.Modules.QuantityCalculation;
+using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
@@ -9,12 +13,24 @@ namespace TCPipeAutoDraw.UI.Studio
     {
         private readonly Dictionary<string, CDBoxStudioAction> _actionsById;
         private readonly CDBoxStudioState _state;
+        private readonly CDBoxStudioSettings _settings;
+        private readonly Action<string> _scriptSink;
+        private readonly CDBoxStudioUpdateRoutes _updateRoutes;
 
-        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioState state)
+        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioState state, CDBoxStudioSettings settings)
+            : this(actionsById, state, settings, null)
+        {
+        }
+
+        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioState state, CDBoxStudioSettings settings, Action<string> scriptSink)
         {
             if (actionsById == null) throw new ArgumentNullException("actionsById");
             _actionsById = actionsById;
             _state = state ?? new CDBoxStudioState();
+            _settings = settings ?? new CDBoxStudioSettings();
+            _scriptSink = scriptSink;
+            CDBoxStudioQuantityDashboardRoutes.Configure(_scriptSink);
+            _updateRoutes = new CDBoxStudioUpdateRoutes(_settings, _scriptSink, ApplySettingsArgument);
         }
 
         public CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)
@@ -25,6 +41,18 @@ namespace TCPipeAutoDraw.UI.Studio
                 result.Handled = false;
                 return result;
             }
+
+            CDBoxStudioRouteResult quantityDashboardResult;
+            if (CDBoxStudioQuantityDashboardRoutes.TryRoute(request, out quantityDashboardResult)) return quantityDashboardResult;
+
+            CDBoxStudioRouteResult layerManagerResult;
+            if (CDBoxStudioLayerManagerRoutes.TryRoute(request, false, out layerManagerResult)) return layerManagerResult;
+
+            CDBoxStudioRouteResult annotationResult;
+            if (CDBoxStudioAnnotationSettingsRoutes.TryRoute(request, false, out annotationResult)) return annotationResult;
+
+            CDBoxStudioRouteResult updateResult;
+            if (_updateRoutes.TryRoute(request, out updateResult)) return updateResult;
 
             string name = request.Name.Trim().ToLowerInvariant();
             switch (name)
@@ -40,6 +68,45 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "favorite":
                     return RouteFavorite(request.Argument);
+
+                case "removefavorite":
+                    return RouteRemoveFavorite(request.Argument);
+
+                case "clearrecent":
+                    return RouteClearRecent();
+
+                case "settings":
+                    return RouteSettings(request.Argument);
+
+                case "saverecognitionrules":
+                    return RouteSaveRecognitionRules(request.Argument);
+
+                case "openlegacyrecognition":
+                    return RouteOpenLegacyRecognitionRules();
+
+                case "openrecognitionwindow":
+                    return RouteOpenRecognitionWindow();
+
+                case "savedefaultprofiles":
+                    return RouteSaveDefaultProfiles(request.Argument);
+
+                case "opendefaultprofileswindow":
+                    return RouteOpenDefaultProfilesWindow();
+
+                case "openlegacydefaultprofiles":
+                    return RouteOpenLegacyDefaultProfiles();
+
+                case "openlayermanagerwindow":
+                    return RouteOpenLayerManagerWindow();
+
+                case "layermanageropened":
+                    return RouteLayerManagerOpened();
+
+                case "openannotationsettingswindow":
+                    return RouteOpenAnnotationSettingsWindow(request.Argument);
+
+                case "annotationsettingsopened":
+                    return RouteAnnotationSettingsOpened(request.Argument);
 
                 case "openlogs":
                     return RouteOpenLogs();
@@ -100,6 +167,353 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioLogger.Info((added ? "收藏入口：" : "取消收藏入口：") + action.Title + " [" + action.Id + "]");
             result.ToastMessage = added ? "已收藏：" + action.Title : "已取消收藏：" + action.Title;
             return result;
+        }
+
+        private CDBoxStudioRouteResult RouteRemoveFavorite(string id)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = "success" };
+
+            CDBoxStudioAction action;
+            if (string.IsNullOrWhiteSpace(id) || !_actionsById.TryGetValue(id.Trim(), out action) || action == null)
+            {
+                result.ToastMessage = "未找到该收藏入口";
+                result.ToastKind = "warning";
+                return result;
+            }
+
+            bool removed = _state.RemoveFavorite(action.Id);
+            SaveState();
+            CDBoxStudioLogger.Info("收藏管理移除：" + action.Title + " [" + action.Id + "]");
+            result.ToastMessage = removed ? "已从收藏移除：" + action.Title : "该功能不在收藏中";
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteClearRecent()
+        {
+            _state.ClearRecent();
+            SaveState();
+            CDBoxStudioLogger.Info("已清空 Studio 最近使用记录。 ");
+            return new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = true,
+                ToastKind = "success",
+                ToastMessage = "最近使用记录已清空"
+            };
+        }
+
+        private CDBoxStudioRouteResult RouteSettings(string argument)
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = "success",
+                ToastMessage = "Studio 设置已保存"
+            };
+
+            try
+            {
+                ApplySettingsArgument(argument);
+                CDBoxStudioSettingsStore.Save(_settings);
+                CDBoxStudioLogger.Info("保存 Studio 设置：Theme=" + _settings.Theme
+                    + ", AnimationsEnabled=" + _settings.AnimationsEnabled
+                    + ", SidebarCollapsedDefault=" + _settings.SidebarCollapsedDefault
+                    + ", UpdateChannel=" + _settings.UpdateChannel
+                    + ", UpdateSourceUrl=" + _settings.UpdateSourceUrl);
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "设置保存失败：" + ex.Message;
+                CDBoxStudioLogger.Error("保存 Studio 设置失败。", ex);
+            }
+
+            return result;
+        }
+
+        private void ApplySettingsArgument(string argument)
+        {
+            if (string.IsNullOrWhiteSpace(argument)) return;
+
+            string[] parts = argument.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string part in parts)
+            {
+                string[] kv = part.Split(new[] { '=' }, 2);
+                string key = kv.Length > 0 ? kv[0].Trim().ToLowerInvariant() : string.Empty;
+                string value = kv.Length > 1 ? DecodeArgumentValue(kv[1].Trim()) : string.Empty;
+
+                switch (key)
+                {
+                    case "theme":
+                        if (CDBoxStudioSettings.IsValidTheme(value)) _settings.Theme = value.ToLowerInvariant();
+                        break;
+                    case "animations":
+                        _settings.AnimationsEnabled = IsTrue(value);
+                        break;
+                    case "sidebarcollapsed":
+                        _settings.SidebarCollapsedDefault = IsTrue(value);
+                        break;
+                    case "updatechannel":
+                        _settings.UpdateChannel = value;
+                        break;
+                    case "updatesourceurl":
+                        _settings.UpdateSourceUrl = value;
+                        break;
+                }
+            }
+
+            _settings.Normalize();
+        }
+
+        private static string DecodeArgumentValue(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            try
+            {
+                return Uri.UnescapeDataString(value.Replace("+", "%20"));
+            }
+            catch
+            {
+                return value;
+            }
+        }
+
+        private static bool IsTrue(string value)
+        {
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+        }
+
+
+        private CDBoxStudioRouteResult RouteSaveRecognitionRules(string payload)
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                int count = CDBoxStudioRecognitionRules.SavePayload(payload);
+                result.ToastMessage = "属性识别表已保存：" + count + " 条规则";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "属性识别表保存失败：" + ex.Message;
+                CDBoxStudioLogger.Error("Studio 保存属性识别表失败。", ex);
+            }
+
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteSaveDefaultProfiles(string payload)
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                int count = CDBoxStudioDefaultProfiles.SavePayload(payload);
+                result.ToastMessage = "属性默认表已保存：" + count + " 个字段";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "属性默认表保存失败：" + ex.Message;
+                CDBoxStudioLogger.Error("Studio 保存属性默认表失败。", ex);
+            }
+
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenDefaultProfilesWindow()
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                CDBoxStudioDefaultProfilesWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开属性默认表独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "属性默认表独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开属性默认表独立 WebView2 窗口失败。", ex);
+            }
+
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenLegacyDefaultProfiles()
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = true,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                using (var form = new QuantityDefaultProfileForm())
+                {
+                    form.ShowDialog(new AcadMainWindow());
+                }
+
+                result.ToastMessage = "旧版属性默认表已关闭，页面已刷新";
+                CDBoxStudioLogger.Info("通过旧版窗口打开属性默认表。路径：" + CDBoxStudioDefaultProfiles.DefaultsFilePath);
+            }
+            catch (Exception ex)
+            {
+                result.RefreshPage = false;
+                result.ToastKind = "error";
+                result.ToastMessage = "旧版属性默认表打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开旧版属性默认表失败。", ex);
+            }
+
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenRecognitionWindow()
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                CDBoxStudioRecognitionRulesWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开属性识别表独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "属性识别表独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开属性识别表独立 WebView2 窗口失败。", ex);
+            }
+
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenLegacyRecognitionRules()
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = true,
+                ToastKind = "success"
+            };
+
+            try
+            {
+                using (var form = new LayerRecognitionRulesForm(LayerManagerService.LoadRecognitionRules(), LayerManagerService.GetRecognitionRulesFilePath()))
+                {
+                    DialogResult dialogResult = form.ShowDialog(new AcadMainWindow());
+                    if (dialogResult == DialogResult.OK)
+                    {
+                        LayerManagerService.SaveRecognitionRules(form.Rules);
+                        result.ToastMessage = "旧版属性识别表已保存";
+                        CDBoxStudioLogger.Info("通过旧版窗口保存属性识别表。路径：" + LayerManagerService.GetRecognitionRulesFilePath());
+                    }
+                    else
+                    {
+                        result.RefreshPage = false;
+                        result.ToastKind = "info";
+                        result.ToastMessage = "已关闭旧版属性识别表";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.RefreshPage = false;
+                result.ToastKind = "error";
+                result.ToastMessage = "旧版属性识别表打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开旧版属性识别表失败。", ex);
+            }
+
+            return result;
+        }
+
+
+        private CDBoxStudioRouteResult RouteOpenLayerManagerWindow()
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioLayerManagerWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开图层管理器独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "图层管理器独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开图层管理器独立 WebView2 窗口失败。", ex);
+            }
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteLayerManagerOpened()
+        {
+            const string actionId = "module:layer-manager";
+            CDBoxStudioAction action;
+            if (_actionsById.TryGetValue(actionId, out action) && action != null)
+            {
+                _state.MarkRecent(actionId);
+                SaveState();
+            }
+
+            CDBoxStudioLogger.Info("打开图层管理器 WebView2 页面。");
+            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = false };
+        }
+
+        private CDBoxStudioRouteResult RouteOpenAnnotationSettingsWindow(string section)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), section);
+                result.ToastMessage = "已打开标注设置独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "标注设置独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开标注设置独立 WebView2 窗口失败。", ex);
+            }
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteAnnotationSettingsOpened(string section)
+        {
+            const string actionId = "module:annotation-settings";
+            CDBoxStudioAction action;
+            if (_actionsById.TryGetValue(actionId, out action) && action != null)
+            {
+                _state.MarkRecent(actionId);
+                SaveState();
+            }
+
+            CDBoxStudioLogger.Info("打开标注设置 WebView2 页面，模块：" + (section ?? "surface"));
+            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = false };
         }
 
         private CDBoxStudioRouteResult RouteOpenLogs()

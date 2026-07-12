@@ -139,7 +139,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 AddButton(buttons, "调换起终点", 110, delegate { SwapStartEndNodes(); });
                 AddButton(buttons, "选终点井", 90, delegate { SelectNodeManually(false); });
                 AddButton(buttons, "选起点井", 90, delegate { SelectNodeManually(true); });
-                AddButton(buttons, "重新识别起终点", 130, delegate { ReDetectNodes(); });
             }
         }
 
@@ -202,7 +201,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 _attributes.ObjectKind = _kind;
                 _attributes = QuantityPipeAttributeService.RefreshAttributesForObject(_doc, _objectId, _attributes);
                 _fields.LoadAttributes(_attributes, _cadLength);
-                _lblStatus.Text = "已刷新：补齐空白字段并重新计算相关数值；已有平均深度不会被覆盖。";
+                _lblStatus.Text = "已刷新：自动识别规格、起终点，并重新计算平均开挖深度等相关数值。";
             }
             catch (System.Exception ex)
             {
@@ -256,7 +255,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 _attributes = QuantityPipeAttributeService.ReDetectConnectedNodeInfo(_doc, _objectId, _attributes);
                 _fields.UpdateMainPipeStartEndFields(_attributes, true);
-                _lblStatus.Text = "已重新识别起终点，仅更新起点井、终点井及对应深度。";
+                _lblStatus.Text = "已重新识别起终点，并按当前结构层重新计算平均开挖深度。";
             }
             catch (System.Exception ex)
             {
@@ -422,6 +421,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private TextBox _averageDepthBox;
         private QuantityStructureLayerEditor _structureEditor;
         private bool _loadingAttributes;
+        private bool _updatingDerivedValues;
+        private double _lastPipeCushion;
 
         public QuantityAttributeFieldsPanel(string kind, bool defaultMode)
         {
@@ -464,10 +465,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 TextBox endDepthBox = AddNumber("EndDepth", "终点深度 m");
                 TextBox averageDepthBox = AddNumber("AverageDepth", "平均深度 m");
 
-                EventHandler updateStructure = delegate { if (!_loadingAttributes) UpdateStructureLayerEditor(false); };
-                startDepthBox.TextChanged += updateStructure;
-                endDepthBox.TextChanged += updateStructure;
-                averageDepthBox.TextChanged += updateStructure;
+                EventHandler updateDepth = delegate { if (!_loadingAttributes) RecalculateMainPipeDerivedValuesFromDepthChange(); };
+                startDepthBox.TextChanged += updateDepth;
+                endDepthBox.TextChanged += updateDepth;
+                averageDepthBox.TextChanged += delegate { if (!_loadingAttributes && !_updatingDerivedValues) UpdateStructureLayerEditor(false); };
             }
             AddNumber("TrenchWidth", "开挖宽度 m");
             AddNumber("RoadThickness", "原路面结构层 m");
@@ -573,6 +574,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             editor.Height = 220;
             editor.RequestTotalHeight += delegate { return GetStructureTotalHeight(); };
             editor.RequestPipeDiameter += delegate { return GetPipeDiameterForStructureCheck(); };
+            editor.StructureChanged += delegate { if (!_loadingAttributes) OnStructureLayerEditorChanged(); };
             _structureEditor = editor;
             AddControl(key, label, editor);
         }
@@ -672,6 +674,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             UpdateStructureLayerEditor(false);
+            _lastPipeCushion = GetPipeCushionForUi();
         }
 
         public void SwapMainPipeStartEnd()
@@ -688,7 +691,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             SetNumber("StartDepth", endDepth);
             SetNumber("EndDepth", startDepth);
 
-            UpdateStructureLayerEditor(false);
+            RecalculateMainPipeDerivedValuesFromDepthChange();
         }
 
         public void UpdateMainPipeStartEndFields(QuantityPipeAttributes attrs, bool setAverageIfEmpty)
@@ -704,16 +707,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 SetText("EndNode", attrs.EndNode);
                 SetNumber("EndDepth", attrs.EndDepth);
 
-                // 平均深度已允许用户手动修改；重新识别起终点时不主动覆盖已有平均深度。
-                // 仅当平均深度为空或小于等于 0 时，根据新识别的起终点深度带入一次。
+                // 起点深度、终点深度已经是“井深 + 当前管线垫层”后的开挖深度，
+                // 因此平均深度直接按当前起终点深度实时计算。
                 if (setAverageIfEmpty)
                 {
-                    double currentAverage = GetNumber("AverageDepth", 0.0);
-                    if (currentAverage <= 0)
-                    {
-                        double average = ResolveAverageDepthForDisplay(attrs);
-                        if (average > 0) SetNumber("AverageDepth", average);
-                    }
+                    double average = CalculateMainPipeAverageDepthForUi();
+                    if (average <= 0) average = ResolveAverageDepthForDisplay(attrs);
+                    if (average > 0) SetNumber("AverageDepth", average);
                 }
             }
             finally
@@ -739,7 +739,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             attrs.EndNode = GetText("EndNode", attrs.EndNode);
             attrs.EndDepth = GetNumber("EndDepth", attrs.EndDepth);
             attrs.AverageDepth = GetNumber("AverageDepth", attrs.AverageDepth);
-            if (attrs.AverageDepth <= 0 && attrs.StartDepth > 0 && attrs.EndDepth > 0) attrs.AverageDepth = (attrs.StartDepth + attrs.EndDepth) / 2.0;
+            if (QuantityPipeAttributes.IsMainPipeKind(_kind))
+            {
+                double averageDepth = CalculateMainPipeAverageDepthForUi();
+                if (averageDepth > 0) attrs.AverageDepth = averageDepth;
+            }
             attrs.TrenchWidth = GetNumber("TrenchWidth", attrs.TrenchWidth);
             attrs.RoadThickness = GetNumber("RoadThickness", attrs.RoadThickness);
             attrs.ExcavationType = GetText("ExcavationType", attrs.ExcavationType);
@@ -812,6 +816,21 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             UpdateStructureLayerEditor(false);
         }
 
+        private double CalculateMainPipeAverageDepthForUi()
+        {
+            if (!QuantityPipeAttributes.IsMainPipeKind(_kind)) return 0.0;
+
+            // v22：起点深度、终点深度字段本身就是管线开挖深度。
+            // 平均深度直接随当前起终点深度实时变化，不再重复叠加管线垫层。
+            double startExcavationDepth = GetNumber("StartDepth", 0.0);
+            double endExcavationDepth = GetNumber("EndDepth", 0.0);
+
+            if (startExcavationDepth > 0 && endExcavationDepth > 0) return (startExcavationDepth + endExcavationDepth) / 2.0;
+            if (startExcavationDepth > 0) return startExcavationDepth;
+            if (endExcavationDepth > 0) return endExcavationDepth;
+            return 0.0;
+        }
+
         private static double ResolveAverageDepthForDisplay(QuantityPipeAttributes attrs)
         {
             if (attrs == null) return 0.0;
@@ -820,6 +839,93 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (attrs.StartDepth > 0) return attrs.StartDepth;
             if (attrs.EndDepth > 0) return attrs.EndDepth;
             return 0.0;
+        }
+
+        private void RecalculateMainPipeDerivedValuesFromDepthChange()
+        {
+            if (!QuantityPipeAttributes.IsMainPipeKind(_kind))
+            {
+                UpdateStructureLayerEditor(false);
+                return;
+            }
+
+            if (_updatingDerivedValues) return;
+            _updatingDerivedValues = true;
+            try
+            {
+                double average = CalculateMainPipeAverageDepthForUi();
+                if (average > 0) SetNumber("AverageDepth", average);
+                UpdateStructureLayerEditor(false);
+                _lastPipeCushion = GetPipeCushionForUi();
+            }
+            finally
+            {
+                _updatingDerivedValues = false;
+            }
+        }
+
+        private void OnStructureLayerEditorChanged()
+        {
+            if (_updatingDerivedValues) return;
+            _updatingDerivedValues = true;
+            try
+            {
+                if (QuantityPipeAttributes.IsMainPipeKind(_kind))
+                {
+                    double editedPipeCushion = GetPipeCushionForUi();
+                    ApplyPipeCushionDeltaToEndpointDepths(editedPipeCushion - _lastPipeCushion);
+                    SetMainPipeAverageFromCurrentEndpointDepths();
+
+                    // 用新的平均深度重新分配非锁定结构层。若被自动分配的刚好也是管线垫层，
+                    // 则再次把垫层差值同步到起终点深度，保证“结构层变，深度也变”。
+                    UpdateStructureLayerEditor(false);
+                    double recalculatedPipeCushion = GetPipeCushionForUi();
+                    ApplyPipeCushionDeltaToEndpointDepths(recalculatedPipeCushion - editedPipeCushion);
+                    SetMainPipeAverageFromCurrentEndpointDepths();
+                    _lastPipeCushion = recalculatedPipeCushion;
+                }
+                else
+                {
+                    UpdateStructureLayerEditor(false);
+                }
+            }
+            finally
+            {
+                _updatingDerivedValues = false;
+            }
+        }
+
+        private void ApplyPipeCushionDeltaToEndpointDepths(double delta)
+        {
+            if (Math.Abs(delta) <= 0.000001) return;
+            double startDepth = GetNumber("StartDepth", 0.0);
+            double endDepth = GetNumber("EndDepth", 0.0);
+            if (startDepth > 0) SetNumber("StartDepth", Math.Max(0.0, startDepth + delta));
+            if (endDepth > 0) SetNumber("EndDepth", Math.Max(0.0, endDepth + delta));
+        }
+
+        private void SetMainPipeAverageFromCurrentEndpointDepths()
+        {
+            double average = CalculateMainPipeAverageDepthForUi();
+            if (average > 0) SetNumber("AverageDepth", average);
+        }
+
+        private double GetPipeCushionForUi()
+        {
+            string structureText = GetText("BackfillStructure", string.Empty);
+            double pipeCushion = 0.0;
+            try
+            {
+                List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(structureText);
+                pipeCushion = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsSandCushion);
+            }
+            catch
+            {
+                pipeCushion = 0.0;
+            }
+
+            if (pipeCushion <= 0) pipeCushion = GetNumber("SandCushionThickness", 0.0);
+            return pipeCushion < 0 ? 0.0 : pipeCushion;
         }
 
         private static string NormalizeWellCoverMaterial(string value)
@@ -939,6 +1045,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         public event DoubleProvider RequestTotalHeight;
         public event DoubleProvider RequestPipeDiameter;
+        public event EventHandler StructureChanged;
 
         private readonly DataGridView _grid;
         private readonly Label _statusLabel;
@@ -963,11 +1070,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             buttons.AutoSize = true;
             root.Controls.Add(buttons, 0, 0);
 
-            AddSmallButton(buttons, "添加层", 70, delegate { AddLayer("回填层", 0.0, false, false); RecalculateAutoLayers(false); });
-            AddSmallButton(buttons, "删除层", 70, delegate { DeleteCurrentLayer(); RecalculateAutoLayers(false); });
-            AddSmallButton(buttons, "上移", 55, delegate { MoveCurrentLayer(-1); });
-            AddSmallButton(buttons, "下移", 55, delegate { MoveCurrentLayer(1); });
-            AddSmallButton(buttons, "自动计算", 80, delegate { RecalculateAutoLayers(true); });
+            AddSmallButton(buttons, "添加层", 70, delegate { AddLayer("回填层", 0.0, false, false); RecalculateAutoLayers(false); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "删除层", 70, delegate { DeleteCurrentLayer(); RecalculateAutoLayers(false); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "上移", 55, delegate { MoveCurrentLayer(-1); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "下移", 55, delegate { MoveCurrentLayer(1); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "自动计算", 80, delegate { RecalculateAutoLayers(true); RaiseStructureChanged(); });
 
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
@@ -996,9 +1103,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 {
                     if (e.ColumnIndex == 3 && GetBool(e.RowIndex, 3)) EnsureSinglePipeLayer(e.RowIndex);
                     RecalculateAutoLayers(false);
+                    RaiseStructureChanged();
                 }
             };
-            _grid.CellEndEdit += delegate { if (!_updating) RecalculateAutoLayers(false); };
+            _grid.CellEndEdit += delegate { if (!_updating) { RecalculateAutoLayers(false); RaiseStructureChanged(); } };
             _grid.DataError += delegate(object sender, DataGridViewDataErrorEventArgs e) { e.ThrowException = false; };
             root.Controls.Add(_grid, 0, 1);
 
@@ -1007,6 +1115,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _statusLabel.Padding = new Padding(0, 3, 0, 0);
             _statusLabel.Text = _nodeWellMode ? "非锁定层按井深自动分配；井下层位于井深之下，不参与扣减。" : "非锁定层会按总高自动分配；管线层高度应大于管径。";
             root.Controls.Add(_statusLabel, 0, 2);
+        }
+
+        private void RaiseStructureChanged()
+        {
+            if (_updating) return;
+            EventHandler handler = StructureChanged;
+            if (handler != null) handler(this, EventArgs.Empty);
         }
 
         public override string Text

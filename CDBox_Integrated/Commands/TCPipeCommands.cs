@@ -41,7 +41,13 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc != null)
             {
-                doc.Editor.WriteMessage("\nCDBOX 已加载\nCDBOX 打开合集界面\nCDCBL 唤出侧边栏\nCDSTUDIO 打开 WebView2 实验工作台\nBZSZ 打开标注设置\n");
+                doc.Editor.WriteMessage(" \n \n \n" +
+                                        "╭───────────────────────────╮\n" +
+                                        "│     超重氢工具箱  CDBox    │\n" +
+                                        "│───────────────────────────│\n" +
+                                        "│    WebView2 次时代工作台   │\n" +
+                                        "╰───────────────────────────╯\n" +
+                                        " \n \n");
             }
 
             QueueStartupWorkflow();

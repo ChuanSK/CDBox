@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -643,20 +643,19 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 return result;
             }
 
-            PromptPointOptions ppoEnd = new PromptPointOptions("\n请指定引线结束位置（注记位置）");
-            ppoEnd.UseBasePoint = true;
-            ppoEnd.BasePoint = pprStart.Value;
-            PromptPointResult pprEnd = doc.Editor.GetPoint(ppoEnd);
-            if (pprEnd.Status != PromptStatus.OK)
+            string annotationLayer = ResolveAnnotationLayer(options, result.BoundaryLayerName);
+            result.AnnotationLayerName = annotationLayer;
+            result.AnnotationFontName = options.AnnotationFontName;
+            string previewText = BuildAnnotationText(options, result);
+
+            Point3d previewAnnotationPoint;
+            if (!TryPromptAnnotationPointWithPreview(doc, pprStart.Value, previewText, options, out previewAnnotationPoint))
             {
                 result.Message = "已取消注记位置。";
                 return result;
             }
 
-            result.AnnotationPoint = pprEnd.Value;
-            string annotationLayer = ResolveAnnotationLayer(options, result.BoundaryLayerName);
-            result.AnnotationLayerName = annotationLayer;
-            result.AnnotationFontName = options.AnnotationFontName;
+            result.AnnotationPoint = previewAnnotationPoint;
 
             using (doc.LockDocument())
             {
@@ -665,11 +664,15 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 {
                     string text = BuildAnnotationText(options, result);
                     AttachmentPoint attachment = GetTextAttachment(result.AnnotationPoint, pprStart.Value);
-                    result.AnnotationObjectId = DrawAnnotationDbText(db, tr, result.AnnotationPoint, text, options.TextHeight, annotationLayer, 1, attachment, options.AnnotationFontName);
+                    ObjectId textStyleId = GetExistingTextStyleId(db, tr, options.AnnotationFontName);
+                    SurfaceTextLayoutMetrics metrics = BuildSurfaceTextLayoutMetrics(db, tr, text, options.TextHeight, textStyleId);
+                    SurfacePreviewLayout layout = BuildSurfacePreviewLayout(text, options.TextHeight, result.AnnotationPoint, attachment, metrics);
+
+                    result.AnnotationObjectId = DrawAnnotationDbTextCentered(db, tr, layout.TextPoint, text, options.TextHeight, annotationLayer, 7, textStyleId);
 
                     if (options.DrawLeader)
                     {
-                        result.LeaderObjectId = DrawLeader(db, tr, pprStart.Value, result.AnnotationObjectId, options.TextHeight, annotationLayer, attachment);
+                        result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
 
                     tr.Commit();
@@ -769,20 +772,19 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 return result;
             }
 
-            PromptPointOptions ppoEnd = new PromptPointOptions("\n请指定引线结束位置（注记位置）");
-            ppoEnd.UseBasePoint = true;
-            ppoEnd.BasePoint = pprStart.Value;
-            PromptPointResult pprEnd = doc.Editor.GetPoint(ppoEnd);
-            if (pprEnd.Status != PromptStatus.OK)
+            string annotationLayer = ResolveAnnotationLayer(options, result.BoundaryLayerName);
+            result.AnnotationLayerName = annotationLayer;
+            result.AnnotationFontName = options.AnnotationFontName;
+            string previewText = BuildAnnotationText(options, result);
+
+            Point3d previewAnnotationPoint;
+            if (!TryPromptAnnotationPointWithPreview(doc, pprStart.Value, previewText, options, out previewAnnotationPoint))
             {
                 result.Message = fallbackMessage + "但已取消注记位置。";
                 return result;
             }
 
-            result.AnnotationPoint = pprEnd.Value;
-            string annotationLayer = ResolveAnnotationLayer(options, result.BoundaryLayerName);
-            result.AnnotationLayerName = annotationLayer;
-            result.AnnotationFontName = options.AnnotationFontName;
+            result.AnnotationPoint = previewAnnotationPoint;
 
             using (doc.LockDocument())
             {
@@ -791,11 +793,15 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 {
                     string text = BuildAnnotationText(options, result);
                     AttachmentPoint attachment = GetTextAttachment(result.AnnotationPoint, pprStart.Value);
-                    result.AnnotationObjectId = DrawAnnotationDbText(db, tr, result.AnnotationPoint, text, options.TextHeight, annotationLayer, 1, attachment, options.AnnotationFontName);
+                    ObjectId textStyleId = GetExistingTextStyleId(db, tr, options.AnnotationFontName);
+                    SurfaceTextLayoutMetrics metrics = BuildSurfaceTextLayoutMetrics(db, tr, text, options.TextHeight, textStyleId);
+                    SurfacePreviewLayout layout = BuildSurfacePreviewLayout(text, options.TextHeight, result.AnnotationPoint, attachment, metrics);
+
+                    result.AnnotationObjectId = DrawAnnotationDbTextCentered(db, tr, layout.TextPoint, text, options.TextHeight, annotationLayer, 7, textStyleId);
 
                     if (options.DrawLeader)
                     {
-                        result.LeaderObjectId = DrawLeader(db, tr, pprStart.Value, result.AnnotationObjectId, options.TextHeight, annotationLayer, attachment);
+                        result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
 
                     tr.Commit();
@@ -1767,6 +1773,326 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             // 引线拉出点在注记左侧时，文字向右排；在注记右侧时，文字向左排。
             // 这样引线始终接到注记横线靠近边界的一侧，避免穿过文字。
             return leaderStartPoint.X <= annotationPoint.X ? AttachmentPoint.BottomLeft : AttachmentPoint.BottomRight;
+        }
+
+        private static bool TryPromptAnnotationPointWithPreview(Document doc, Point3d leaderStartPoint, string text, SurfaceAreaAnnotationOptions options, out Point3d annotationPoint)
+        {
+            annotationPoint = Point3d.Origin;
+            if (doc == null || doc.Editor == null) return false;
+
+            options = NormalizeOptions(options);
+            Database db = doc.Database;
+            ObjectId textStyleId = ObjectId.Null;
+            SurfaceTextLayoutMetrics metrics = CreateEstimatedSurfaceTextLayoutMetrics(text, options.TextHeight);
+
+            try
+            {
+                using (doc.LockDocument())
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    textStyleId = GetExistingTextStyleId(db, tr, options.AnnotationFontName);
+                    metrics = BuildSurfaceTextLayoutMetrics(db, tr, text, options.TextHeight, textStyleId);
+                    tr.Commit();
+                }
+            }
+            catch
+            {
+                metrics = CreateEstimatedSurfaceTextLayoutMetrics(text, options.TextHeight);
+            }
+
+            var jig = new SurfaceAreaAnnotationPreviewJig(db, leaderStartPoint, text, options.TextHeight, textStyleId, metrics, options.DrawLeader);
+            PromptResult dragResult = doc.Editor.Drag(jig);
+            if (dragResult.Status != PromptStatus.OK) return false;
+
+            annotationPoint = jig.AnnotationPoint;
+            return true;
+        }
+
+        private sealed class SurfaceAreaAnnotationPreviewJig : DrawJig
+        {
+            private readonly Database _database;
+            private readonly Point3d _leaderStartPoint;
+            private readonly string _text;
+            private readonly double _textHeight;
+            private readonly ObjectId _textStyleId;
+            private readonly SurfaceTextLayoutMetrics _metrics;
+            private readonly bool _drawLeader;
+            private Point3d _annotationPoint;
+
+            public SurfaceAreaAnnotationPreviewJig(Database database, Point3d leaderStartPoint, string text, double textHeight, ObjectId textStyleId, SurfaceTextLayoutMetrics metrics, bool drawLeader)
+            {
+                _database = database;
+                _leaderStartPoint = leaderStartPoint;
+                _text = string.IsNullOrWhiteSpace(text) ? "表面积标注" : text;
+                _textHeight = textHeight <= 0 ? 1.0 : textHeight;
+                _textStyleId = textStyleId;
+                _metrics = metrics ?? CreateEstimatedSurfaceTextLayoutMetrics(_text, _textHeight);
+                _drawLeader = drawLeader;
+                _annotationPoint = leaderStartPoint;
+            }
+
+            public Point3d AnnotationPoint
+            {
+                get { return _annotationPoint; }
+            }
+
+            protected override SamplerStatus Sampler(JigPrompts prompts)
+            {
+                var options = new JigPromptPointOptions("\n请指定注记位置，按 ESC 退出");
+                options.UseBasePoint = true;
+                options.BasePoint = _leaderStartPoint;
+                options.UserInputControls = UserInputControls.Accept3dCoordinates
+                    | UserInputControls.NoZeroResponseAccepted;
+
+                PromptPointResult result = prompts.AcquirePoint(options);
+                if (result.Status != PromptStatus.OK) return SamplerStatus.Cancel;
+
+                if (result.Value.DistanceTo(_annotationPoint) < DuplicateTolerance)
+                {
+                    return SamplerStatus.NoChange;
+                }
+
+                _annotationPoint = result.Value;
+                return SamplerStatus.OK;
+            }
+
+            protected override bool WorldDraw(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw)
+            {
+                if (draw == null || draw.Geometry == null) return true;
+
+                AttachmentPoint attachment = GetTextAttachment(_annotationPoint, _leaderStartPoint);
+                SurfacePreviewLayout layout = BuildSurfacePreviewLayout(_text, _textHeight, _annotationPoint, attachment, _metrics);
+
+                DrawPreviewDbText(draw, _database, layout.TextPoint, _text, _textHeight, _textStyleId);
+
+                if (_drawLeader)
+                {
+                    using (var polyline = new Autodesk.AutoCAD.DatabaseServices.Polyline())
+                    {
+                        Point3d leaderJoin = IsRightAttachment(attachment) ? layout.UnderlineEnd : layout.UnderlineStart;
+                        Point3d farEnd = IsRightAttachment(attachment) ? layout.UnderlineStart : layout.UnderlineEnd;
+
+                        polyline.AddVertexAt(0, new Point2d(_leaderStartPoint.X, _leaderStartPoint.Y), 0, 0, 0);
+                        polyline.AddVertexAt(1, new Point2d(leaderJoin.X, leaderJoin.Y), 0, 0, 0);
+                        polyline.AddVertexAt(2, new Point2d(farEnd.X, farEnd.Y), 0, 0, 0);
+                        polyline.ColorIndex = 7;
+                        draw.Geometry.Draw(polyline);
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        private sealed class SurfacePreviewLayout
+        {
+            public Point3d TextPoint { get; set; }
+            public double TextWidth { get; set; }
+            public double UnderlineWidth { get; set; }
+            public Point3d UnderlineStart { get; set; }
+            public Point3d UnderlineEnd { get; set; }
+        }
+
+        private sealed class SurfaceTextLayoutMetrics
+        {
+            public double TextWidth { get; set; }
+        }
+
+        private static SurfacePreviewLayout BuildSurfacePreviewLayout(string text, double textHeight, Point3d annotationPoint, AttachmentPoint attachment, SurfaceTextLayoutMetrics metrics)
+        {
+            if (textHeight <= 0) textHeight = 1.0;
+            metrics = metrics ?? CreateEstimatedSurfaceTextLayoutMetrics(text, textHeight);
+
+            double textWidth = Math.Max(metrics.TextWidth, EstimatePreviewTextWidth(text, textHeight));
+            double sideMargin = Math.Max(textHeight * 0.12, 0.03);
+            double lineWidth = textWidth + sideMargin * 2.0;
+            if (lineWidth < DuplicateTolerance) lineWidth = Math.Max(textHeight * 4.0, 1.0);
+
+            double lineGap = Math.Max(textHeight * 0.22, 0.05);
+            double lineY = annotationPoint.Y - lineGap;
+            double z = annotationPoint.Z;
+            double lineStartX;
+            double lineEndX;
+
+            // annotationPoint 始终作为横线靠近引线一侧的端点，保持预览与正式成图一致。
+            if (IsRightAttachment(attachment))
+            {
+                lineStartX = annotationPoint.X - lineWidth;
+                lineEndX = annotationPoint.X;
+            }
+            else
+            {
+                lineStartX = annotationPoint.X;
+                lineEndX = annotationPoint.X + lineWidth;
+            }
+
+            double centerX = (lineStartX + lineEndX) / 2.0;
+            var layout = new SurfacePreviewLayout();
+            layout.TextWidth = textWidth;
+            layout.UnderlineWidth = lineWidth;
+            layout.UnderlineStart = new Point3d(lineStartX, lineY, z);
+            layout.UnderlineEnd = new Point3d(lineEndX, lineY, z);
+            layout.TextPoint = new Point3d(centerX, annotationPoint.Y, z);
+            return layout;
+        }
+
+        private static void DrawPreviewDbText(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw, Database db, Point3d centerBaselinePoint, string text, double textHeight, ObjectId textStyleId)
+        {
+            if (draw == null || draw.Geometry == null || string.IsNullOrWhiteSpace(text)) return;
+            if (textHeight <= 0) textHeight = 1.0;
+
+            string normalized = NormalizeDbTextString(text);
+            try
+            {
+                using (var dbText = new DBText())
+                {
+                    if (db != null)
+                    {
+                        try { dbText.SetDatabaseDefaults(db); } catch { }
+                    }
+
+                    dbText.HorizontalMode = TextHorizontalMode.TextCenter;
+                    dbText.Position = centerBaselinePoint;
+                    dbText.AlignmentPoint = centerBaselinePoint;
+                    dbText.Height = textHeight;
+                    dbText.TextString = normalized;
+                    dbText.ColorIndex = 7;
+                    if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
+                    try { if (db != null) dbText.AdjustAlignment(db); } catch { }
+                    draw.Geometry.Draw(dbText);
+                }
+            }
+            catch
+            {
+                try
+                {
+                    draw.Geometry.Text(centerBaselinePoint, Vector3d.ZAxis, Vector3d.XAxis, textHeight, 1.0, 0.0, normalized);
+                }
+                catch { }
+            }
+        }
+
+        private static SurfaceTextLayoutMetrics BuildSurfaceTextLayoutMetrics(Database db, Transaction tr, string text, double textHeight, ObjectId textStyleId)
+        {
+            if (textHeight <= 0) textHeight = 1.0;
+
+            SurfaceTextLayoutMetrics estimated = CreateEstimatedSurfaceTextLayoutMetrics(text, textHeight);
+            var metrics = new SurfaceTextLayoutMetrics();
+            metrics.TextWidth = Math.Max(estimated.TextWidth, MeasureDbTextWidth(db, tr, text, textHeight, textStyleId, estimated.TextWidth));
+            return metrics;
+        }
+
+        private static SurfaceTextLayoutMetrics CreateEstimatedSurfaceTextLayoutMetrics(string text, double textHeight)
+        {
+            var metrics = new SurfaceTextLayoutMetrics();
+            metrics.TextWidth = EstimatePreviewTextWidth(text, textHeight);
+            return metrics;
+        }
+
+        private static double MeasureDbTextWidth(Database db, Transaction tr, string text, double textHeight, ObjectId textStyleId, double fallbackWidth)
+        {
+            if (db == null || tr == null || string.IsNullOrWhiteSpace(text)) return fallbackWidth;
+            if (textHeight <= 0) textHeight = 1.0;
+
+            DBText tempText = null;
+            try
+            {
+                BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+
+                tempText = new DBText();
+                try { tempText.SetDatabaseDefaults(db); } catch { }
+                tempText.Position = Point3d.Origin;
+                tempText.Height = textHeight;
+                tempText.TextString = NormalizeDbTextString(text);
+                if (!textStyleId.IsNull) tempText.TextStyleId = textStyleId;
+                tempText.HorizontalMode = TextHorizontalMode.TextLeft;
+
+                btr.AppendEntity(tempText);
+                tr.AddNewlyCreatedDBObject(tempText, true);
+                try { tempText.AdjustAlignment(db); } catch { }
+
+                Extents3d extents = tempText.GeometricExtents;
+                double width = Math.Abs(extents.MaxPoint.X - extents.MinPoint.X);
+
+                try { tempText.Erase(); } catch { }
+                return width > DuplicateTolerance ? Math.Max(width, fallbackWidth) : fallbackWidth;
+            }
+            catch
+            {
+                try
+                {
+                    if (tempText != null && !tempText.IsErased) tempText.Erase();
+                }
+                catch { }
+                return fallbackWidth;
+            }
+        }
+
+        private static double EstimatePreviewTextWidth(string text, double textHeight)
+        {
+            if (textHeight <= 0) textHeight = 1.0;
+            text = NormalizeDbTextString(text);
+            if (string.IsNullOrEmpty(text)) return Math.Max(textHeight * 4.0, 1.0);
+
+            double widthFactor = 0.0;
+            foreach (char ch in text)
+            {
+                if (ch <= 127)
+                {
+                    if (char.IsWhiteSpace(ch)) widthFactor += 0.35;
+                    else if (char.IsDigit(ch)) widthFactor += 0.68;
+                    else if (char.IsLetter(ch)) widthFactor += 0.72;
+                    else if (ch == '.' || ch == ',' || ch == ':' || ch == ';') widthFactor += 0.42;
+                    else widthFactor += 0.58;
+                }
+                else
+                {
+                    widthFactor += 1.08;
+                }
+            }
+
+            return Math.Max(widthFactor * textHeight, textHeight * 4.0);
+        }
+
+        private static ObjectId DrawAnnotationDbTextCentered(Database db, Transaction tr, Point3d centerBaselinePoint, string text, double height, string layerName, short colorIndex, ObjectId textStyleId)
+        {
+            if (db == null || tr == null || string.IsNullOrWhiteSpace(text)) return ObjectId.Null;
+
+            CadLayerService.EnsureLayer(db, tr, layerName, colorIndex);
+            BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+
+            var dbText = new DBText();
+            try { dbText.SetDatabaseDefaults(db); } catch { }
+            // 注意：必须先设置 HorizontalMode，再设置 AlignmentPoint。
+            // 否则部分 AutoCAD 环境会在 AlignmentPoint 处抛出 eNotApplicable。
+            dbText.HorizontalMode = TextHorizontalMode.TextCenter;
+            dbText.Position = centerBaselinePoint;
+            dbText.AlignmentPoint = centerBaselinePoint;
+            dbText.Height = height <= 0 ? 1.0 : height;
+            dbText.TextString = NormalizeDbTextString(text);
+            dbText.Layer = layerName;
+            dbText.ColorIndex = colorIndex;
+            if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
+
+            ObjectId id = btr.AppendEntity(dbText);
+            tr.AddNewlyCreatedDBObject(dbText, true);
+
+            try { dbText.AdjustAlignment(db); } catch { }
+            return id;
+        }
+
+        private static ObjectId DrawLeaderByUnderline(Database db, Transaction tr, Point3d leaderStartPoint, Point3d underlineStart, Point3d underlineEnd, string layerName, AttachmentPoint attachment)
+        {
+            Point3d leaderJoin = IsRightAttachment(attachment) ? underlineEnd : underlineStart;
+            Point3d farEnd = IsRightAttachment(attachment) ? underlineStart : underlineEnd;
+
+            var points = new List<Point3d>();
+            points.Add(leaderStartPoint);
+            if (leaderStartPoint.DistanceTo(leaderJoin) > DuplicateTolerance) points.Add(leaderJoin);
+            if (leaderJoin.DistanceTo(farEnd) > DuplicateTolerance) points.Add(farEnd);
+            if (points.Count < 2) return ObjectId.Null;
+
+            return CadDrawService.DrawPolyline(db, tr, points, layerName, 7);
         }
 
         private static ObjectId DrawAnnotationDbText(Database db, Transaction tr, Point3d position, string text, double height, string layerName, short colorIndex, AttachmentPoint attachment, string textStyleName)

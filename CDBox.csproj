@@ -1,6 +1,6 @@
 <!-- CDBoxNet.AutoCAD2023.csproj -->
 <!-- 面向 AutoCAD 2023 / CASS11 宿主环境的 .NET Framework 4.8 项目模板。 -->
-<!-- 编译前需确认 HintPath 与本机 AutoCAD 安装目录一致。 -->
+<!-- 非默认安装位置可通过 /p:AutoCADManagedDir="..." 覆盖。 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -9,32 +9,53 @@
     <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>2.6.0-studio-preview.6</Version>
+    <AssemblyVersion>2.6.0.0</AssemblyVersion>
+    <FileVersion>2.6.0.0</FileVersion>
+    <InformationalVersion>2.6.0-studio-preview.6</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <CDBoxVersionCode>20600</CDBoxVersionCode>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-6</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 6</CDBoxReleaseTitle>
+    <CDBoxPackageFileName>CDBox.Studio.Preview.6.zip</CDBoxPackageFileName>
+    <CDBoxAppVersion>2.6.0</CDBoxAppVersion>
+    <CDBoxUpdateChannel>studio-preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 	<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
+    <AutoCADManagedDir Condition="'$(AutoCADManagedDir)' == ''">C:\Program Files\Autodesk\AutoCAD 2023</AutoCADManagedDir>
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyMetadata Include="CDBoxVersionCode" Value="$(CDBoxVersionCode)" />
+    <AssemblyMetadata Include="CDBoxReleaseIdentity" Value="$(CDBoxReleaseIdentity)" />
+    <AssemblyMetadata Include="CDBoxReleaseTitle" Value="$(CDBoxReleaseTitle)" />
+    <AssemblyMetadata Include="CDBoxUpdateChannel" Value="$(CDBoxUpdateChannel)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="AcMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2023\AcMgd.dll</HintPath>
+      <HintPath>$(AutoCADManagedDir)\AcMgd.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="AcDbMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2023\AcDbMgd.dll</HintPath>
+      <HintPath>$(AutoCADManagedDir)\AcDbMgd.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="AcCoreMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2023\AcCoreMgd.dll</HintPath>
+      <HintPath>$(AutoCADManagedDir)\AcCoreMgd.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="NPOI" Version="2.8.0" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="CDBox_Integrated\Templates\工程量计算表模板.xls">
@@ -61,4 +82,24 @@
       <TargetPath>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
     </Content>
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="CDBoxUpdater\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
+    <ProjectReference Include="CDBoxUpdater\CDBoxUpdater.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyCDBoxUpdaterOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_CDBoxUpdaterFiles Include="$(MSBuildProjectDirectory)\CDBoxUpdater\bin\$(Configuration)\net48\CDBoxUpdater.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(TargetDir)Updater" />
+    <Copy SourceFiles="@(_CDBoxUpdaterFiles)" DestinationFolder="$(TargetDir)Updater" SkipUnchangedFiles="true" Condition="'@(_CDBoxUpdaterFiles)' != ''" />
+  </Target>
+
+  <Target Name="ValidateAutoCADManagedReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="!Exists('$(AutoCADManagedDir)\AcMgd.dll') Or !Exists('$(AutoCADManagedDir)\AcDbMgd.dll') Or !Exists('$(AutoCADManagedDir)\AcCoreMgd.dll')"
+      Text="未在 $(AutoCADManagedDir) 找到 AutoCAD 2023 托管程序集。请安装 AutoCAD 2023，或通过 /p:AutoCADManagedDir=&quot;实际目录&quot; 指定路径。" />
+  </Target>
 </Project>

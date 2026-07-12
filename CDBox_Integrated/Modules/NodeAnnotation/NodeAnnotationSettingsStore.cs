@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -41,35 +41,41 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
         public static void Save(NodeAnnotationOptions options)
         {
             if (options == null) return;
-            options = NormalizeOptions(options);
             try
             {
-                string path = GetSettingsPath();
-                string dir = Path.GetDirectoryName(path);
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                var lines = new List<string>();
-                lines.Add("TextHeight=" + options.TextHeight.ToString("0.###", CultureInfo.InvariantCulture));
-                lines.Add("DecimalPlaces=" + options.DecimalPlaces.ToString(CultureInfo.InvariantCulture));
-                lines.Add("AnnotationFontName=" + (options.AnnotationFontName ?? string.Empty));
-                lines.Add("AnnotationLayerName=" + (options.AnnotationLayerName ?? string.Empty));
-                lines.Add("LineSpacingFactor=" + options.LineSpacingFactor.ToString("0.###", CultureInfo.InvariantCulture));
-                lines.Add("NodeNoColorIndex=" + options.NodeNoColorIndex.ToString(CultureInfo.InvariantCulture));
-                lines.Add("TextColorIndex=" + options.TextColorIndex.ToString(CultureInfo.InvariantCulture));
-                lines.Add("PreviewLeaderColorIndex=" + options.PreviewLeaderColorIndex.ToString(CultureInfo.InvariantCulture));
-                File.WriteAllLines(path, lines.ToArray());
+                SaveStrict(options);
             }
             catch
             {
             }
         }
 
+        internal static void SaveStrict(NodeAnnotationOptions options)
+        {
+            if (options == null) throw new ArgumentNullException("options");
+            options = NormalizeOptions(options);
+
+            string path = GetSettingsPath();
+            string dir = Path.GetDirectoryName(path);
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var lines = new List<string>();
+            lines.Add("TextHeight=" + options.TextHeight.ToString("0.###", CultureInfo.InvariantCulture));
+            lines.Add("DecimalPlaces=" + options.DecimalPlaces.ToString(CultureInfo.InvariantCulture));
+            lines.Add("AnnotationFontName=" + (options.AnnotationFontName ?? string.Empty));
+            lines.Add("AnnotationLayerName=" + (options.AnnotationLayerName ?? string.Empty));
+            lines.Add("LineSpacingFactor=" + options.LineSpacingFactor.ToString("0.###", CultureInfo.InvariantCulture));
+            lines.Add("NodeNoColorIndex=" + options.NodeNoColorIndex.ToString(CultureInfo.InvariantCulture));
+            lines.Add("TextColorIndex=" + options.TextColorIndex.ToString(CultureInfo.InvariantCulture));
+            lines.Add("PreviewLeaderColorIndex=" + options.PreviewLeaderColorIndex.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllLines(path, lines.ToArray());
+        }
+
         private static NodeAnnotationOptions NormalizeOptions(NodeAnnotationOptions options)
         {
             options = options ?? NodeAnnotationOptions.Default;
             if (options.TextHeight <= 0) options.TextHeight = 1.0;
-            // 节点标注深度固定保留两位小数。
-            options.DecimalPlaces = 2;
+            options.DecimalPlaces = Math.Max(0, Math.Min(6, options.DecimalPlaces));
             if (string.IsNullOrWhiteSpace(options.AnnotationFontName)) options.AnnotationFontName = "宋体";
             if (string.IsNullOrWhiteSpace(options.AnnotationLayerName)) options.AnnotationLayerName = "ZJ";
             if (options.LineSpacingFactor <= 0.5) options.LineSpacingFactor = 1.45;

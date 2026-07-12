@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -13,6 +13,7 @@ namespace TCPipeAutoDraw.UI.Studio
     {
         private readonly Dictionary<string, CDBoxStudioAction> _actionsById = new Dictionary<string, CDBoxStudioAction>(StringComparer.OrdinalIgnoreCase);
         private readonly CDBoxStudioState _state;
+        private readonly CDBoxStudioSettings _settings;
         private CDBoxStudioCommandRouter _router;
         private WebView2 _webView;
         private bool _webViewReady;
@@ -29,6 +30,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
 
             _state = CDBoxStudioStateStore.Load();
+            _settings = CDBoxStudioSettingsStore.Load();
             SetActions(actions);
             BuildUi();
             CDBoxStudioLogger.Info("Studio 窗口构造完成。日志路径：" + CDBoxStudioLogger.LogFilePath);
@@ -48,7 +50,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
             _state.RemoveMissingActions(_actionsById.Keys);
             CDBoxStudioStateStore.Save(_state);
-            _router = new CDBoxStudioCommandRouter(_actionsById, _state);
+            _router = new CDBoxStudioCommandRouter(_actionsById, _state, _settings, PostScriptFromRouter);
             RefreshPage();
         }
 
@@ -99,7 +101,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private void RefreshPage()
         {
             if (!_webViewReady || _webView == null || _webView.IsDisposed || _webView.CoreWebView2 == null) return;
-            _webView.NavigateToString(CDBoxStudioHtml.Build(_actionsById.Values, _state, _runtimeVersion, CDBoxStudioLogger.LogFilePath));
+            _webView.NavigateToString(CDBoxStudioHtml.Build(_actionsById.Values, _state, _settings, _runtimeVersion, CDBoxStudioLogger.LogFilePath, CDBoxStudioSettingsStore.SettingsFilePath));
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -141,6 +143,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
 
             if (result.RefreshPage) RefreshPage();
+            if (!string.IsNullOrWhiteSpace(result.ExecuteScript)) ExecuteScript(result.ExecuteScript);
             if (!string.IsNullOrWhiteSpace(result.ToastMessage)) ShowToast(result.ToastMessage, result.ToastKind);
         }
 
@@ -176,18 +179,39 @@ namespace TCPipeAutoDraw.UI.Studio
             }
         }
 
-        private void ShowToast(string message, string kind)
+
+        private void PostScriptFromRouter(string script)
         {
-            if (string.IsNullOrWhiteSpace(message) || !_webViewReady || _webView == null || _webView.IsDisposed || _webView.CoreWebView2 == null) return;
+            if (string.IsNullOrWhiteSpace(script) || IsDisposed) return;
 
             try
             {
-                string script = "window.CDBoxStudioToast && window.CDBoxStudioToast(" + ToJsString(message) + "," + ToJsString(kind ?? "info") + ");";
+                if (InvokeRequired) BeginInvoke(new Action(delegate { ExecuteScript(script); }));
+                else ExecuteScript(script);
+            }
+            catch (Exception ex)
+            {
+                CDBoxStudioLogger.Error("执行 Studio 后台路由脚本失败。", ex);
+            }
+        }
+
+        private void ShowToast(string message, string kind)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
+            ExecuteScript("window.CDBoxStudioToast && window.CDBoxStudioToast(" + ToJsString(message) + "," + ToJsString(kind ?? "info") + ");");
+        }
+
+        private void ExecuteScript(string script)
+        {
+            if (string.IsNullOrWhiteSpace(script) || !_webViewReady || _webView == null || _webView.IsDisposed || _webView.CoreWebView2 == null) return;
+
+            try
+            {
                 _webView.CoreWebView2.ExecuteScriptAsync(script);
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error("发送 Toast 失败。", ex);
+                CDBoxStudioLogger.Error("执行 Studio 前端脚本失败。", ex);
             }
         }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -244,7 +244,7 @@ namespace TCPipeAutoDraw.Core.Startup
             catch (Exception ex)
             {
                 CDBoxInstallLogger.Error("安排更新失败。", ex);
-                return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
+                return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "\r\n\r\n日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
             }
         }
 
@@ -254,7 +254,7 @@ namespace TCPipeAutoDraw.Core.Startup
 
             var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                ".dll", ".pdb", ".config", ".json", ".xml", ".deps", ".targets", ".props",
+                ".dll", ".exe", ".pdb", ".config", ".json", ".xml", ".deps", ".targets", ".props",
                 ".html", ".htm", ".css", ".js", ".mjs", ".map", ".wasm",
                 ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
                 ".woff", ".woff2", ".ttf", ".eot", ".txt", ".csv", ".xls", ".xlsx"
@@ -287,6 +287,7 @@ namespace TCPipeAutoDraw.Core.Startup
                 CopyDirectoryIfExists(Path.Combine(root, "wwwroot"), Path.Combine(contentsDir, "wwwroot"));
                 CopyDirectoryIfExists(Path.Combine(root, "dist"), Path.Combine(contentsDir, "dist"));
                 CopyDirectoryIfExists(Path.Combine(root, "assets"), Path.Combine(contentsDir, "assets"));
+                CopyDirectoryIfExists(Path.Combine(root, "Updater"), Path.Combine(contentsDir, "Updater"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "Web"), Path.Combine(contentsDir, "Studio", "Web"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "dist"), Path.Combine(contentsDir, "Studio", "dist"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Studio"), Path.Combine(contentsDir, "Studio"));
@@ -539,6 +540,8 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 if (HasFrontendAssets(contentsDir)) ok.Add("Studio/Web 前端资源目录已安装或已内置");
                 else warnings.Add("未发现独立 Studio/Web 前端资源目录；当前 Preview 内置 HTML 可忽略，后续使用前端构建产物时请确认已复制到输出目录");
+
+                CheckFile(Path.Combine(contentsDir, "Updater", "CDBoxUpdater.exe"), "CDBoxUpdater.exe", ok, errors);
             }
             catch (Exception ex)
             {

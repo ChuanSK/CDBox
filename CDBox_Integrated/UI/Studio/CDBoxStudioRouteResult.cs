@@ -8,5 +8,6 @@ namespace TCPipeAutoDraw.UI.Studio
         public string ToastMessage { get; set; }
         public string ToastKind { get; set; }
         public string WindowTitleSuffix { get; set; }
+        public string ExecuteScript { get; set; }
     }
 }

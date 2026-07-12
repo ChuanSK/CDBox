@@ -660,8 +660,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
         {
             options = options ?? NodeAnnotationOptions.Default;
             if (options.TextHeight <= 0) options.TextHeight = 1.0;
-            // 节点标注深度固定保留两位小数。
-            options.DecimalPlaces = 2;
+            options.DecimalPlaces = Math.Max(0, Math.Min(6, options.DecimalPlaces));
             if (string.IsNullOrWhiteSpace(options.AnnotationFontName)) options.AnnotationFontName = "宋体";
             if (string.IsNullOrWhiteSpace(options.AnnotationLayerName)) options.AnnotationLayerName = "ZJ";
             if (options.LineSpacingFactor <= 0.5) options.LineSpacingFactor = 1.45;

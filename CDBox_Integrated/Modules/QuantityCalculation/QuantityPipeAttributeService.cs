@@ -232,10 +232,68 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (string.IsNullOrWhiteSpace(attributes.ObjectKind)) attributes.ObjectKind = InferObjectKind(db, tr, entity);
                 ApplyLayerMetadata(db, tr, entity, attributes);
                 WritePipeAttributes(entity, tr, attributes);
+
+                // 保存井属性后，同步刷新已绑定该井编号的主管起终点深度与平均开挖深度。
+                // 这样修改井深后，相关主管不会继续保留旧深度。
+                if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
+                {
+                    RefreshMainPipeDepthsLinkedToNode(db, tr, objectId, attributes);
+                }
+
                 tr.Commit();
             }
 
             return new QuantityPipeWriteResult { Success = true, SuccessCount = 1, Message = "已写入当前对象属性。" };
+        }
+
+        private static void RefreshMainPipeDepthsLinkedToNode(Database db, Transaction tr, ObjectId nodeObjectId, QuantityPipeAttributes nodeAttrs)
+        {
+            if (db == null || tr == null || nodeAttrs == null) return;
+            if (string.IsNullOrWhiteSpace(nodeAttrs.NodeNo)) return;
+
+            string nodeNo = nodeAttrs.NodeNo.Trim();
+            BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
+            if (space == null) return;
+
+            foreach (ObjectId id in space)
+            {
+                if (id.IsNull || id == nodeObjectId) continue;
+
+                try
+                {
+                    Entity entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (entity == null) continue;
+                    if (!HasPipeAttributes(entity, tr)) continue;
+
+                    QuantityPipeAttributes pipeAttrs = ReadPipeAttributes(entity, tr);
+                    if (pipeAttrs == null || !QuantityPipeAttributes.IsMainPipeKind(pipeAttrs.ObjectKind)) continue;
+
+                    bool changed = false;
+                    if (!string.IsNullOrWhiteSpace(pipeAttrs.StartNode)
+                        && string.Equals(pipeAttrs.StartNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        pipeAttrs.StartDepth = CalculatePipeEndpointDepthFromNode(pipeAttrs, nodeAttrs);
+                        changed = true;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(pipeAttrs.EndNode)
+                        && string.Equals(pipeAttrs.EndNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        pipeAttrs.EndDepth = CalculatePipeEndpointDepthFromNode(pipeAttrs, nodeAttrs);
+                        changed = true;
+                    }
+
+                    if (!changed) continue;
+                    RecalculateMainPipeAverageDepth(pipeAttrs);
+
+                    if (!entity.IsWriteEnabled) entity.UpgradeOpen();
+                    WritePipeAttributes(entity, tr, pipeAttrs);
+                }
+                catch
+                {
+                    // 单条主管同步失败不应影响井属性保存。
+                }
+            }
         }
 
         public static QuantityPipeWriteResult ApplyToSelection(Document doc, QuantityPipeAttributes sourceAttributes, bool keepIdentityFields)
@@ -411,7 +469,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             // v19 数据模型刷新：批量 SX 不再简单跳过已填对象。
                             // 未填对象按默认表建立；已填对象保留身份字段，同时让默认表控制字段与当前 SXMRB 默认表同步，
                             // 并始终执行一次识别/规格解析/依赖字段刷新，避免默认表调整后旧对象数据不更新。
-                            RefreshAttributeModel(db, tr, entity, attrs, defaultAttrs, kind, true, true);
+                            RefreshAttributeModel(db, tr, entity, attrs, defaultAttrs, kind, true, false);
 
                             if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                             WritePipeAttributes(entity, tr, attrs);
@@ -614,7 +672,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (entity != null) ApplyLayerMetadata(db, tr, entity, attributes);
                 if (entity != null && curve != null)
                 {
-                    TryFillConnectedNodeInfo(db, tr, entity, curve, attributes);
+                    TryFillConnectedNodeInfo(db, tr, entity, curve, attributes, true);
+                    RecalculateMainPipeAverageDepth(attributes);
                 }
                 tr.Commit();
             }
@@ -639,7 +698,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeAttributes defaults = QuantityAttributeDefaultStore.LoadForKind(kind);
                 defaults.ObjectKind = kind;
                 ApplySmartDefaults(db, tr, entity, entity == null ? string.Empty : entity.Layer, defaults, false);
-                RefreshAttributeModel(db, tr, entity, attributes, defaults, kind, false, true);
+                RefreshAttributeModel(db, tr, entity, attributes, defaults, kind, false, false);
                 tr.Commit();
             }
             return attributes;
@@ -842,13 +901,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             Curve curve = entity as Curve;
             if (curve != null && QuantityPipeAttributes.IsMainPipeKind(target.ObjectKind))
             {
-                TryFillConnectedNodeInfo(db, tr, entity, curve, target);
-                if (!preserveAverageDepth || target.AverageDepth <= 0)
-                {
-                    if (target.StartDepth > 0 && target.EndDepth > 0) target.AverageDepth = (target.StartDepth + target.EndDepth) / 2.0;
-                    else if (target.StartDepth > 0) target.AverageDepth = target.StartDepth;
-                    else if (target.EndDepth > 0) target.AverageDepth = target.EndDepth;
-                }
+                TryFillConnectedNodeInfo(db, tr, entity, curve, target, true);
+                RecalculateMainPipeAverageDepth(target);
+            }
+            else if (QuantityPipeAttributes.IsMainPipeKind(target.ObjectKind) && !preserveAverageDepth)
+            {
+                RecalculateMainPipeAverageDepth(target);
             }
 
             target.BackfillStructure = QuantityPipeAttributes.NormalizeStructureLayerText(target.BackfillStructure);
@@ -1497,6 +1555,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void TryFillConnectedNodeInfo(Database db, Transaction tr, Entity pipeEntity, Curve pipeCurve, QuantityPipeAttributes attrs)
         {
+            TryFillConnectedNodeInfo(db, tr, pipeEntity, pipeCurve, attrs, false);
+        }
+
+        private static void TryFillConnectedNodeInfo(Database db, Transaction tr, Entity pipeEntity, Curve pipeCurve, QuantityPipeAttributes attrs, bool overwriteExisting)
+        {
             if (db == null || tr == null || pipeEntity == null || pipeCurve == null || attrs == null) return;
             try
             {
@@ -1565,8 +1628,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
                 }
 
-                ApplyNodeToPipeStart(attrs, startNode);
-                ApplyNodeToPipeEnd(attrs, endNode);
+                ApplyNodeToPipeStart(attrs, startNode, overwriteExisting);
+                ApplyNodeToPipeEnd(attrs, endNode, overwriteExisting);
+                RecalculateMainPipeAverageDepth(attrs);
             }
             catch
             {
@@ -1993,6 +2057,32 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return height < 0 ? 0.0 : height;
         }
 
+        private static void RecalculateMainPipeAverageDepth(QuantityPipeAttributes attrs)
+        {
+            if (attrs == null) return;
+            if (!QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind)) return;
+
+            // v22：起点深度、终点深度字段本身即为“井深 + 当前主管管线垫层
+            // （沉泥井再扣减）”后的管线开挖深度。
+            // 因此平均开挖深度直接取起终点深度平均值，不再额外叠加管线垫层，
+            // 否则会出现垫层被重复计算。
+            double startExcavationDepth = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
+            double endExcavationDepth = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
+
+            if (startExcavationDepth > 0 && endExcavationDepth > 0) attrs.AverageDepth = (startExcavationDepth + endExcavationDepth) / 2.0;
+            else if (startExcavationDepth > 0) attrs.AverageDepth = startExcavationDepth;
+            else if (endExcavationDepth > 0) attrs.AverageDepth = endExcavationDepth;
+            else attrs.AverageDepth = 0.0;
+        }
+
+        private static double CalculatePipeEndpointDepthFromNode(QuantityPipeAttributes pipeAttrs, QuantityPipeAttributes nodeAttrs)
+        {
+            if (nodeAttrs == null) return 0.0;
+            double pipeCushion = GetPipeCushionHeight(pipeAttrs);
+            double fallback = nodeAttrs.WellDepth > 0 ? nodeAttrs.WellDepth + Math.Max(pipeCushion, 0.0) : 0.0;
+            return QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(nodeAttrs, pipeCushion, fallback);
+        }
+
         private static void ApplyNodeToPipeStart(QuantityPipeAttributes attrs, NodeCandidate node)
         {
             ApplyNodeToPipeStart(attrs, node, false);
@@ -2002,7 +2092,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (attrs == null || node == null || node.Attributes == null) return;
             if ((overwrite || string.IsNullOrWhiteSpace(attrs.StartNode)) && !string.IsNullOrWhiteSpace(node.Attributes.NodeNo)) attrs.StartNode = node.Attributes.NodeNo;
-            if ((overwrite || attrs.StartDepth <= 0) && node.Attributes.WellDepth > 0) attrs.StartDepth = QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(node.Attributes, GetPipeCushionHeight(attrs), node.Attributes.WellDepth);
+            if ((overwrite || attrs.StartDepth <= 0) && node.Attributes.WellDepth > 0)
+            {
+                attrs.StartDepth = CalculatePipeEndpointDepthFromNode(attrs, node.Attributes);
+            }
         }
 
         private static void ApplyNodeToPipeEnd(QuantityPipeAttributes attrs, NodeCandidate node)
@@ -2014,7 +2107,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (attrs == null || node == null || node.Attributes == null) return;
             if ((overwrite || string.IsNullOrWhiteSpace(attrs.EndNode)) && !string.IsNullOrWhiteSpace(node.Attributes.NodeNo)) attrs.EndNode = node.Attributes.NodeNo;
-            if ((overwrite || attrs.EndDepth <= 0) && node.Attributes.WellDepth > 0) attrs.EndDepth = QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(node.Attributes, GetPipeCushionHeight(attrs), node.Attributes.WellDepth);
+            if ((overwrite || attrs.EndDepth <= 0) && node.Attributes.WellDepth > 0)
+            {
+                attrs.EndDepth = CalculatePipeEndpointDepthFromNode(attrs, node.Attributes);
+            }
         }
 
         private sealed class NodeCandidate
@@ -2183,28 +2279,46 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static string InferDiameter(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-            Match dn = Regex.Match(text, @"DN\s*(?<n>\d{2,4})", RegexOptions.IgnoreCase);
+            string source = text.Trim();
+
+            Match dn = Regex.Match(source, @"DN\s*(?<n>\d{2,4})", RegexOptions.IgnoreCase);
             if (dn.Success) return "DN" + dn.Groups["n"].Value;
 
-            Match numberPipe = Regex.Match(text, @"(?<!\d)(?<n>\d{2,4})(?:\s*)?(?:PVC|HDPE|PE|管|波纹)", RegexOptions.IgnoreCase);
+            Match numberPipe = Regex.Match(source, @"(?<!\d)(?<n>\d{2,4})(?:\s*)?(?:PVC|UPVC|HDPE|PE|管|波纹|砼管|钢管)", RegexOptions.IgnoreCase);
             if (numberPipe.Success) return "DN" + numberPipe.Groups["n"].Value;
 
-            Match leading = Regex.Match(text, @"^(?<n>\d{2,4})");
-            if (leading.Success) return "DN" + leading.Groups["n"].Value;
+            // 图层标签中常见只写“110PVC”“75PVC”，也可能只写“110”。
+            // 只有来源文本明确属于主管/支管/管线时，才把孤立数字识别为管径，避免井规格 500 被误判为管径。
+            if (ContainsAny(source, "主管", "支管", "管线", "管径", "管道", "PVC", "HDPE", "PE", "波纹"))
+            {
+                Match isolated = Regex.Match(source, @"(?<!\d)(?<n>\d{2,4})(?!\d)");
+                if (isolated.Success) return "DN" + isolated.Groups["n"].Value;
+            }
+
             return string.Empty;
         }
 
         private static string InferWellSpec(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-            Match phi = Regex.Match(text, @"[φΦ]\s*(?<n>\d{3,4})");
+            string source = text.Trim();
+
+            Match phi = Regex.Match(source, @"[φΦ]\s*(?<n>\d{3,4})");
             if (phi.Success) return "φ" + phi.Groups["n"].Value;
 
-            Match well = Regex.Match(text, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d).{0,8}?(?:井|井盖|检查|沉泥|跌水)", RegexOptions.IgnoreCase);
+            Match well = Regex.Match(source, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d).{0,8}?(?:井|井盖|检查|沉泥|跌水)", RegexOptions.IgnoreCase);
             if (well.Success) return "φ" + well.Groups["n"].Value;
 
-            Match anyWellNumber = Regex.Match(text, @"(?:井|井盖|检查|沉泥|跌水).{0,8}?(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
+            Match anyWellNumber = Regex.Match(source, @"(?:井|井盖|检查|沉泥|跌水).{0,8}?(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
             if (anyWellNumber.Success) return "φ" + anyWellNumber.Groups["n"].Value;
+
+            // 图层管理中父属性=井、分类=检查/沉泥井时，标签有时只写“500”“700”。
+            if (ContainsAny(source, "井", "检查", "沉泥", "跌水", "井盖"))
+            {
+                Match isolated = Regex.Match(source, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
+                if (isolated.Success) return "φ" + isolated.Groups["n"].Value;
+            }
+
             return string.Empty;
         }
 

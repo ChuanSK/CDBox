@@ -11,6 +11,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private const string FolderName = "CDBox";
         private const string FileName = "QuantityAttributeDefaults.settings";
 
+        public static string SettingsFilePath
+        {
+            get { return GetSettingsPath(); }
+        }
+
         public static QuantityAttributeDefaults Load()
         {
             QuantityAttributeDefaults defaults = new QuantityAttributeDefaults();

@@ -9,12 +9,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     public sealed class QuantityCalculationReport
     {
         public List<QuantityMainPipeCalculationRow> MainPipes { get; private set; }
+        public List<QuantityMainPipeCalculationRow> BranchPipes { get; private set; }
         public List<QuantityWellCalculationRow> Wells { get; private set; }
         public List<string> Warnings { get; private set; }
 
         public QuantityCalculationReport()
         {
             MainPipes = new List<QuantityMainPipeCalculationRow>();
+            BranchPipes = new List<QuantityMainPipeCalculationRow>();
             Wells = new List<QuantityWellCalculationRow>();
             Warnings = new List<string>();
         }
@@ -53,6 +55,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public double EarthworkOut { get; set; }
         public string FormulaText { get; set; }
         public string Remark { get; set; }
+        public string ObjectKind { get; set; }
+        public string BranchType { get; set; }
+        public string CalculationSource { get; set; }
+        public string DataStatus { get; set; }
 
         public QuantityMainPipeCalculationRow()
         {
@@ -67,6 +73,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             BackfillStructure = string.Empty;
             FormulaText = string.Empty;
             Remark = string.Empty;
+            ObjectKind = string.Empty;
+            BranchType = string.Empty;
+            CalculationSource = string.Empty;
+            DataStatus = string.Empty;
         }
     }
 
@@ -107,6 +117,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public int WellCoverCount { get; set; }
         public string FormulaText { get; set; }
         public string Remark { get; set; }
+        public string CalculationSource { get; set; }
+        public string DataStatus { get; set; }
 
         public QuantityWellCalculationRow()
         {
@@ -123,6 +135,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             CoverPlate = string.Empty;
             FormulaText = string.Empty;
             Remark = string.Empty;
+            CalculationSource = string.Empty;
+            DataStatus = string.Empty;
             CoverPlateCount = 1;
             WellCoverCount = 1;
         }
