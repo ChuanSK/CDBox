@@ -257,7 +257,7 @@ namespace TCPipeAutoDraw.Commands
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择新版 CDBox.dll";
+                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
                 dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;

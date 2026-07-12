@@ -71,6 +71,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-CDBoxIntera
 
 Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一定义在 `CDBox.csproj`。产物默认写入 `artifacts`。下载源模板位于 `scripts\update-sources.json`；正式发布前必须确认各平台的 release/tag 规则与模板一致。脚本会拒绝下载 URL 末尾文件名与实际 ZIP 不一致的清单。
 
+若旧版“选择 CDBox.dll 更新”曾导致安装目录只剩主 DLL，请先关闭全部 AutoCAD 进程，再以管理员 PowerShell 运行 `scripts\Repair-CDBoxLegacyUpdate.ps1`。脚本从完整 Release 输出恢复依赖，替换前备份现有 `CDBox.bundle`，失败时自动回滚。
+
 ## 本地加载
 
 在 AutoCAD 2023 中执行 `NETLOAD`，选择 `bin\Debug\net48\CDBox.dll`。常用入口：

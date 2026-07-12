@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using CDBoxUpdater;
+using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.UI.Studio;
 
@@ -26,6 +27,7 @@ namespace CDBox.CoreTests
             Run("Studio 收藏与最近使用", TestStudioState);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
+            Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
 
@@ -171,6 +173,30 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
             True(standalone.IndexOf("Preview 9", StringComparison.Ordinal) >= 0, "页面应显示 Preview 9 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
+        }
+
+        private static void TestLegacyUpdateSourceValidation()
+        {
+            string root = NewTemporaryDirectory("update-source");
+            try
+            {
+                string dll = Path.Combine(root, "CDBox.dll");
+                File.WriteAllText(dll, "main");
+                CDBoxUpdateSourceValidationResult invalid = CDBoxUpdateSourceValidator.Validate(dll);
+                False(invalid.Valid, "只有 CDBox.dll 的目录必须拒绝更新");
+                True(invalid.Message.IndexOf("Microsoft.Web.WebView2.WinForms.dll", StringComparison.Ordinal) >= 0, "错误应指出缺失的 WebView2 依赖");
+
+                File.WriteAllText(Path.Combine(root, "Microsoft.Web.WebView2.Core.dll"), "core");
+                File.WriteAllText(Path.Combine(root, "Microsoft.Web.WebView2.WinForms.dll"), "forms");
+                Directory.CreateDirectory(Path.Combine(root, "Updater"));
+                File.WriteAllText(Path.Combine(root, "Updater", "CDBoxUpdater.exe"), "updater");
+                Directory.CreateDirectory(Path.Combine(root, "runtimes", "win-x64", "native"));
+                File.WriteAllText(Path.Combine(root, "runtimes", "win-x64", "native", "WebView2Loader.dll"), "loader");
+
+                CDBoxUpdateSourceValidationResult valid = CDBoxUpdateSourceValidator.Validate(dll);
+                True(valid.Valid, "完整构建输出应允许更新");
+            }
+            finally { DeleteDirectory(root); }
         }
 
         private static void TestUpdaterRejectsZipTraversal()

@@ -22,5 +22,6 @@
     <Compile Include="..\..\CDBoxUpdater\BundleInstaller.cs" Link="Source\Updater\BundleInstaller.cs" />
     <Compile Include="..\..\CDBoxUpdater\PendingUpdateManifest.cs" Link="Source\Updater\PendingUpdateManifest.cs" />
     <Compile Include="..\..\CDBoxUpdater\UpdaterLogger.cs" Link="Source\Updater\UpdaterLogger.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxUpdateSourceValidator.cs" Link="Source\CDBoxUpdateSourceValidator.cs" />
   </ItemGroup>
 </Project>

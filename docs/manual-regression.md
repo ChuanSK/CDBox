@@ -113,6 +113,9 @@
 
 ## 9. 安装与更新器
 
+- [ ] `CDUPDATE` 选择仅包含 `CDBox.dll` 的目录时必须拒绝更新，并列出 WebView2、Loader、Updater 等缺失文件。
+- [ ] `CDUPDATE` 选择 `bin\Release\net48\CDBox.dll` 时，暂存自检通过后才安排替换；关闭 AutoCAD 后完整依赖随主 DLL 一起更新。
+- [ ] 模拟延迟复制失败时，旧 `CDBox.bundle` 从 `.update-backup` 自动恢复，不留下只有主 DLL 的半安装状态。
 - [ ] 在测试环境执行 `CDINSTALL`，确认生成完整 `CDBox.bundle` 且下次启动自动加载。
 - [ ] 使用 `scripts\New-CDBoxRelease.ps1` 生成测试包，清单大小和 SHA256 与 ZIP 一致。
 - [ ] 用错误 SHA256 测试，下载或安装必须中止。
