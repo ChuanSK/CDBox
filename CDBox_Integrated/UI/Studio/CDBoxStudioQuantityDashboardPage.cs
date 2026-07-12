@@ -22,13 +22,48 @@ namespace TCPipeAutoDraw.UI.Studio
             if (!standalone) return css;
             return @"
 :root{--bg:#f5f7fb;--panel:#fff;--panel2:#f8fafc;--muted:#64748b;--text:#162033;--line:#dce8f6;--brand:#3b82f6;--brand2:#7c3aed}
+body[data-theme='fresh']{--bg:#f3f7ff;--panel:#fff;--panel2:#eef4ff;--muted:#65758f;--text:#172033;--line:#dbe7ff;--brand:#2563eb;--brand2:#9333ea}
+body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#94a3b8;--text:#e5e7eb;--line:#26364d;--brand:#60a5fa;--brand2:#a78bfa}
 *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Microsoft YaHei UI','Segoe UI',sans-serif}
+.qd-toast-host{position:fixed;right:22px;bottom:22px;display:grid;gap:9px;z-index:1300}.qd-toast{min-width:260px;max-width:460px;padding:12px 15px;border-radius:13px;background:#172033;color:#fff;box-shadow:0 16px 36px rgba(15,23,42,.22);opacity:0;transform:translateY(8px);transition:.2s}.qd-toast.show{opacity:1;transform:none}.qd-toast.success{background:#047857}.qd-toast.warning{background:#b45309}.qd-toast.error{background:#b91c1c}
 " + css;
+        }
+
+        public static string BuildStandaloneDocument(string theme, bool animationsEnabled, string logFilePath)
+        {
+            theme = NormalizeTheme(theme);
+            var html = new StringBuilder();
+            html.Append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>CDBox Studio - 工程量动态看板</title><style>");
+            html.Append(BuildStyles(true));
+            html.Append("</style></head><body data-theme=\"").Append(HtmlAttr(theme)).Append("\" class=\"").Append(animationsEnabled ? string.Empty : "no-animations").Append("\">");
+            html.Append("<section id=\"quantityDashboardPage\" style=\"height:100%\"></section><div id=\"quantityDashboardToastHost\" class=\"qd-toast-host\"></div><script>");
+            html.Append("function post(n,a){try{chrome.webview.postMessage('studio|'+n+'|'+encodeURIComponent(a||''));}catch(ex){}}function toast(m,k){var h=document.getElementById('quantityDashboardToastHost'),e=document.createElement('div');if(!h)return;e.className='qd-toast '+(k||'info');e.textContent=m||'';h.appendChild(e);setTimeout(function(){e.classList.add('show');},10);setTimeout(function(){e.classList.remove('show');setTimeout(function(){if(e.parentNode)e.parentNode.removeChild(e);},200);},3200);}window.CDBoxStudioToast=toast;");
+            html.Append(BuildComponentScript());
+            html.Append("var quantityDashboardEditor=window.CDBoxQuantityDashboardPage.create({rootId:'quantityDashboardPage',post:post,toast:toast,standalone:true});quantityDashboardEditor.open();window.addEventListener('error',function(e){post('quantityDashboardPageError',(e.message||'页面异常')+'\\n'+(e.error&&e.error.stack||''));});setTimeout(function(){post('ready','quantity-dashboard');post('quantityDashboardOpened','standalone');},50);");
+            html.Append("</script><div style=\"display:none\">").Append(Html(logFilePath)).Append("</div></body></html>");
+            return html.ToString();
         }
 
         public static string BuildComponentScript()
         {
             return Encoding.UTF8.GetString(Convert.FromBase64String(ComponentScriptBase64));
+        }
+
+        private static string NormalizeTheme(string theme)
+        {
+            string value = (theme ?? string.Empty).Trim().ToLowerInvariant();
+            return value == "fresh" || value == "dark" ? value : "light";
+        }
+
+        private static string Html(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&#39;");
+        }
+
+        private static string HtmlAttr(string value)
+        {
+            return Html(value).Replace("\r", string.Empty).Replace("\n", " ");
         }
     }
 }

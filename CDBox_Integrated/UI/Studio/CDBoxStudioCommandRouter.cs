@@ -9,7 +9,7 @@ using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
-    internal sealed class CDBoxStudioCommandRouter
+    internal sealed class CDBoxStudioCommandRouter : IDisposable
     {
         private readonly Dictionary<string, CDBoxStudioAction> _actionsById;
         private readonly CDBoxStudioState _state;
@@ -98,6 +98,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "openlayermanagerwindow":
                     return RouteOpenLayerManagerWindow();
+
+                case "openquantitydashboardwindow":
+                    return RouteOpenQuantityDashboardWindow();
 
                 case "layermanageropened":
                     return RouteLayerManagerOpened();
@@ -469,6 +472,28 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioLogger.Error("打开图层管理器独立 WebView2 窗口失败。", ex);
             }
             return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenQuantityDashboardWindow()
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioQuantityDashboardWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开工程量动态看板独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "工程量动态看板独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开工程量动态看板独立 WebView2 窗口失败。", ex);
+            }
+            return result;
+        }
+
+        public void Dispose()
+        {
+            CDBoxStudioQuantityDashboardRoutes.Unconfigure(_scriptSink);
         }
 
         private CDBoxStudioRouteResult RouteLayerManagerOpened()

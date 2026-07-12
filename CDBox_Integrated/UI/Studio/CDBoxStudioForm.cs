@@ -271,6 +271,11 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             if (disposing)
             {
+                if (_router != null)
+                {
+                    _router.Dispose();
+                    _router = null;
+                }
                 if (_webView != null)
                 {
                     try

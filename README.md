@@ -82,6 +82,7 @@ Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一�
 - `BZSZ`：统一标注设置
 - `SX`：工程量属性编辑器
 - `GCL`：正式工程量表
+- `CDQBOARD`：工程量动态看板独立窗口
 - `CDSELFTEST`：只读宿主环境自检
 
 完整的宿主内验证步骤见 [`docs/manual-regression.md`](docs/manual-regression.md)。

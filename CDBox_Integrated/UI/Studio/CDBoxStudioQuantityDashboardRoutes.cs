@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 
@@ -7,12 +8,26 @@ namespace TCPipeAutoDraw.UI.Studio
     internal static class CDBoxStudioQuantityDashboardRoutes
     {
         private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue, RecursionLimit = 128 };
-        private static Action<string> _scriptSink;
+        private static readonly object SinkLock = new object();
+        private static readonly List<Action<string>> ScriptSinks = new List<Action<string>>();
 
         public static void Configure(Action<string> scriptSink)
         {
-            _scriptSink = scriptSink;
-            QuantityDashboardLiveMonitor.Configure(scriptSink);
+            if (scriptSink == null) return;
+            lock (SinkLock)
+            {
+                if (!ScriptSinks.Contains(scriptSink)) ScriptSinks.Add(scriptSink);
+            }
+            QuantityDashboardLiveMonitor.Configure(BroadcastScript);
+        }
+
+        public static void Unconfigure(Action<string> scriptSink)
+        {
+            if (scriptSink == null) return;
+            lock (SinkLock)
+            {
+                ScriptSinks.Remove(scriptSink);
+            }
         }
 
         public static bool TryRoute(CDBoxStudioRouteRequest request, out CDBoxStudioRouteResult result)
@@ -231,7 +246,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static CDBoxStudioRouteResult DashboardOpened()
         {
-            QuantityDashboardLiveMonitor.Configure(_scriptSink);
+            QuantityDashboardLiveMonitor.Configure(BroadcastScript);
             return NewResult();
         }
 
@@ -248,11 +263,26 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static void Progress(int current, int total, string message)
         {
-            Action<string> sink = _scriptSink;
-            if (sink == null) return;
             double percent = total <= 0 ? 0.0 : Math.Max(0.0, Math.Min(100.0, current * 100.0 / total));
             string json = Serializer.Serialize(new { current = current, total = total, percent = percent, message = message ?? string.Empty });
-            sink("window.CDBoxQuantityDashboardProgress && window.CDBoxQuantityDashboardProgress(" + json + ");");
+            BroadcastScript("window.CDBoxQuantityDashboardProgress && window.CDBoxQuantityDashboardProgress(" + json + ");");
+        }
+
+        private static void BroadcastScript(string script)
+        {
+            if (string.IsNullOrWhiteSpace(script)) return;
+            Action<string>[] sinks;
+            lock (SinkLock)
+            {
+                sinks = ScriptSinks.ToArray();
+            }
+
+            foreach (Action<string> sink in sinks)
+            {
+                if (sink == null) continue;
+                try { sink(script); }
+                catch (Exception ex) { CDBoxStudioLogger.Error("向工程量看板页面宿主广播脚本失败。", ex); }
+            }
         }
 
         private static string ToJs(string value)

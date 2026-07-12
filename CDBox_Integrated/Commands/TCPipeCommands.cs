@@ -613,6 +613,12 @@ namespace TCPipeAutoDraw.Commands
             RunQuantityCalculationReport();
         }
 
+        [CommandMethod("CDQBOARD", CommandFlags.Modal)]
+        public void ShowQuantityDashboardWindowByEnglishName()
+        {
+            ShowQuantityDashboardWindow();
+        }
+
 
         [CommandMethod("CDDRAWNET", CommandFlags.Modal)]
         public void DrawPipeFromPrompt()
@@ -1065,6 +1071,26 @@ namespace TCPipeAutoDraw.Commands
             {
                 doc.Editor.WriteMessage("\n[工程量表格生成] 失败：" + ex.Message);
                 MessageBox.Show(ex.Message, "工程量表格生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ShowQuantityDashboardWindow()
+        {
+            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "工程量动态看板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                CDBoxStudioQuantityDashboardWindow.ShowWindow(new AcadMainWindow());
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage("\n[工程量动态看板] 打开失败：" + ex.Message);
+                MessageBox.Show(new AcadMainWindow(), ex.Message, "工程量动态看板打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

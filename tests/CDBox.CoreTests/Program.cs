@@ -24,6 +24,7 @@ namespace CDBox.CoreTests
             Run("常用文本解析", TestPrimitiveParsing);
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("Studio 收藏与最近使用", TestStudioState);
+            Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
 
@@ -144,6 +145,18 @@ namespace CDBox.CoreTests
             state.RemoveMissingActions(new[] { "action:28" });
             False(state.IsFavorite("action:29"), "不存在的收藏应被清理");
             True(state.HasRecent("action:28"), "仍存在的最近项应保留");
+        }
+
+        private static void TestQuantityDashboardSharedPage()
+        {
+            string embedded = CDBoxStudioQuantityDashboardPage.BuildEmbeddedSection();
+            string standalone = CDBoxStudioQuantityDashboardPage.BuildStandaloneDocument("fresh", false, "test.log");
+
+            True(embedded.IndexOf("quantityDashboardPage", StringComparison.Ordinal) >= 0, "内嵌页应提供共享组件根节点");
+            True(standalone.IndexOf("CDBoxQuantityDashboardPage.create", StringComparison.Ordinal) >= 0, "独立页应创建同一个共享页面组件");
+            True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
+            True(standalone.IndexOf("data-theme=\"fresh\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
+            True(standalone.IndexOf("class=\"no-animations\"", StringComparison.Ordinal) >= 0, "独立页应继承动画设置");
         }
 
         private static void TestUpdaterRejectsZipTraversal()
