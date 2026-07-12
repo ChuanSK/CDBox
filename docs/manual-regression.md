@@ -19,6 +19,8 @@
   dotnet build CDBox.sln -c Debug --no-restore
   ```
 
+- [ ] 可选：设置 `CDBOX_HEADLESS_SELFTEST=1` 后用 AutoCAD Core Console 加载插件并执行 `CDSELFTEST`，确认输出 `CDBOX_SELFTEST_RESULT=PASS`。
+
 ## 2. 加载与启动
 
 - [ ] 在 AutoCAD 执行 `NETLOAD`，选择 `bin\Debug\net48\CDBox.dll`。

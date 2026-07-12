@@ -43,6 +43,22 @@ dotnet run --project tests\CDBox.CoreTests\CDBox.CoreTests.csproj -c Debug
 
 任一断言失败时进程返回非零退出码，适合放入后续 CI。涉及 AutoCAD Database、Editor、WebView2 或 CASS 的流程仍需宿主内集成测试和人工回归。
 
+AutoCAD 2023 Core Console 宿主冒烟测试：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-CDBoxCoreSelfTest.ps1 -Configuration Release
+```
+
+脚本只读取复制后的 Autodesk 示例图纸，并把日志保存在 `artifacts\host-selftest`。成功标志为 `CDBOX_SELFTEST_RESULT=PASS`。
+
+启动可交互的 AutoCAD Studio 冒烟测试：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-CDBoxInteractiveSmoke.ps1 -Configuration Release
+```
+
+该脚本会打开复制后的示例图纸、加载插件并执行 `CDSTUDIO`，AutoCAD 保持打开以供人工检查。
+
 ## 生成发布包
 
 发布脚本会构建 Release、暂存 `CDBox.bundle`、生成 ZIP，并根据实际文件自动写入大小和 SHA256：
@@ -64,8 +80,10 @@ Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一�
 - `BZSZ`：统一标注设置
 - `SX`：工程量属性编辑器
 - `GCL`：正式工程量表
+- `CDSELFTEST`：只读宿主环境自检
 
 完整的宿主内验证步骤见 [`docs/manual-regression.md`](docs/manual-regression.md)。
+最近一次自动宿主验证记录见 [`docs/host-validation-2026-07-12.md`](docs/host-validation-2026-07-12.md)。
 
 ## 代码入口
 

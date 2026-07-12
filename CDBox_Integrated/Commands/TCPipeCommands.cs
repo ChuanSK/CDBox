@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -50,12 +51,94 @@ namespace TCPipeAutoDraw.Commands
                                         " \n \n");
             }
 
+            if (IsHeadlessSelfTest())
+            {
+                if (doc != null) doc.Editor.WriteMessage("\n[CDBox] 已进入无界面自检模式，跳过菜单、安装提示和侧边栏启动流程。\n");
+                _startupWorkflowFinished = true;
+                return;
+            }
+
             QueueStartupWorkflow();
         }
 
         public void Terminate()
         {
+            if (IsHeadlessSelfTest()) return;
             CDBoxMenuService.RemoveMenu();
+        }
+
+        [CommandMethod("CDSELFTEST", CommandFlags.Modal)]
+        public void RunSelfTest()
+        {
+            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Editor editor = doc == null ? null : doc.Editor;
+            var results = new List<string>();
+            int failureCount = 0;
+
+            Action<bool, string, string> check = delegate(bool passed, string name, string detail)
+            {
+                if (!passed) failureCount++;
+                results.Add("[" + (passed ? "PASS" : "FAIL") + "] " + name + (string.IsNullOrWhiteSpace(detail) ? string.Empty : "：" + detail));
+            };
+
+            string assemblyPath = Assembly.GetExecutingAssembly().Location;
+            string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
+            check(File.Exists(assemblyPath), "主程序集", assemblyPath);
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-6", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 20600, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "Updater", "CDBoxUpdater.exe")), "独立更新器", Path.Combine(baseDirectory, "Updater", "CDBoxUpdater.exe"));
+            check(File.Exists(Path.Combine(baseDirectory, "Templates", "工程量计算表模板.xls")), "工程量模板", Path.Combine(baseDirectory, "Templates", "工程量计算表模板.xls"));
+
+            CDBoxStudioRuntimeInfo runtime = CDBoxStudioRuntime.Detect();
+            check(runtime != null && runtime.Available, "WebView2 Runtime", runtime == null ? "检测结果为空" : (runtime.Available ? runtime.Version : runtime.ErrorMessage));
+            check(doc != null, "当前图纸", doc == null ? "未找到活动文档" : doc.Name);
+
+            if (doc != null)
+            {
+                try
+                {
+                    using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                    {
+                        LayerTable layers = tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead, false) as LayerTable;
+                        int layerCount = 0;
+                        if (layers != null)
+                        {
+                            foreach (ObjectId ignored in layers) layerCount++;
+                        }
+                        check(layers != null, "数据库只读事务", layers == null ? "无法打开图层表" : "图层数=" + layerCount);
+                        tr.Commit();
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    check(false, "数据库只读事务", ex.Message);
+                }
+            }
+
+            string processName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+            check(!string.IsNullOrWhiteSpace(processName), "宿主进程", processName);
+
+            if (editor != null)
+            {
+                editor.WriteMessage("\n========== CDBox Self Test ==========");
+                foreach (string line in results) editor.WriteMessage("\n" + line);
+                editor.WriteMessage("\nCDBOX_SELFTEST_RESULT=" + (failureCount == 0 ? "PASS" : "FAIL") + "\n");
+            }
+            else
+            {
+                foreach (string line in results) Console.WriteLine(line);
+                Console.WriteLine("CDBOX_SELFTEST_RESULT=" + (failureCount == 0 ? "PASS" : "FAIL"));
+            }
+        }
+
+        private static bool IsHeadlessSelfTest()
+        {
+            string value = Environment.GetEnvironmentVariable("CDBOX_HEADLESS_SELFTEST");
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
         }
 
         [CommandMethod("CDMENU", CommandFlags.Modal)]

@@ -28,6 +28,7 @@
         <Command Global="CDINSTALL" Local="CDINSTALL" />
         <Command Global="CDUNINSTALL" Local="CDUNINSTALL" />
         <Command Global="CDUPDATE" Local="CDUPDATE" />
+        <Command Global="CDSELFTEST" Local="CDSELFTEST" />
         <Command Global="CDBZSET" Local="CDBZSET" />
         <Command Global="BZSZ" Local="BZSZ" />
         <Command Global="CDLAYER" Local="CDLAYER" />
