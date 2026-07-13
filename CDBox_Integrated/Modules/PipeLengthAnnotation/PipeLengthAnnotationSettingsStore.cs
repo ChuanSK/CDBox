@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -139,36 +139,43 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             try
             {
-                string path = GetSettingsPath();
-                string dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                var lines = new List<string>();
-                lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
-                lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
-                lines.Add("LayerMode=" + Escape(options.LayerMode.ToString()));
-                lines.Add("SelectedLayerName=" + Escape(options.SelectedLayerName ?? string.Empty));
-                lines.Add("AnnotationLayerName=" + Escape(options.AnnotationLayerName ?? string.Empty));
-                lines.Add("EnableSourceMetadataLayerLink=" + Escape(options.EnableSourceMetadataLayerLink ? "true" : "false"));
-                lines.Add("LayerLinkMode=" + Escape(options.LayerLinkMode.ToString()));
-                lines.Add("AutoAnnotationLayerSuffix=" + Escape(options.AutoAnnotationLayerSuffix ?? string.Empty));
-                lines.Add("FallbackAnnotationLayerName=" + Escape(options.FallbackAnnotationLayerName ?? string.Empty));
-                lines.Add("WriteAutoAnnotationLayerMetadata=" + Escape(options.WriteAutoAnnotationLayerMetadata ? "true" : "false"));
-                lines.Add("AnnotationSplitTagText=" + Escape(options.AnnotationSplitTagText ?? string.Empty));
-                lines.Add("DrawBottomAnnotation=" + Escape(options.DrawBottomAnnotation ? "true" : "false"));
-                lines.Add("BottomAnnotationTemplate=" + Escape(options.BottomAnnotationTemplate ?? string.Empty));
-                lines.Add("ExcavationWidth=" + Escape(options.ExcavationWidth.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("ExcavationHeight=" + Escape(options.ExcavationHeight.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("ExcavationDepth=" + Escape(options.ExcavationDepth.ToString(CultureInfo.InvariantCulture)));
-
-                File.WriteAllLines(path, lines.ToArray());
+                SaveStrict(options);
             }
             catch
             {
                 // 设置保存失败不能影响正式标注流程。
             }
+        }
+
+        internal static void SaveStrict(PipeLengthAnnotationOptions options)
+        {
+            if (options == null) throw new ArgumentNullException("options");
+
+            string path = GetSettingsPath();
+            string dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var lines = new List<string>();
+            lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
+            lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
+            lines.Add("LayerMode=" + Escape(options.LayerMode.ToString()));
+            lines.Add("SelectedLayerName=" + Escape(options.SelectedLayerName ?? string.Empty));
+            lines.Add("AnnotationLayerName=" + Escape(options.AnnotationLayerName ?? string.Empty));
+            lines.Add("EnableSourceMetadataLayerLink=" + Escape(options.EnableSourceMetadataLayerLink ? "true" : "false"));
+            lines.Add("LayerLinkMode=" + Escape(options.LayerLinkMode.ToString()));
+            lines.Add("AutoAnnotationLayerSuffix=" + Escape(options.AutoAnnotationLayerSuffix ?? string.Empty));
+            lines.Add("FallbackAnnotationLayerName=" + Escape(options.FallbackAnnotationLayerName ?? string.Empty));
+            lines.Add("WriteAutoAnnotationLayerMetadata=" + Escape(options.WriteAutoAnnotationLayerMetadata ? "true" : "false"));
+            lines.Add("AnnotationSplitTagText=" + Escape(options.AnnotationSplitTagText ?? string.Empty));
+            lines.Add("DrawBottomAnnotation=" + Escape(options.DrawBottomAnnotation ? "true" : "false"));
+            lines.Add("BottomAnnotationTemplate=" + Escape(options.BottomAnnotationTemplate ?? string.Empty));
+            lines.Add("ExcavationWidth=" + Escape(options.ExcavationWidth.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("ExcavationHeight=" + Escape(options.ExcavationHeight.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("ExcavationDepth=" + Escape(options.ExcavationDepth.ToString(CultureInfo.InvariantCulture)));
+
+            File.WriteAllLines(path, lines.ToArray());
         }
 
         private static string GetSettingsPath()

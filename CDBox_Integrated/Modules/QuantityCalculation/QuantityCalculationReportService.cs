@@ -25,6 +25,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             QuantityCalculationReport report = new QuantityCalculationReport();
             List<ObjectId> ids = BuildScopedObjectIdList(doc, scopeObjectIds);
             int mainIndex = 1;
+            int branchIndex = 1;
             int wellIndex = 1;
 
             List<QuantityPipeSelectionInfo> infos = new List<QuantityPipeSelectionInfo>();
@@ -93,8 +94,23 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 ReportProgress(progress, mainInfoIndex + 1, totalInfos, "正在汇总主管工程量：" + (mainInfoIndex + 1) + "/" + totalInfos);
             }
 
+            ReportProgress(progress, 0, totalInfos, "正在汇总支管工程量...");
+            for (int branchInfoIndex = 0; branchInfoIndex < infos.Count; branchInfoIndex++)
+            {
+                QuantityPipeSelectionInfo info = infos[branchInfoIndex];
+                QuantityPipeAttributes attrs = info.Attributes;
+                if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
+                {
+                    QuantityMainPipeCalculationRow row = BuildBranchPipeRow(info, attrs, branchIndex, wellLookup);
+                    report.BranchPipes.Add(row);
+                    branchIndex++;
+                }
+                ReportProgress(progress, branchInfoIndex + 1, totalInfos, "正在汇总支管工程量：" + (branchInfoIndex + 1) + "/" + totalInfos);
+            }
+
             ReportProgress(progress, 1, 1, "工程量数据汇总完成。");
             if (report.MainPipes.Count == 0) report.Warnings.Add("未找到已写入属性且启用统计的主管对象。");
+            if (report.BranchPipes.Count == 0) report.Warnings.Add("未找到已写入属性且启用统计的支管对象。");
             if (report.Wells.Count == 0) report.Warnings.Add("未找到已写入属性且启用统计的节点/检查井对象。");
             return report;
         }
@@ -120,26 +136,57 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static QuantityMainPipeCalculationRow BuildMainPipeRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index, IDictionary<string, QuantityPipeAttributes> wellLookup)
         {
+            return BuildPipeRow(info, attrs, index, wellLookup, false);
+        }
+
+        private static QuantityMainPipeCalculationRow BuildBranchPipeRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index, IDictionary<string, QuantityPipeAttributes> wellLookup)
+        {
+            return BuildPipeRow(info, attrs, index, wellLookup, true);
+        }
+
+        internal static QuantityMainPipeCalculationRow BuildDashboardPipeRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index, IDictionary<string, QuantityPipeAttributes> wellLookup, bool isBranch)
+        {
+            return BuildPipeRow(info, attrs, index, wellLookup, isBranch);
+        }
+
+        private static QuantityMainPipeCalculationRow BuildPipeRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index, IDictionary<string, QuantityPipeAttributes> wellLookup, bool isBranch)
+        {
             List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(attrs.BackfillStructure);
             double length = Round(attrs.EffectiveLength(info == null ? 0.0 : info.CadLength));
             double width = attrs.TrenchWidth;
             double pipeCushionHeightForDepth = SumLayerHeight(layers, QuantityStructureLayer.IsSandCushion, attrs.SandCushionThickness);
-            double startDepth = ResolvePipeEndpointDepth(attrs.StartNode, attrs.StartDepth, wellLookup, pipeCushionHeightForDepth);
-            double endDepth = ResolvePipeEndpointDepth(attrs.EndNode, attrs.EndDepth, wellLookup, pipeCushionHeightForDepth);
-            double rawAverageDepth = 0.0;
-            if (attrs.StartDepth > 0 && attrs.EndDepth > 0) rawAverageDepth = (attrs.StartDepth + attrs.EndDepth) / 2.0;
-            else if (attrs.StartDepth > 0) rawAverageDepth = attrs.StartDepth;
-            else if (attrs.EndDepth > 0) rawAverageDepth = attrs.EndDepth;
+            double startDepth;
+            double endDepth;
+            double avgDepth;
+            if (isBranch)
+            {
+                avgDepth = attrs.BranchDepth > 0 ? attrs.BranchDepth : attrs.AverageDepth;
+                startDepth = avgDepth;
+                endDepth = avgDepth;
+            }
+            else
+            {
+                startDepth = ResolvePipeEndpointDepth(attrs.StartNode, attrs.StartDepth, wellLookup, pipeCushionHeightForDepth);
+                endDepth = ResolvePipeEndpointDepth(attrs.EndNode, attrs.EndDepth, wellLookup, pipeCushionHeightForDepth);
+                double rawAverageDepth = 0.0;
+                if (attrs.StartDepth > 0 && attrs.EndDepth > 0) rawAverageDepth = (attrs.StartDepth + attrs.EndDepth) / 2.0;
+                else if (attrs.StartDepth > 0) rawAverageDepth = attrs.StartDepth;
+                else if (attrs.EndDepth > 0) rawAverageDepth = attrs.EndDepth;
 
-            double avgDepth = 0.0;
-            bool hasManualAverageDepth = attrs.AverageDepth > 0 && (rawAverageDepth <= 0 || Math.Abs(attrs.AverageDepth - rawAverageDepth) > 0.005);
-            if (hasManualAverageDepth) avgDepth = attrs.AverageDepth;
-            else if (startDepth > 0 && endDepth > 0) avgDepth = (startDepth + endDepth) / 2.0;
-            else if (startDepth > 0) avgDepth = startDepth;
-            else if (endDepth > 0) avgDepth = endDepth;
-            else avgDepth = attrs.AverageDepth;
+                avgDepth = 0.0;
+                bool hasManualAverageDepth = attrs.AverageDepth > 0 && (rawAverageDepth <= 0 || Math.Abs(attrs.AverageDepth - rawAverageDepth) > 0.005);
+                if (hasManualAverageDepth) avgDepth = attrs.AverageDepth;
+                else if (startDepth > 0 && endDepth > 0) avgDepth = (startDepth + endDepth) / 2.0;
+                else if (startDepth > 0) avgDepth = startDepth;
+                else if (endDepth > 0) avgDepth = endDepth;
+                else avgDepth = attrs.AverageDepth;
+            }
 
-            double pipeVolume = attrs.DeductPipeVolume ? PipeVolume(length, attrs.PipeOuterDiameter) : 0.0;
+            bool exposedBranch = isBranch && ContainsAny(attrs.BranchType, "明管");
+            bool coBuried = ContainsAny(attrs.BranchType, "并埋");
+            bool hasExplicitEarthwork = avgDepth > 0 && width > 0 && (!string.IsNullOrWhiteSpace(attrs.BackfillStructure) || attrs.RoadThickness > 0);
+            bool calculateEarthwork = !coBuried && (!isBranch || (attrs.BranchIncludeInCalculation && (!exposedBranch || hasExplicitEarthwork)));
+            double pipeVolume = calculateEarthwork && attrs.DeductPipeVolume ? PipeVolume(length, attrs.PipeOuterDiameter) : 0.0;
             double c25Height = SumPipeC25Height(layers, attrs);
             double gravelHeight = SumLayerHeight(layers, QuantityStructureLayer.IsGravel, attrs.GravelCushionThickness);
             double sandCushionHeight = SumLayerHeight(layers, QuantityStructureLayer.IsSandCushion, attrs.SandCushionThickness);
@@ -155,10 +202,20 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 else sandBackfillHeight = remain;
             }
 
-            double roadCutting = attrs.RoadThickness > 0 ? length * 2.0 : 0.0;
-            double roadBreaking = attrs.RoadThickness > 0 ? length * width : 0.0;
-            double roadWaste = attrs.RoadThickness > 0 ? length * width * attrs.RoadThickness : 0.0;
-            double excavation = length * width * Math.Max(avgDepth - attrs.RoadThickness, 0.0);
+            if (!calculateEarthwork)
+            {
+                c25Height = 0.0;
+                gravelHeight = 0.0;
+                sandCushionHeight = 0.0;
+                sandBackfillHeight = 0.0;
+                soilBackfillHeight = 0.0;
+                encasementHeight = 0.0;
+            }
+
+            double roadCutting = calculateEarthwork && attrs.RoadThickness > 0 ? length * 2.0 : 0.0;
+            double roadBreaking = calculateEarthwork && attrs.RoadThickness > 0 ? length * width : 0.0;
+            double roadWaste = calculateEarthwork && attrs.RoadThickness > 0 ? length * width * attrs.RoadThickness : 0.0;
+            double excavation = calculateEarthwork ? length * width * Math.Max(avgDepth - attrs.RoadThickness, 0.0) : 0.0;
             double mechanical = IsManualExcavation(attrs.ExcavationType) ? 0.0 : excavation;
             double manual = IsManualExcavation(attrs.ExcavationType) ? excavation : 0.0;
 
@@ -201,6 +258,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.C25PipeEncasement = Round(encasement);
             row.EarthworkOut = Round(earthOut);
             row.Remark = string.Empty;
+            row.ObjectKind = isBranch ? QuantityPipeAttributes.KindBranchPipe : QuantityPipeAttributes.KindMainPipe;
+            row.BranchType = attrs.BranchType ?? string.Empty;
+            row.CalculationSource = QuantityDashboardSources.Property;
+            row.DataStatus = coBuried ? "仅统计长度（并埋）" : (calculateEarthwork || !isBranch ? "正常" : "仅统计长度");
             row.FormulaText = BuildMainFormulaText(row, c25Height, gravelHeight, sandCushionHeight, sandBackfillHeight, soilBackfillHeight);
             return row;
         }
@@ -211,6 +272,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             QuantityPipeAttributes wellAttrs;
             if (!wellLookup.TryGetValue(nodeNo.Trim(), out wellAttrs) || wellAttrs == null) return fallback;
             return QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(wellAttrs, pipeCushionHeight, fallback);
+        }
+
+        internal static QuantityWellCalculationRow BuildDashboardWellRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index)
+        {
+            return BuildWellRow(info, attrs, index);
         }
 
         private static QuantityWellCalculationRow BuildWellRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index)
@@ -287,6 +353,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.CoverPlateCount = string.IsNullOrWhiteSpace(attrs.CoverPlate) || ContainsAny(attrs.CoverPlate, "无", "不设") ? 0 : 1;
             row.WellCoverCount = 1;
             row.Remark = string.Empty;
+            row.CalculationSource = QuantityDashboardSources.Property;
+            row.DataStatus = attrs.WellDepth > 0 && excavationLength > 0 && excavationWidth > 0 ? "正常" : "关键属性不完整";
             row.FormulaText = BuildWellFormulaText(row, sandCushionHeight, wellBottomCushionHeight, c25CushionHeight, coverGravelHeight, coverC25Height, sandBackfillHeight);
             return row;
         }

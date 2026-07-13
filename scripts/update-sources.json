@@ -1,0 +1,14 @@
+[
+  {
+    "name": "GitHub备用",
+    "urlTemplate": "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview/{fileName}"
+  },
+  {
+    "name": "Gitee",
+    "urlTemplate": "https://gitee.com/chaun-skye/CDBox/releases/download/{latestVersion}/{fileName}"
+  },
+  {
+    "name": "GitCode",
+    "urlTemplate": "https://gitcode.com/ChuanSK/CDBox/releases/download/{latestVersion}/{fileName}"
+  }
+]

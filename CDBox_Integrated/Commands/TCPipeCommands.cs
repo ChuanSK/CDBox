@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -41,7 +42,20 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc != null)
             {
-                doc.Editor.WriteMessage("\nCDBOX 已加载\nCDBOX 打开合集界面\nCDCBL 唤出侧边栏\nCDSTUDIO 打开 WebView2 实验工作台\nBZSZ 打开标注设置\n");
+                doc.Editor.WriteMessage(" \n \n \n" +
+                                        "╭───────────────────────────╮\n" +
+                                        "│     超重氢工具箱  CDBox    │\n" +
+                                        "│───────────────────────────│\n" +
+                                        "│    WebView2 次时代工作台   │\n" +
+                                        "╰───────────────────────────╯\n" +
+                                        " \n \n");
+            }
+
+            if (IsHeadlessSelfTest())
+            {
+                if (doc != null) doc.Editor.WriteMessage("\n[CDBox] 已进入无界面自检模式，跳过菜单、安装提示和侧边栏启动流程。\n");
+                _startupWorkflowFinished = true;
+                return;
             }
 
             QueueStartupWorkflow();
@@ -49,7 +63,82 @@ namespace TCPipeAutoDraw.Commands
 
         public void Terminate()
         {
+            if (IsHeadlessSelfTest()) return;
             CDBoxMenuService.RemoveMenu();
+        }
+
+        [CommandMethod("CDSELFTEST", CommandFlags.Modal)]
+        public void RunSelfTest()
+        {
+            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Editor editor = doc == null ? null : doc.Editor;
+            var results = new List<string>();
+            int failureCount = 0;
+
+            Action<bool, string, string> check = delegate(bool passed, string name, string detail)
+            {
+                if (!passed) failureCount++;
+                results.Add("[" + (passed ? "PASS" : "FAIL") + "] " + name + (string.IsNullOrWhiteSpace(detail) ? string.Empty : "：" + detail));
+            };
+
+            string assemblyPath = Assembly.GetExecutingAssembly().Location;
+            string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
+            check(File.Exists(assemblyPath), "主程序集", assemblyPath);
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-9", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 20900, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "Updater", "CDBoxUpdater.exe")), "独立更新器", Path.Combine(baseDirectory, "Updater", "CDBoxUpdater.exe"));
+            check(File.Exists(Path.Combine(baseDirectory, "Templates", "工程量计算表模板.xls")), "工程量模板", Path.Combine(baseDirectory, "Templates", "工程量计算表模板.xls"));
+
+            CDBoxStudioRuntimeInfo runtime = CDBoxStudioRuntime.Detect();
+            check(runtime != null && runtime.Available, "WebView2 Runtime", runtime == null ? "检测结果为空" : (runtime.Available ? runtime.Version : runtime.ErrorMessage));
+            check(doc != null, "当前图纸", doc == null ? "未找到活动文档" : doc.Name);
+
+            if (doc != null)
+            {
+                try
+                {
+                    using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                    {
+                        LayerTable layers = tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead, false) as LayerTable;
+                        int layerCount = 0;
+                        if (layers != null)
+                        {
+                            foreach (ObjectId ignored in layers) layerCount++;
+                        }
+                        check(layers != null, "数据库只读事务", layers == null ? "无法打开图层表" : "图层数=" + layerCount);
+                        tr.Commit();
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    check(false, "数据库只读事务", ex.Message);
+                }
+            }
+
+            string processName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+            check(!string.IsNullOrWhiteSpace(processName), "宿主进程", processName);
+
+            if (editor != null)
+            {
+                editor.WriteMessage("\n========== CDBox Self Test ==========");
+                foreach (string line in results) editor.WriteMessage("\n" + line);
+                editor.WriteMessage("\nCDBOX_SELFTEST_RESULT=" + (failureCount == 0 ? "PASS" : "FAIL") + "\n");
+            }
+            else
+            {
+                foreach (string line in results) Console.WriteLine(line);
+                Console.WriteLine("CDBOX_SELFTEST_RESULT=" + (failureCount == 0 ? "PASS" : "FAIL"));
+            }
+        }
+
+        private static bool IsHeadlessSelfTest()
+        {
+            string value = Environment.GetEnvironmentVariable("CDBOX_HEADLESS_SELFTEST");
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
         }
 
         [CommandMethod("CDMENU", CommandFlags.Modal)]
@@ -168,7 +257,7 @@ namespace TCPipeAutoDraw.Commands
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择新版 CDBox.dll";
+                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
                 dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;
@@ -500,6 +589,12 @@ namespace TCPipeAutoDraw.Commands
             ShowQuantityPipeAttributeEditor();
         }
 
+        [CommandMethod("SXLEGACY", CommandFlags.Modal | CommandFlags.UsePickSet)]
+        public void ShowLegacyQuantityPipeAttributeEditor()
+        {
+            ShowQuantityPipeAttributeEditor(true);
+        }
+
         [CommandMethod("SXQC", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void ClearQuantityAttributesByShortName()
         {
@@ -522,6 +617,12 @@ namespace TCPipeAutoDraw.Commands
         public void GenerateQuantityCalculationReportByShortName()
         {
             RunQuantityCalculationReport();
+        }
+
+        [CommandMethod("CDQBOARD", CommandFlags.Modal)]
+        public void ShowQuantityDashboardWindowByEnglishName()
+        {
+            ShowQuantityDashboardWindow();
         }
 
 
@@ -838,6 +939,11 @@ namespace TCPipeAutoDraw.Commands
 
         private void ShowQuantityPipeAttributeEditor()
         {
+            ShowQuantityPipeAttributeEditor(false);
+        }
+
+        private void ShowQuantityPipeAttributeEditor(bool legacy)
+        {
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
@@ -856,6 +962,12 @@ namespace TCPipeAutoDraw.Commands
                     if (info == null)
                     {
                         MessageBox.Show("所选对象无法识别为主管、支管或节点/检查井，未填入属性。\n请先在图层管理中设置父属性/标签，或选择正确对象。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    if (!legacy)
+                    {
+                        CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, QuantityDashboardService.GetDocumentId(doc));
                         return;
                     }
 
@@ -976,6 +1088,26 @@ namespace TCPipeAutoDraw.Commands
             {
                 doc.Editor.WriteMessage("\n[工程量表格生成] 失败：" + ex.Message);
                 MessageBox.Show(ex.Message, "工程量表格生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ShowQuantityDashboardWindow()
+        {
+            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "工程量动态看板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                CDBoxStudioQuantityDashboardWindow.ShowWindow(new AcadMainWindow());
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage("\n[工程量动态看板] 打开失败：" + ex.Message);
+                MessageBox.Show(new AcadMainWindow(), ex.Message, "工程量动态看板打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

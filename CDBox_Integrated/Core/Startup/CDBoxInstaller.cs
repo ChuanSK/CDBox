@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -117,6 +117,12 @@ namespace TCPipeAutoDraw.Core.Startup
                     return CDBoxInstallResult.Fail("未能定位当前加载的 CDBox.dll，无法安装。", installRoot);
                 }
 
+                CDBoxUpdateSourceValidationResult sourceValidation = CDBoxUpdateSourceValidator.Validate(sourceAssemblyPath);
+                if (!sourceValidation.Valid)
+                {
+                    return CDBoxInstallResult.Fail("当前加载目录不是完整 CDBox 构建输出，已拒绝安装。\r\n\r\n" + sourceValidation.Message, installRoot);
+                }
+
                 Directory.CreateDirectory(contentsDir);
                 string sourceDir = Path.GetDirectoryName(sourceAssemblyPath);
                 CopyRuntimeFiles(sourceDir, contentsDir);
@@ -212,6 +218,13 @@ namespace TCPipeAutoDraw.Core.Startup
                     return CDBoxInstallResult.Fail("请选择 CDBox 主 DLL 文件。当前选择：" + selectedName, installRoot);
                 }
 
+                CDBoxUpdateSourceValidationResult sourceValidation = CDBoxUpdateSourceValidator.Validate(newDllPath);
+                if (!sourceValidation.Valid)
+                {
+                    CDBoxInstallLogger.Warn("更新源校验失败：" + sourceValidation.Message.Replace("\r\n", " | "));
+                    return CDBoxInstallResult.Fail(sourceValidation.Message, installRoot);
+                }
+
                 string tempRoot = Path.Combine(Path.GetTempPath(), "CDBox_Update_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff"));
                 string stagingBundle = Path.Combine(tempRoot, BundleFolderName);
                 string stagingContents = Path.Combine(stagingBundle, ContentsFolderName);
@@ -221,11 +234,17 @@ namespace TCPipeAutoDraw.Core.Startup
                 WritePackageContents(stagingBundle, Path.GetFileName(newDllPath));
                 RegisterDemandLoad(GetInstalledDllPath(Path.GetFileName(newDllPath)));
 
-                string selfCheck = RunInstallSelfCheck(stagingBundle, Path.GetFileName(newDllPath));
+                bool stagingValid;
+                string selfCheck = RunInstallSelfCheck(stagingBundle, Path.GetFileName(newDllPath), out stagingValid);
                 CDBoxInstallLogger.Info("更新暂存目录准备完成。暂存目录：" + stagingBundle + "；源目录：" + sourceDir);
                 CDBoxInstallLogger.Info("更新暂存自检结果：" + selfCheck.Replace("\r\n", " | "));
 
-                bool started = TryStartDeferredUpdate(stagingBundle, installRoot, tempRoot, out string message);
+                if (!stagingValid)
+                {
+                    return CDBoxInstallResult.Fail("更新暂存包未通过完整性检查，现有安装不会被替换。\r\n\r\n" + selfCheck, installRoot);
+                }
+
+                bool started = TryStartDeferredUpdate(stagingBundle, installRoot, tempRoot, Path.GetFileName(newDllPath), out string message);
                 if (!started)
                 {
                     return CDBoxInstallResult.Fail("已准备更新文件，但未能创建关闭 CAD 后自动替换的脚本：" + message + "\r\n\r\n临时目录：" + stagingBundle, installRoot);
@@ -244,7 +263,7 @@ namespace TCPipeAutoDraw.Core.Startup
             catch (Exception ex)
             {
                 CDBoxInstallLogger.Error("安排更新失败。", ex);
-                return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
+                return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "\r\n\r\n日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
             }
         }
 
@@ -254,7 +273,7 @@ namespace TCPipeAutoDraw.Core.Startup
 
             var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                ".dll", ".pdb", ".config", ".json", ".xml", ".deps", ".targets", ".props",
+                ".dll", ".exe", ".pdb", ".config", ".json", ".xml", ".deps", ".targets", ".props",
                 ".html", ".htm", ".css", ".js", ".mjs", ".map", ".wasm",
                 ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
                 ".woff", ".woff2", ".ttf", ".eot", ".txt", ".csv", ".xls", ".xlsx"
@@ -287,6 +306,7 @@ namespace TCPipeAutoDraw.Core.Startup
                 CopyDirectoryIfExists(Path.Combine(root, "wwwroot"), Path.Combine(contentsDir, "wwwroot"));
                 CopyDirectoryIfExists(Path.Combine(root, "dist"), Path.Combine(contentsDir, "dist"));
                 CopyDirectoryIfExists(Path.Combine(root, "assets"), Path.Combine(contentsDir, "assets"));
+                CopyDirectoryIfExists(Path.Combine(root, "Updater"), Path.Combine(contentsDir, "Updater"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "Web"), Path.Combine(contentsDir, "Studio", "Web"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "dist"), Path.Combine(contentsDir, "Studio", "dist"));
                 CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Studio"), Path.Combine(contentsDir, "Studio"));
@@ -510,6 +530,12 @@ namespace TCPipeAutoDraw.Core.Startup
 
         private static string RunInstallSelfCheck(string bundleRoot, string assemblyFileName)
         {
+            bool passed;
+            return RunInstallSelfCheck(bundleRoot, assemblyFileName, out passed);
+        }
+
+        private static string RunInstallSelfCheck(string bundleRoot, string assemblyFileName, out bool passed)
+        {
             var ok = new List<string>();
             var warnings = new List<string>();
             var errors = new List<string>();
@@ -519,6 +545,7 @@ namespace TCPipeAutoDraw.Core.Startup
                 if (string.IsNullOrWhiteSpace(bundleRoot))
                 {
                     errors.Add("安装目录为空");
+                    passed = false;
                     return FormatSelfCheck(ok, warnings, errors);
                 }
 
@@ -539,6 +566,8 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 if (HasFrontendAssets(contentsDir)) ok.Add("Studio/Web 前端资源目录已安装或已内置");
                 else warnings.Add("未发现独立 Studio/Web 前端资源目录；当前 Preview 内置 HTML 可忽略，后续使用前端构建产物时请确认已复制到输出目录");
+
+                CheckFile(Path.Combine(contentsDir, "Updater", "CDBoxUpdater.exe"), "CDBoxUpdater.exe", ok, errors);
             }
             catch (Exception ex)
             {
@@ -546,6 +575,7 @@ namespace TCPipeAutoDraw.Core.Startup
                 CDBoxInstallLogger.Error("安装自检异常。", ex);
             }
 
+            passed = errors.Count == 0;
             return FormatSelfCheck(ok, warnings, errors);
         }
 
@@ -622,7 +652,7 @@ namespace TCPipeAutoDraw.Core.Startup
             return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
         }
 
-        private static bool TryStartDeferredUpdate(string stagingBundleRoot, string installRoot, string tempRoot, out string message)
+        private static bool TryStartDeferredUpdate(string stagingBundleRoot, string installRoot, string tempRoot, string assemblyFileName, out string message)
         {
             message = string.Empty;
             try
@@ -642,6 +672,8 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 int pid = Process.GetCurrentProcess().Id;
                 string cmdPath = Path.Combine(Path.GetTempPath(), "CDBox_Update_" + pid.ToString() + ".cmd");
+                string backupRoot = installRoot + ".update-backup";
+                string installedDll = Path.Combine(Path.Combine(installRoot, ContentsFolderName), string.IsNullOrWhiteSpace(assemblyFileName) ? "CDBox.dll" : assemblyFileName);
                 string script = "@echo off\r\n" +
                     "setlocal\r\n" +
                     ":wait\r\n" +
@@ -651,10 +683,21 @@ namespace TCPipeAutoDraw.Core.Startup
                     "  goto wait\r\n" +
                     ")\r\n" +
                     "if not exist \"" + installParent + "\" mkdir \"" + installParent + "\"\r\n" +
-                    "if exist \"" + installRoot + "\" rmdir /S /Q \"" + installRoot + "\"\r\n" +
+                    "if exist \"" + backupRoot + "\" rmdir /S /Q \"" + backupRoot + "\"\r\n" +
+                    "if exist \"" + installRoot + "\" move /Y \"" + installRoot + "\" \"" + backupRoot + "\" >nul\r\n" +
                     "xcopy /E /I /Y \"" + stagingBundleRoot + "\" \"" + installRoot + "\" >nul\r\n" +
+                    "if errorlevel 1 goto rollback\r\n" +
+                    "if not exist \"" + installedDll + "\" goto rollback\r\n" +
+                    "if exist \"" + backupRoot + "\" rmdir /S /Q \"" + backupRoot + "\"\r\n" +
                     "rmdir /S /Q \"" + tempRoot + "\"\r\n" +
-                    "del \"%~f0\"\r\n";
+                    "del \"%~f0\"\r\n" +
+                    "exit /b 0\r\n" +
+                    ":rollback\r\n" +
+                    "if exist \"" + installRoot + "\" rmdir /S /Q \"" + installRoot + "\"\r\n" +
+                    "if exist \"" + backupRoot + "\" move /Y \"" + backupRoot + "\" \"" + installRoot + "\" >nul\r\n" +
+                    "rmdir /S /Q \"" + tempRoot + "\"\r\n" +
+                    "del \"%~f0\"\r\n" +
+                    "exit /b 1\r\n";
 
                 File.WriteAllText(cmdPath, script, Encoding.Default);
                 Process.Start(new ProcessStartInfo

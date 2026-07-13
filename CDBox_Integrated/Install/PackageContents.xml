@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage
   SchemaVersion="1.0"
-  AppVersion="1.0.0"
+  AppVersion="2.9.0"
   Name="CDBox"
   Description="CDBox 管线测绘辅助插件"
   Author="CDBox"
@@ -28,6 +28,7 @@
         <Command Global="CDINSTALL" Local="CDINSTALL" />
         <Command Global="CDUNINSTALL" Local="CDUNINSTALL" />
         <Command Global="CDUPDATE" Local="CDUPDATE" />
+        <Command Global="CDSELFTEST" Local="CDSELFTEST" />
         <Command Global="CDBZSET" Local="CDBZSET" />
         <Command Global="BZSZ" Local="BZSZ" />
         <Command Global="CDLAYER" Local="CDLAYER" />

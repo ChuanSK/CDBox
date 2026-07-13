@@ -72,6 +72,16 @@ namespace TCPipeAutoDraw.UI.Studio
             return true;
         }
 
+        public bool RemoveFavorite(string id)
+        {
+            return !string.IsNullOrWhiteSpace(id) && FavoriteIds.Remove(id);
+        }
+
+        public void ClearRecent()
+        {
+            RecentItems.Clear();
+        }
+
         public void MarkRecent(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return;

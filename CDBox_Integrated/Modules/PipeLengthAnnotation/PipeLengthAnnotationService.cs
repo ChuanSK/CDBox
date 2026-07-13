@@ -59,7 +59,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             string previewText = BuildAnnotationText(options, previewSource);
             string bottomPreviewText = BuildBottomAnnotationText(options, previewSource);
             ObjectId previewTextStyleId = ResolveTextStyleId(doc, options.AnnotationFontName);
-            var jig = new PipeLengthAnnotationPreviewJig(leaderStartPoint, previewText, bottomPreviewText, options.TextHeight, previewTextStyleId);
+            TextLayoutMetrics previewMetrics = BuildTextLayoutMetrics(doc, previewText, bottomPreviewText, options.TextHeight, previewTextStyleId);
+            var jig = new PipeLengthAnnotationPreviewJig(doc.Database, leaderStartPoint, previewText, bottomPreviewText, options.TextHeight, previewTextStyleId, previewMetrics);
             PromptResult dragResult = ed.Drag(jig);
             if (dragResult.Status != PromptStatus.OK)
             {
@@ -270,29 +271,28 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 string text = BuildAnnotationText(options, result);
                 string bottomText = BuildBottomAnnotationText(options, result);
                 AttachmentPoint attachment = GetTextAttachment(annotationPoint, leaderStartPoint);
-                PreviewLayout initialLayout = BuildPreviewLayout(text, bottomText, options.TextHeight, annotationPoint, attachment);
+                ObjectId finalTextStyleId = GetExistingTextStyleId(db, tr, options.AnnotationFontName);
+                TextLayoutMetrics finalMetrics = BuildTextLayoutMetrics(db, tr, text, bottomText, options.TextHeight, finalTextStyleId);
+                PreviewLayout initialLayout = BuildPreviewLayout(text, bottomText, options.TextHeight, annotationPoint, attachment, finalMetrics);
 
-                ObjectId textId = DrawAnnotationDbText(db, tr, initialLayout.TopTextPoint, text, options.TextHeight, result.AnnotationLayerName, 7, options.AnnotationFontName);
+                ObjectId textId = DrawAnnotationDbText(db, tr, initialLayout.TopTextPoint, text, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
                 result.AnnotationObjectId = textId;
                 WriteAnnotationSourceData(tr, textId, result);
 
                 ObjectId bottomTextId = ObjectId.Null;
                 if (!string.IsNullOrWhiteSpace(bottomText) && !textId.IsNull)
                 {
-                    bottomTextId = DrawAnnotationDbText(db, tr, initialLayout.BottomTextPoint, bottomText, options.TextHeight, result.AnnotationLayerName, 7, options.AnnotationFontName);
+                    bottomTextId = DrawAnnotationDbText(db, tr, initialLayout.BottomTextPoint, bottomText, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
                     result.BottomAnnotationObjectId = bottomTextId;
                     WriteAnnotationSourceData(tr, bottomTextId, result);
                 }
 
-                Point3d underlineStart;
-                Point3d underlineEnd;
-                if (TryArrangeFinalAnnotation(tr, textId, bottomTextId, annotationPoint, options.TextHeight, attachment, out underlineStart, out underlineEnd))
+                // 为保证“预览即实际”，正式落图使用与 Jig 预览完全相同的布局计算结果。
+                // 之前落图后再次按 GeometricExtents 重排，会导致部分文字样式下预览和实际成图位置明显不一致。
+                if (options.DrawLeader && !textId.IsNull)
                 {
-                    if (options.DrawLeader && !textId.IsNull)
-                    {
-                        result.LeaderObjectId = DrawLeaderByUnderline(db, tr, leaderStartPoint, underlineStart, underlineEnd, result.AnnotationLayerName, attachment);
-                        WriteAnnotationSourceData(tr, result.LeaderObjectId, result);
-                    }
+                    result.LeaderObjectId = DrawLeaderByUnderline(db, tr, leaderStartPoint, initialLayout.UnderlineStart, initialLayout.UnderlineEnd, result.AnnotationLayerName, attachment);
+                    WriteAnnotationSourceData(tr, result.LeaderObjectId, result);
                 }
 
                 tr.Commit();
@@ -678,22 +678,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return leaderStartPoint.X <= annotationPoint.X ? AttachmentPoint.BottomLeft : AttachmentPoint.BottomRight;
         }
 
-        private static ObjectId DrawAnnotationDbText(Database db, Transaction tr, Point3d position, string text, double height, string layerName, short colorIndex, string textStyleName)
+        private static ObjectId DrawAnnotationDbText(Database db, Transaction tr, Point3d centerBaselinePoint, string text, double height, string layerName, short colorIndex, ObjectId textStyleId)
         {
             if (db == null || tr == null || string.IsNullOrWhiteSpace(text)) return ObjectId.Null;
 
             CadLayerService.EnsureLayer(db, tr, layerName, colorIndex);
-            ObjectId textStyleId = GetExistingTextStyleId(db, tr, textStyleName);
             BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
             var dbText = new DBText();
-            dbText.Position = position;
+            try { dbText.SetDatabaseDefaults(db); } catch { }
+            // 使用中心对齐：上下文字与横线中心一致，左侧/右侧标注时不会再因左插入点产生偏移。
+            dbText.HorizontalMode = TextHorizontalMode.TextCenter;
+            dbText.Position = centerBaselinePoint;
+            dbText.AlignmentPoint = centerBaselinePoint;
             dbText.Height = height <= 0 ? 1.0 : height;
             dbText.TextString = NormalizeDbTextString(text);
             dbText.Layer = layerName;
+            dbText.ColorIndex = colorIndex;
             if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
-
-            dbText.HorizontalMode = TextHorizontalMode.TextLeft;
 
             ObjectId id = btr.AppendEntity(dbText);
             tr.AddNewlyCreatedDBObject(dbText, true);
@@ -922,20 +924,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private sealed class PipeLengthAnnotationPreviewJig : DrawJig
         {
+            private readonly Database _database;
             private readonly Point3d _leaderStartPoint;
             private readonly string _text;
             private readonly string _bottomText;
             private readonly double _textHeight;
             private readonly ObjectId _textStyleId;
+            private readonly TextLayoutMetrics _metrics;
             private Point3d _annotationPoint;
 
-            public PipeLengthAnnotationPreviewJig(Point3d leaderStartPoint, string text, string bottomText, double textHeight, ObjectId textStyleId)
+            public PipeLengthAnnotationPreviewJig(Database database, Point3d leaderStartPoint, string text, string bottomText, double textHeight, ObjectId textStyleId, TextLayoutMetrics metrics)
             {
+                _database = database;
                 _leaderStartPoint = leaderStartPoint;
                 _text = string.IsNullOrWhiteSpace(text) ? "长度标注" : text;
                 _bottomText = string.IsNullOrWhiteSpace(bottomText) ? string.Empty : bottomText;
                 _textHeight = textHeight <= 0 ? 1.0 : textHeight;
                 _textStyleId = textStyleId;
+                _metrics = metrics ?? CreateEstimatedTextLayoutMetrics(_text, _bottomText, _textHeight);
                 _annotationPoint = leaderStartPoint;
             }
 
@@ -969,12 +975,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 if (draw == null || draw.Geometry == null) return true;
 
                 AttachmentPoint attachment = GetTextAttachment(_annotationPoint, _leaderStartPoint);
-                PreviewLayout layout = BuildPreviewLayout(_text, _bottomText, _textHeight, _annotationPoint, attachment);
+                PreviewLayout layout = BuildPreviewLayout(_text, _bottomText, _textHeight, _annotationPoint, attachment, _metrics);
 
-                DrawPreviewText(draw, layout.TopTextPoint, _text, _textHeight, _textStyleId);
+                DrawPreviewText(draw, _database, layout.TopTextPoint, _text, _textHeight, _textStyleId);
                 if (!string.IsNullOrWhiteSpace(_bottomText))
                 {
-                    DrawPreviewText(draw, layout.BottomTextPoint, _bottomText, _textHeight, _textStyleId);
+                    DrawPreviewText(draw, _database, layout.BottomTextPoint, _bottomText, _textHeight, _textStyleId);
                 }
 
                 using (var polyline = new Autodesk.AutoCAD.DatabaseServices.Polyline())
@@ -995,26 +1001,44 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private sealed class PreviewLayout
         {
+            /// <summary>
+            /// DBText 的中心基线点。预览和正式落图都使用同一对齐方式，避免“预览一套、成图一套”。
+            /// </summary>
             public Point3d TopTextPoint { get; set; }
             public Point3d BottomTextPoint { get; set; }
+
+            public double TopTextWidth { get; set; }
+            public double BottomTextWidth { get; set; }
+            public double UnderlineWidth { get; set; }
             public Point3d UnderlineStart { get; set; }
             public Point3d UnderlineEnd { get; set; }
         }
 
-        private static PreviewLayout BuildPreviewLayout(string text, string bottomText, double textHeight, Point3d annotationPoint, AttachmentPoint attachment)
+        private sealed class TextLayoutMetrics
+        {
+            public double TopTextWidth { get; set; }
+            public double BottomTextWidth { get; set; }
+        }
+
+        private static PreviewLayout BuildPreviewLayout(string text, string bottomText, double textHeight, Point3d annotationPoint, AttachmentPoint attachment, TextLayoutMetrics metrics)
         {
             if (textHeight <= 0) textHeight = 1.0;
+            metrics = metrics ?? CreateEstimatedTextLayoutMetrics(text, bottomText, textHeight);
 
-            double topWidth = EstimatePreviewTextWidth(text, textHeight);
-            double bottomWidth = string.IsNullOrWhiteSpace(bottomText) ? 0.0 : EstimatePreviewTextWidth(bottomText, textHeight);
-            double lineWidth = Math.Max(topWidth, bottomWidth);
+            double topWidth = Math.Max(metrics.TopTextWidth, EstimatePreviewTextWidth(text, textHeight));
+            double bottomWidth = string.IsNullOrWhiteSpace(bottomText) ? 0.0 : Math.Max(metrics.BottomTextWidth, EstimatePreviewTextWidth(bottomText, textHeight));
+            double sideMargin = Math.Max(textHeight * 0.12, 0.03);
+            double lineWidth = Math.Max(topWidth, bottomWidth) + sideMargin * 2.0;
+            if (lineWidth < DuplicateTolerance) lineWidth = Math.Max(textHeight * 4.0, 1.0);
+
             double lineGap = Math.Max(textHeight * 0.22, 0.05);
-
             double lineY = annotationPoint.Y - lineGap;
             double z = annotationPoint.Z;
             double lineStartX;
             double lineEndX;
 
+            // annotationPoint 始终作为横线靠近引线一侧的端点：
+            // 右侧标注时为横线左端点，左侧标注时为横线右端点。
             if (IsRightAttachment(attachment))
             {
                 lineStartX = annotationPoint.X - lineWidth;
@@ -1026,29 +1050,41 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 lineEndX = annotationPoint.X + lineWidth;
             }
 
+            double centerX = (lineStartX + lineEndX) / 2.0;
             var layout = new PreviewLayout();
+            layout.TopTextWidth = topWidth;
+            layout.BottomTextWidth = bottomWidth;
+            layout.UnderlineWidth = lineWidth;
             layout.UnderlineStart = new Point3d(lineStartX, lineY, z);
             layout.UnderlineEnd = new Point3d(lineEndX, lineY, z);
-            layout.TopTextPoint = new Point3d(lineStartX + (lineWidth - topWidth) / 2.0, annotationPoint.Y, z);
-            layout.BottomTextPoint = new Point3d(lineStartX + (lineWidth - bottomWidth) / 2.0, lineY - lineGap - textHeight, z);
+            layout.TopTextPoint = new Point3d(centerX, annotationPoint.Y, z);
+            layout.BottomTextPoint = new Point3d(centerX, lineY - lineGap - textHeight, z);
             return layout;
         }
 
-        private static void DrawPreviewText(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw, Point3d position, string text, double textHeight, ObjectId textStyleId)
+        private static void DrawPreviewText(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw, Database db, Point3d centerBaselinePoint, string text, double textHeight, ObjectId textStyleId)
         {
             if (draw == null || draw.Geometry == null || string.IsNullOrWhiteSpace(text)) return;
             if (textHeight <= 0) textHeight = 1.0;
 
+            string normalized = NormalizeDbTextString(text);
             try
             {
                 using (var dbText = new DBText())
                 {
-                    dbText.Position = position;
+                    if (db != null)
+                    {
+                        try { dbText.SetDatabaseDefaults(db); } catch { }
+                    }
+
+                    dbText.HorizontalMode = TextHorizontalMode.TextCenter;
+                    dbText.Position = centerBaselinePoint;
+                    dbText.AlignmentPoint = centerBaselinePoint;
                     dbText.Height = textHeight;
-                    dbText.TextString = NormalizeDbTextString(text);
+                    dbText.TextString = normalized;
                     dbText.ColorIndex = 7;
-                    dbText.HorizontalMode = TextHorizontalMode.TextLeft;
                     if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
+                    try { if (db != null) dbText.AdjustAlignment(db); } catch { }
                     draw.Geometry.Draw(dbText);
                 }
             }
@@ -1056,21 +1092,115 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 try
                 {
-                    draw.Geometry.Text(position, Vector3d.ZAxis, Vector3d.XAxis, textHeight, 1.0, 0.0, NormalizeDbTextString(text));
+                    // 兜底预览只在 DBText 预览失败时使用。正常情况下会走上方 DBText 分支，从而继承用户选择的文字样式和高度。
+                    draw.Geometry.Text(centerBaselinePoint, Vector3d.ZAxis, Vector3d.XAxis, textHeight, 1.0, 0.0, normalized);
                 }
                 catch { }
+            }
+        }
+
+        private static TextLayoutMetrics BuildTextLayoutMetrics(Document doc, string topText, string bottomText, double textHeight, ObjectId textStyleId)
+        {
+            if (doc == null || doc.Database == null) return CreateEstimatedTextLayoutMetrics(topText, bottomText, textHeight);
+
+            try
+            {
+                using (DocumentLock docLock = doc.LockDocument())
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    TextLayoutMetrics metrics = BuildTextLayoutMetrics(doc.Database, tr, topText, bottomText, textHeight, textStyleId);
+                    tr.Commit();
+                    return metrics;
+                }
+            }
+            catch
+            {
+                return CreateEstimatedTextLayoutMetrics(topText, bottomText, textHeight);
+            }
+        }
+
+        private static TextLayoutMetrics BuildTextLayoutMetrics(Database db, Transaction tr, string topText, string bottomText, double textHeight, ObjectId textStyleId)
+        {
+            if (textHeight <= 0) textHeight = 1.0;
+
+            TextLayoutMetrics estimated = CreateEstimatedTextLayoutMetrics(topText, bottomText, textHeight);
+            var metrics = new TextLayoutMetrics();
+            metrics.TopTextWidth = Math.Max(estimated.TopTextWidth, MeasureDbTextWidth(db, tr, topText, textHeight, textStyleId, estimated.TopTextWidth));
+            metrics.BottomTextWidth = string.IsNullOrWhiteSpace(bottomText)
+                ? 0.0
+                : Math.Max(estimated.BottomTextWidth, MeasureDbTextWidth(db, tr, bottomText, textHeight, textStyleId, estimated.BottomTextWidth));
+            return metrics;
+        }
+
+        private static TextLayoutMetrics CreateEstimatedTextLayoutMetrics(string topText, string bottomText, double textHeight)
+        {
+            var metrics = new TextLayoutMetrics();
+            metrics.TopTextWidth = EstimatePreviewTextWidth(topText, textHeight);
+            metrics.BottomTextWidth = string.IsNullOrWhiteSpace(bottomText) ? 0.0 : EstimatePreviewTextWidth(bottomText, textHeight);
+            return metrics;
+        }
+
+        private static double MeasureDbTextWidth(Database db, Transaction tr, string text, double textHeight, ObjectId textStyleId, double fallbackWidth)
+        {
+            if (db == null || tr == null || string.IsNullOrWhiteSpace(text)) return fallbackWidth;
+            if (textHeight <= 0) textHeight = 1.0;
+
+            DBText tempText = null;
+            try
+            {
+                BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+
+                tempText = new DBText();
+                try { tempText.SetDatabaseDefaults(db); } catch { }
+                tempText.Position = Point3d.Origin;
+                tempText.Height = textHeight;
+                tempText.TextString = NormalizeDbTextString(text);
+                if (!textStyleId.IsNull) tempText.TextStyleId = textStyleId;
+                tempText.HorizontalMode = TextHorizontalMode.TextLeft;
+
+                btr.AppendEntity(tempText);
+                tr.AddNewlyCreatedDBObject(tempText, true);
+                try { tempText.AdjustAlignment(db); } catch { }
+
+                Extents3d extents = tempText.GeometricExtents;
+                double width = Math.Abs(extents.MaxPoint.X - extents.MinPoint.X);
+
+                try { tempText.Erase(); } catch { }
+                return width > DuplicateTolerance ? Math.Max(width, fallbackWidth) : fallbackWidth;
+            }
+            catch
+            {
+                try
+                {
+                    if (tempText != null && !tempText.IsErased) tempText.Erase();
+                }
+                catch { }
+                return fallbackWidth;
             }
         }
 
         private static double EstimatePreviewTextWidth(string text, double textHeight)
         {
             if (textHeight <= 0) textHeight = 1.0;
+            text = NormalizeDbTextString(text);
             if (string.IsNullOrEmpty(text)) return Math.Max(textHeight * 4.0, 1.0);
 
             double widthFactor = 0.0;
             foreach (char ch in text)
             {
-                widthFactor += ch <= 127 ? 0.62 : 1.0;
+                if (ch <= 127)
+                {
+                    if (char.IsWhiteSpace(ch)) widthFactor += 0.35;
+                    else if (char.IsDigit(ch)) widthFactor += 0.68;
+                    else if (char.IsLetter(ch)) widthFactor += 0.72;
+                    else if (ch == '.' || ch == ',' || ch == ':' || ch == ';') widthFactor += 0.42;
+                    else widthFactor += 0.58;
+                }
+                else
+                {
+                    // 中文及中文标点按略大于一个字高估算；测量失败时宁可横线略长，也不能短于下方长宽高注记。
+                    widthFactor += 1.08;
+                }
             }
 
             return Math.Max(widthFactor * textHeight, textHeight * 4.0);

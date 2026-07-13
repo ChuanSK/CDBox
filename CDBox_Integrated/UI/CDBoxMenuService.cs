@@ -349,7 +349,7 @@ namespace TCPipeAutoDraw.UI
             //object common = AddSubMenu(topMenu, "常用功能", "CDBox_Common");
             //AddEmptyItem(common);
 
-            AddCommandItem(topMenu, "CDBox Studio 实验版(CDSTUDIO)", "CDSTUDIO");
+            AddCommandItem(topMenu, "WebView2 实验工作台", "CDSTUDIO");
             AddCommandItem(topMenu, "图层管理器(TCGL)", "CDLAYER");
 
             object annotation = AddSubMenu(topMenu, "标注", "CDBox_Annotation");

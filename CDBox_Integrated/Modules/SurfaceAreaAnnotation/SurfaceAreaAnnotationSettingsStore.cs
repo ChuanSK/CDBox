@@ -100,28 +100,35 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             try
             {
-                string path = GetSettingsPath();
-                string dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                var lines = new List<string>();
-                lines.Add("BoundaryInterval=" + Escape(options.BoundaryInterval.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
-                lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
-                lines.Add("CassSurfaceLogPath=" + Escape(options.CassSurfaceLogPath ?? string.Empty));
-                lines.Add("DeleteCassGeneratedObjects=" + Escape(options.DeleteCassGeneratedObjects ? "true" : "false"));
-                lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
-                lines.Add("LayerMode=" + Escape(options.LayerMode.ToString()));
-                lines.Add("SelectedLayerName=" + Escape(options.SelectedLayerName ?? string.Empty));
-                lines.Add("AnnotationLayerName=" + Escape(options.AnnotationLayerName ?? string.Empty));
-
-                File.WriteAllLines(path, lines.ToArray());
+                SaveStrict(options);
             }
             catch
             {
                 // 设置保存失败不能影响正式标注流程。
             }
+        }
+
+        internal static void SaveStrict(SurfaceAreaAnnotationOptions options)
+        {
+            if (options == null) throw new ArgumentNullException("options");
+
+            string path = GetSettingsPath();
+            string dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var lines = new List<string>();
+            lines.Add("BoundaryInterval=" + Escape(options.BoundaryInterval.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
+            lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
+            lines.Add("CassSurfaceLogPath=" + Escape(options.CassSurfaceLogPath ?? string.Empty));
+            lines.Add("DeleteCassGeneratedObjects=" + Escape(options.DeleteCassGeneratedObjects ? "true" : "false"));
+            lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
+            lines.Add("LayerMode=" + Escape(options.LayerMode.ToString()));
+            lines.Add("SelectedLayerName=" + Escape(options.SelectedLayerName ?? string.Empty));
+            lines.Add("AnnotationLayerName=" + Escape(options.AnnotationLayerName ?? string.Empty));
+
+            File.WriteAllLines(path, lines.ToArray());
         }
 
         private static string GetSettingsPath()
