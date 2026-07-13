@@ -3,28 +3,28 @@
     "latestVersion":  "CDBox-Studio-Preview-6",
     "versionCode":  20600,
     "title":  "CDBox Studio Preview 6",
-    "releaseDate":  "2026-07-12",
+    "releaseDate":  "2026-07-13",
     "mandatory":  false,
-    "package":  {
-                    "fileName":  "CDBox.Studio.Preview.6.zip",
-                    "size":  6981465,
-                    "sha256":  "51EF3875E91D76725D47AF2551F950F1C55CED838502F99C45C0B5C1F082DFF4",
-                    "urls":  [
-                                 {
-                                     "name":  "GitHub备用",
-                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.6.zip"
-                                 },
-                                 {
-                                     "name":  "Gitee",
-                                     "url":  "https://gitee.com/chaun-skye/CDBox/releases/download/CDBox-Studio-Preview-6/CDBox.Studio.Preview.6.zip"
-                                 },
-                                 {
-                                     "name":  "GitCode",
-                                     "url":  "https://gitcode.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-6/CDBox.Studio.Preview.6.zip"
-                                 }
-                             ]
-                },
+  "package": {
+    "fileName": "CDBox.Studio.Preview.6.zip",
+    "size": 49459216,
+    "sha256": "e6a2f7ba053c9645425994e06b33c3e18d41a823dff75d60bbbf32290a80a9f1",
+    "urls": [
+      {
+        "name": "GitHub备用",
+        "url": "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.6.zip"
+      },
+      {
+        "name": "Gitee",
+        "url": "https://gitee.com/chaun-skye/CDBox/releases/download/CDBox-Studio-Preview-6/CDBox.Studio.Preview.6.zip"
+      },
+      {
+        "name": "GitCode",
+        "url": "https://gitcode.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-6/CDBox.Studio.Preview.6.zip"
+      }
+    ]
+  },
     "notes":  [
-                  "完成插件更新系统；新增工程量动态看板"
+                  "工程量动态看板"
               ]
 }
