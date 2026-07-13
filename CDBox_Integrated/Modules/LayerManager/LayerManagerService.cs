@@ -798,7 +798,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     Pattern = "200*",
                     ParentGroup = "主管",
                     ParentClass = string.Empty,
-                    TagText = "{Bracket}、{DN}",
+                    TagText = "{DN}、{PipeMaterial}、{Bracket}",
                     StopAfterMatch = true
                 },
                 new LayerRecognitionRule
@@ -808,7 +808,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     Pattern = "300*",
                     ParentGroup = "主管",
                     ParentClass = string.Empty,
-                    TagText = "{Bracket}、{DN}",
+                    TagText = "{DN}、{PipeMaterial}、{Bracket}",
                     StopAfterMatch = true
                 },
                 new LayerRecognitionRule
@@ -817,8 +817,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     MatchMode = MatchModeWildcard,
                     Pattern = "110*",
                     ParentGroup = "支管",
-                    ParentClass = "DN110",
-                    TagText = "{Bracket}、{DN}",
+                    ParentClass = "{BaseName}",
+                    TagText = "{DN}、{PipeMaterial}、{Bracket}",
                     StopAfterMatch = true
                 },
                 new LayerRecognitionRule
@@ -827,8 +827,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     MatchMode = MatchModeWildcard,
                     Pattern = "75*",
                     ParentGroup = "支管",
-                    ParentClass = "DN75",
-                    TagText = "{Bracket}、{DN}",
+                    ParentClass = "{BaseName}",
+                    TagText = "{DN}、{PipeMaterial}、{Bracket}",
                     StopAfterMatch = true
                 },
                 new LayerRecognitionRule
@@ -837,8 +837,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     MatchMode = MatchModeWildcard,
                     Pattern = "160*",
                     ParentGroup = "支管",
-                    ParentClass = "DN160",
-                    TagText = "{Bracket}、{DN}",
+                    ParentClass = "{BaseName}",
+                    TagText = "{DN}、{PipeMaterial}、{Bracket}",
                     StopAfterMatch = true
                 },
                 new LayerRecognitionRule

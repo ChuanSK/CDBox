@@ -21,12 +21,15 @@ namespace CDBox.CoreTests
             Run("对象类型识别", TestKindRecognition);
             Run("有效长度与默认表克隆", TestEffectiveLengthAndDefaultClone);
             Run("结构层解析", TestStructureLayers);
+            Run("工程量管线分类", TestQuantityPipeClassification);
             Run("沉泥井管沟深度", TestSiltWellDepth);
             Run("常用文本解析", TestPrimitiveParsing);
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("Studio 收藏与最近使用", TestStudioState);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
+            Run("图层管理器自定义父级", TestLayerManagerCustomParents);
+            Run("属性默认表统一表格交互", TestQuantityDefaultsTableInteraction);
             Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
@@ -101,6 +104,13 @@ namespace CDBox.CoreTests
             True(QuantityStructureLayer.IsSandCushion(layers[3]), "中粗砂垫层分类");
         }
 
+        private static void TestQuantityPipeClassification()
+        {
+            Equal("DN110PVC管", QuantityDashboardClassification.BuildPipeType("110", "PVC"), "数字管径与管材应形成统一类型");
+            Equal("DN110PVC管", QuantityDashboardClassification.BuildPipeType("DN110", "PVC管"), "已有前后缀不应重复");
+            Equal("DN110PE管", QuantityDashboardClassification.BuildPipeType("DN110", "PE"), "不同管材应形成不同类型");
+        }
+
         private static void TestSiltWellDepth()
         {
             QuantityPipeAttributes well = QuantityPipeAttributes.DefaultNodeWell;
@@ -160,6 +170,13 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
             True(standalone.IndexOf("data-theme=\"fresh\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
             True(standalone.IndexOf("class=\"no-animations\"", StringComparison.Ordinal) >= 0, "独立页应继承动画设置");
+            False(standalone.IndexOf("当前工程量快速估算台", StringComparison.Ordinal) >= 0, "看板不应显示冗余副标题");
+            False(standalone.IndexOf("当前结果为基于图纸现有属性", StringComparison.Ordinal) >= 0, "看板不应显示估算说明小字");
+            False(standalone.IndexOf("适合截图、复制或导出", StringComparison.Ordinal) >= 0, "参考表不应显示用途说明小字");
+            True(standalone.IndexOf("style=\"display:none\"><div class=\"qd-panel-head\"><div><h3>动态工程量图表", StringComparison.Ordinal) >= 0, "动态图表卡片当前应隐藏");
+            False(standalone.IndexOf("<small>" + "'+html(sub)", StringComparison.Ordinal) >= 0, "汇总卡片不应显示说明小字");
+            True(standalone.IndexOf("道路拆除", StringComparison.Ordinal) >= 0, "看板总览应直接显示道路拆除指标");
+            True(standalone.IndexOf("余土道渣外运", StringComparison.Ordinal) >= 0, "看板总览应直接显示外运指标");
         }
 
         private static void TestQuantityAttributeEditorSharedPage()
@@ -173,6 +190,35 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
             True(standalone.IndexOf("Preview 9", StringComparison.Ordinal) >= 0, "页面应显示 Preview 9 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
+            True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
+            True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
+            True(standalone.IndexOf("bindLayerDrag", StringComparison.Ordinal) >= 0, "结构层应支持拖动排序");
+        }
+
+        private static void TestLayerManagerCustomParents()
+        {
+            string script = CDBoxStudioLayerManagerPage.BuildComponentScript();
+            string styles = CDBoxStudioLayerManagerPage.BuildStyles(false);
+            True(styles.Length > 10000, "Layer Manager shared styles must not be missing");
+            True(styles.IndexOf(".lm-page", StringComparison.Ordinal) >= 0, "Layer Manager page layout styles must be present");
+            True(styles.IndexOf(".lm-grid-header", StringComparison.Ordinal) >= 0, "Layer Manager grid styles must be present");
+            True(styles.IndexOf(".lm-grid-row.dragging", StringComparison.Ordinal) >= 0, "Layer Manager drag state styles must be present");
+            False(script.IndexOf("branch('other','其他'", StringComparison.Ordinal) >= 0, "不应再生成合成的“其他”父级");
+            True(script.IndexOf("out+=otherChildren;", StringComparison.Ordinal) >= 0, "自定义父级应直接显示在树根");
+            True(script.IndexOf("draggedLayerName", StringComparison.Ordinal) >= 0, "图层表应支持拖动行");
+            True(script.IndexOf("draggable=\"true\"", StringComparison.Ordinal) >= 0, "图层行应启用拖动");
+            False(script.IndexOf("树状分类筛选、行内属性编辑", StringComparison.Ordinal) >= 0, "图层管理器不应显示冗余说明");
+        }
+
+        private static void TestQuantityDefaultsTableInteraction()
+        {
+            string script = CDBoxStudioQuantityDefaultsPage.BuildEmbeddedBridgeScript();
+            True(script.IndexOf("draggable=\"true\"", StringComparison.Ordinal) >= 0, "默认表结构层应支持拖动行");
+            True(script.IndexOf("draggedLayer", StringComparison.Ordinal) >= 0, "默认表应绑定拖动排序");
+            False(script.IndexOf(">上移<", StringComparison.Ordinal) >= 0, "默认表不应保留上移按钮");
+            False(script.IndexOf(">下移<", StringComparison.Ordinal) >= 0, "默认表不应保留下移按钮");
+            False(script.IndexOf("data-layer-row-action=\"up\"", StringComparison.Ordinal) >= 0, "默认表不应保留行上移操作");
+            False(script.IndexOf("data-layer-row-action=\"down\"", StringComparison.Ordinal) >= 0, "默认表不应保留行下移操作");
         }
 
         private static void TestLegacyUpdateSourceValidation()

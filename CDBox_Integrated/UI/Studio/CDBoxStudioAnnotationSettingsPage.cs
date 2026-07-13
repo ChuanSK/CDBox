@@ -35,7 +35,7 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("<section id=\"annotationSettingsPage\" class=\"annotation-settings-page ").Append(standalone ? "as-standalone" : "as-embedded").Append("\" data-route=\"annotation-settings\"");
             if (!standalone) page.Append(" style=\"display:none\"");
             page.Append(">");
-            page.Append("<div class=\"as-page\"><header class=\"as-head\"><div class=\"as-heading\"><h2>标注设置</h2><p>统一管理表面积、管线长度和节点标注参数。</p></div><div class=\"as-head-actions\">");
+            page.Append("<div class=\"as-page\"><header class=\"as-head\"><div class=\"as-heading\"><h2>标注设置</h2></div><div class=\"as-head-actions\">");
             if (!standalone) page.Append("<button type=\"button\" class=\"as-btn ghost\" data-action=\"open-standalone\">独立窗口</button>");
             page.Append("<div class=\"as-reset-split\"><button type=\"button\" class=\"as-btn warning\" data-action=\"reset-current\">恢复当前默认</button><button type=\"button\" class=\"as-btn warning as-caret\" data-action=\"toggle-reset-menu\">▾</button><div class=\"as-reset-menu\"><button data-reset-section=\"surface\">恢复表面积默认</button><button data-reset-section=\"pipeLength\">恢复管线长度默认</button><button data-reset-section=\"node\">恢复节点默认</button><button data-reset-section=\"all\">恢复全部默认</button></div></div>");
             page.Append("<button type=\"button\" class=\"as-btn primary\" data-action=\"save\" disabled><span data-save-label>保存设置</span></button>");
@@ -56,7 +56,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static void AppendModeCard(StringBuilder page, string section, string title, string description)
         {
-            page.Append("<button type=\"button\" class=\"as-mode-card\" data-mode=\"").Append(HtmlAttr(section)).Append("\"><span class=\"as-dirty-dot\"></span><strong>").Append(Html(title)).Append("</strong><em>").Append(Html(description)).Append("</em><small data-summary>读取中…</small></button>");
+            page.Append("<button type=\"button\" class=\"as-mode-card\" data-mode=\"").Append(HtmlAttr(section)).Append("\"><span class=\"as-dirty-dot\"></span><strong>").Append(Html(title)).Append("</strong><small data-summary>读取中…</small></button>");
         }
 
         public static string BuildStyles(bool standalone)

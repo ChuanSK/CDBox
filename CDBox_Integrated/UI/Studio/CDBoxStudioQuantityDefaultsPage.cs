@@ -660,12 +660,10 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             var page = new StringBuilder();
             page.Append("<section id=\"defaultProfilesPage\" class=\"quantity-defaults-page quantity-defaults-embedded\" style=\"display:none\">");
-            page.Append("<div class=\"settings-head\"><div><span class=\"kicker\">Studio Preview 5.1</span><h2>属性默认表</h2><p>维护主管、支管、节点/检查井三类对象的默认属性。内嵌页和独立页复用同一个 QuantityDefaultsPage / StructureLayerEditor；旧 WinForms 默认表保留为兜底入口。</p></div><div class=\"head-actions\"><button class=\"primary-btn\" id=\"openDefaultProfilesWindow\">独立窗口打开</button><button class=\"ghost-btn\" id=\"openLegacyDefaultProfiles\">打开旧版属性默认表</button><button class=\"ghost-btn\" id=\"backToHomeFromDefaults\">返回总览</button></div></div>");
+            page.Append("<div class=\"settings-head\"><div><span class=\"kicker\">Studio Preview 5.1</span><h2>属性默认表</h2></div><div class=\"head-actions\"><button class=\"primary-btn\" id=\"openDefaultProfilesWindow\">独立窗口打开</button><button class=\"ghost-btn\" id=\"openLegacyDefaultProfiles\">打开旧版属性默认表</button><button class=\"ghost-btn\" id=\"backToHomeFromDefaults\">返回总览</button></div></div>");
             page.Append("<article class=\"setting-card profiles-card qd-card\" data-quantity-defaults=\"1\">");
-            page.Append("<div class=\"rules-toolbar qd-toolbar\"><div><strong>默认表</strong><em>规格/管径和井规格后续由插件自动识别，旧配置兼容读取但不再在界面维护。</em></div><div class=\"profile-actions\"><button id=\"restoreDefaultProfilesButton\" class=\"danger-btn warn\">恢复默认</button><button id=\"saveDefaultProfilesButton\" class=\"primary-btn\">保存</button></div></div>");
+            page.Append("<div class=\"rules-toolbar qd-toolbar\"><div><strong>默认表</strong></div><div class=\"profile-actions\"><button id=\"restoreDefaultProfilesButton\" class=\"danger-btn warn\">恢复默认</button><button id=\"saveDefaultProfilesButton\" class=\"primary-btn\">保存</button></div></div>");
             page.Append("<div id=\"defaultProfileTabs\" class=\"profile-tabs qd-tabs\"></div><div id=\"defaultProfileEditor\" class=\"profile-editor qd-editor\"></div>");
-            page.Append("<div class=\"profile-help qd-help\"><strong>填写说明：</strong>回填结构层使用结构化层列表编辑，每层包含层名、厚度、锁定和管线层/井下层标记；保存时自动转换回旧属性默认表配置格式，旧属性编辑器可以继续读取。</div>");
-            page.Append("<p class=\"muted-path\">保存位置：{{DEFAULT_PROFILES_PATH}}</p>");
             page.Append("</article></section>");
             return page.ToString();
         }
@@ -680,8 +678,8 @@ namespace TCPipeAutoDraw.UI.Studio
             html.Append(BuildStyles(true));
             html.Append("</style></head><body data-theme=\"").Append(HtmlAttr(settings.Theme)).Append("\" class=\"").Append(settings.AnimationsEnabled ? string.Empty : "no-animations").Append("\">");
             html.Append("<section id=\"defaultProfilesPage\" class=\"quantity-defaults-page quantity-defaults-standalone\" data-route=\"quantity-defaults\">");
-            html.Append("<main class=\"qd-page\"><article class=\"qd-card\"><div class=\"qd-card-head\"><div class=\"qd-title\"><strong>属性默认表</strong><em>主管、支管、节点/检查井三类默认属性。保存后旧属性编辑器读取同一份配置。</em></div><div class=\"qd-actions\"><button id=\"restoreDefaultProfilesButton\" class=\"qd-btn warning\">恢复默认</button><button id=\"saveDefaultProfilesButton\" class=\"qd-btn primary\">保存</button><button id=\"openLegacyDefaultProfiles\" class=\"qd-btn legacy\">打开旧版</button><button id=\"closeWindow\" class=\"qd-btn danger\">关闭</button></div></div>");
-            html.Append("<div id=\"defaultProfileTabs\" class=\"qd-tabs\"></div><div id=\"defaultProfileEditor\" class=\"qd-editor\"></div><div class=\"qd-help\"><strong>填写说明：</strong>规格/管径和井规格由插件自动识别，不再在默认表中维护。回填结构层使用结构化列表，保存时自动转回旧配置文本格式。</div><p class=\"qd-path\">保存位置：").Append(Html(CDBoxStudioDefaultProfiles.DefaultsFilePath)).Append("<br>Studio 日志：").Append(Html(logFilePath ?? string.Empty)).Append("</p></article></main></section><div id=\"toastStack\" class=\"toast-stack\"></div>");
+            html.Append("<main class=\"qd-page\"><article class=\"qd-card\"><div class=\"qd-card-head\"><div class=\"qd-title\"><strong>属性默认表</strong></div><div class=\"qd-actions\"><button id=\"restoreDefaultProfilesButton\" class=\"qd-btn warning\">恢复默认</button><button id=\"saveDefaultProfilesButton\" class=\"qd-btn primary\">保存</button><button id=\"openLegacyDefaultProfiles\" class=\"qd-btn legacy\">打开旧版</button><button id=\"closeWindow\" class=\"qd-btn danger\">关闭</button></div></div>");
+            html.Append("<div id=\"defaultProfileTabs\" class=\"qd-tabs\"></div><div id=\"defaultProfileEditor\" class=\"qd-editor\"></div></article></main></section><div id=\"toastStack\" class=\"toast-stack\"></div>");
             html.Append("<script>\n");
             html.Append("var defaultProfilesData=").Append(CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadDefaults())).Append(";\n");
             html.Append("var builtInDefaultProfilesData=").Append(CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadBuiltInDefaults())).Append(";\n");
@@ -692,17 +690,34 @@ namespace TCPipeAutoDraw.UI.Studio
 
         public static string BuildStyles(bool standalone)
         {
-            return Decode(standalone ? StandaloneStyleBase64 : EmbeddedStyleBase64);
+            return Decode(standalone ? StandaloneStyleBase64 : EmbeddedStyleBase64)
+                + ".layer-table tr[draggable=true]{cursor:grab}.layer-table tr.dragging{opacity:.4}.layer-table tr.drag-target td{background:rgba(59,130,246,.10)}";
         }
 
         public static string BuildEmbeddedBridgeScript()
         {
-            return Decode(EmbeddedBridgeScriptBase64);
+            return NormalizeTableExperience(Decode(EmbeddedBridgeScriptBase64));
         }
 
         private static string BuildStandaloneBootstrapScript()
         {
-            return Decode(StandaloneBootstrapScriptBase64);
+            return NormalizeTableExperience(Decode(StandaloneBootstrapScriptBase64));
+        }
+
+        private static string NormalizeTableExperience(string script)
+        {
+            script = script.Replace("+(f.help?'<p>'+esc(f.help)+'</p>':'')", string.Empty);
+            script = script.Replace("<span>每层填写层名、厚度、锁定和管线层/井下层标记；保存时自动拼回旧版多行结构层文本。</span>", string.Empty);
+            script = script.Replace("<button type=\"button\" class=\"small-btn\" data-layer-action=\"up\" data-idx=\"'+idx+'\">上移</button>", string.Empty);
+            script = script.Replace("<button type=\"button\" class=\"small-btn\" data-layer-action=\"down\" data-idx=\"'+idx+'\">下移</button>", string.Empty);
+            script = script.Replace("<button type=\"button\" class=\"icon-btn\" data-layer-row-action=\"up\" data-idx=\"'+idx+'\" data-row=\"'+row+'\">↑</button>", string.Empty);
+            script = script.Replace("<button type=\"button\" class=\"icon-btn\" data-layer-row-action=\"down\" data-idx=\"'+idx+'\" data-row=\"'+row+'\">↓</button>", string.Empty);
+            script = script.Replace("<tr class=\"'+(row===this.selectedLayer[key]?'selected':'')+'\" data-layer-row=\"'+row+'\"", "<tr draggable=\"true\" class=\"'+(row===this.selectedLayer[key]?'selected':'')+'\" data-layer-row=\"'+row+'\"");
+            script = script.Replace(
+                "QuantityDefaultsPage.prototype.bindStructureEditors=function(p){var self=this;",
+                "QuantityDefaultsPage.prototype.bindStructureEditors=function(p){var self=this,draggedLayer=null;[].slice.call(this.editor.querySelectorAll('[data-layer-row]')).forEach(function(rowEl){rowEl.addEventListener('dragstart',function(ev){if(ev.target.closest('input,select,button')){ev.preventDefault();return;}draggedLayer=rowEl;rowEl.classList.add('dragging');if(ev.dataTransfer)ev.dataTransfer.effectAllowed='move';});rowEl.addEventListener('dragover',function(ev){if(!draggedLayer||draggedLayer===rowEl)return;ev.preventDefault();rowEl.classList.add('drag-target');});rowEl.addEventListener('dragleave',function(){rowEl.classList.remove('drag-target');});rowEl.addEventListener('drop',function(ev){if(!draggedLayer||draggedLayer===rowEl)return;ev.preventDefault();var idx=parseInt(rowEl.getAttribute('data-idx'),10),from=parseInt(draggedLayer.getAttribute('data-layer-row'),10),to=parseInt(rowEl.getAttribute('data-layer-row'),10),f=p.fields[idx],box=rowEl.getBoundingClientRect();self.ensureLayers(f);var item=f.layers.splice(from,1)[0];if(from<to)to--;if(ev.clientY>box.top+box.height/2)to++;to=Math.max(0,Math.min(f.layers.length,to));f.layers.splice(to,0,item);self.selectedLayer[self.profileKey(p,idx)]=to;self.syncStructureValue(f);draggedLayer=null;self.render();});rowEl.addEventListener('dragend',function(){draggedLayer=null;rowEl.classList.remove('dragging','drag-target');});});");
+            script = script.Replace("else if(action==='up'&&selected>0){var a=f.layers.splice(selected,1)[0];f.layers.splice(selected-1,0,a);this.selectedLayer[key]=selected-1;}else if(action==='down'&&selected<f.layers.length-1){var b=f.layers.splice(selected,1)[0];f.layers.splice(selected+1,0,b);this.selectedLayer[key]=selected+1;}", string.Empty);
+            return script;
         }
 
         private static string Decode(string value)

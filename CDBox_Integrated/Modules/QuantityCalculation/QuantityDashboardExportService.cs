@@ -42,7 +42,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             WriteMeta(sheet, 4, "统计规则", snapshot.scope == null ? string.Empty : snapshot.scope.pipeRule);
             WriteMeta(sheet, 5, "更新时间", snapshot.status == null ? string.Empty : snapshot.status.updatedAt);
             WriteMeta(sheet, 6, "数据完整度", snapshot.status == null ? string.Empty : snapshot.status.dataCompleteness.ToString("0.00") + "%");
-            WriteMeta(sheet, 7, "说明", "当前结果为基于图纸现有属性的工程量参考估算，用于阶段预算和施工调整，不作为最终结算依据。");
 
             IRow header = sheet.CreateRow(9);
             string[] headers = { "工程量项目", "工程量", "单位", "备注", "估算来源" };

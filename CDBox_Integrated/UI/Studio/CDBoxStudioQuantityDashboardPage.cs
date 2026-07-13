@@ -46,7 +46,28 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
 
         public static string BuildComponentScript()
         {
-            return Encoding.UTF8.GetString(Convert.FromBase64String(ComponentScriptBase64));
+            return Encoding.UTF8.GetString(Convert.FromBase64String(ComponentScriptBase64))
+                .Replace("<p>当前工程量快速估算台</p>", string.Empty)
+                .Replace("<p class=\"qd-note\">当前结果为基于图纸现有属性的工程量参考估算，用于阶段预算和施工调整，不作为最终结算依据。</p>", string.Empty)
+                .Replace("<p>适合截图、复制或导出给甲方作为阶段预算参考。</p>", string.Empty)
+                .Replace("<p>不同单位分开呈现；点击图表项可筛选下方明细。</p>", string.Empty)
+                .Replace("<p>虚拟滚动展示，支持筛选后联动 CAD 对象。</p>", string.Empty)
+                .Replace("<p>异常不会阻止已成功对象的工程量展示。</p>", string.Empty)
+                .Replace("<p>'+this.categorySubtitle(key)+'</p>", string.Empty)
+                .Replace("<small>'+html(sub)+'</small>", string.Empty)
+                .Replace("'参考估算 · '+html(status.message||'已更新')", "html(status.message||'已更新')")
+                .Replace("<article class=\"qd-panel\"><div class=\"qd-panel-head\"><div><h3>动态工程量图表", "<article class=\"qd-panel\" style=\"display:none\"><div class=\"qd-panel-head\"><div><h3>动态工程量图表")
+                .Replace("砂回填与原土回填合计", "仅新增材料回填（原土回填不计材料量）")
+                .Replace("包含砼恢复、原土回填、明管和并埋支管。", "按施工类型拆分；并埋仅统计管线长度，不重复计算开挖与结构层。")
+                .Replace(
+                    "this.summaryCard('excavation','土方开挖量',sum.excavationVolume,'m³','主管、支管、井类及其他设施合计')",
+                    "this.summaryCard('road','道路拆除',sum.roadBreakingArea,'㎡','切缝 '+fmt(sum.roadCuttingLength)+' m · 道渣 '+fmt(sum.roadWasteVolume)+' m³')+this.summaryCard('excavation','土方开挖量',sum.excavationVolume,'m³','机械 '+fmt(sum.mechanicalExcavationVolume)+' · 人工 '+fmt(sum.manualExcavationVolume))")
+                .Replace(
+                    "this.summaryCard('facilities','井及构筑物'",
+                    "this.summaryCard('disposal','余土道渣外运',sum.earthworkOutVolume,'m³','按正式工程量口径汇总')+this.summaryCard('facilities','井及构筑物'")
+                .Replace(
+                    "if(this.expandedCard==='pipe')rows=",
+                    "if(this.expandedCard==='road')rows=[['路面机械切缝',s.summary.roadCuttingLength,'m'],['路面破碎',s.summary.roadBreakingArea,'㎡'],['拆除路面弃置',s.summary.roadWasteVolume,'m³']];else if(this.expandedCard==='disposal')rows=[['余土及道渣弃置（外运）',s.summary.earthworkOutVolume,'m³']];else if(this.expandedCard==='pipe')rows=");
         }
 
         private static string NormalizeTheme(string theme)

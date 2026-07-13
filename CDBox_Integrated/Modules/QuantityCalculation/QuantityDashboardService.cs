@@ -239,11 +239,22 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 snapshot.wells.excavationVolume += excavation;
                 snapshot.wells.backfillVolume += row.SandBackfill;
                 snapshot.wells.beddingVolume += bedding;
+                snapshot.wells.roadCuttingLength += row.RoadCutting;
+                snapshot.wells.roadBreakingArea += row.RoadBreaking;
+                snapshot.wells.roadWasteVolume += row.RoadWaste;
+                snapshot.wells.mechanicalExcavationVolume += row.MechanicalExcavation;
+                snapshot.wells.manualExcavationVolume += row.ManualExcavation;
+                snapshot.wells.earthworkOutVolume += row.EarthworkOut;
                 snapshot.wells.concreteVolume += row.C25Cushion + row.CoverPlateC25Foundation;
                 snapshot.wells.sandVolume += row.SandCushion + row.SandBackfill;
                 snapshot.wells.gravelVolume += row.CoverPlateGravelCushion;
                 snapshot.wells.restorationArea += row.RoadBreaking;
                 snapshot.wells.coverCount += row.WellCoverCount;
+                Add(snapshot.wells.byBudgetClassification, BuildWellBudgetName(row), 1);
+                if (row.WellCoverCount > 0) Add(snapshot.wells.byCoverMaterial, EmptyAs(row.WellCoverMaterial, "未设置井盖材料"), row.WellCoverCount);
+                if (row.CoverPlateCount > 0) Add(snapshot.wells.byCoverMaterial, EmptyAs(row.CoverPlate, "承压盖板"), row.CoverPlateCount);
+                AddWellLayerMaterials(snapshot.wells, row);
+                if (row.RoadBreaking > 0) Add(snapshot.wells.byRestorationType, ResolveRestorationType(row.BackfillStructure, string.Empty, row.BackfillType), row.RoadBreaking);
                 snapshot.details.Add(new QuantityDashboardDetailRow
                 {
                     handle = row.HandleText,
@@ -277,7 +288,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 if (row == null) continue;
                 double excavation = row.MechanicalExcavation + row.ManualExcavation;
-                double backfill = row.SandBackfill + row.OriginalSoilBackfill;
+                double backfill = row.SandBackfill;
                 double bedding = row.SandCushion + row.GravelCushion;
                 double pipeDeduction = row.PipeOuterDiameter > 0 ? Math.PI * Math.Pow(row.PipeOuterDiameter / 2.0, 2.0) * row.Length : 0.0;
                 category.count++;
@@ -288,6 +299,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 category.pipeDeductionVolume += pipeDeduction;
                 category.beddingVolume += bedding;
                 category.restorationArea += row.RoadBreaking;
+                category.roadCuttingLength += row.RoadCutting;
+                category.roadBreakingArea += row.RoadBreaking;
+                category.roadWasteVolume += row.RoadWaste;
+                category.mechanicalExcavationVolume += row.MechanicalExcavation;
+                category.manualExcavationVolume += row.ManualExcavation;
+                category.earthworkOutVolume += row.EarthworkOut;
                 category.concreteVolume += row.C25Restore + row.C25PipeEncasement;
                 category.sandVolume += row.SandCushion + row.SandBackfill;
                 category.gravelVolume += row.GravelCushion;
@@ -295,12 +312,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Add(category.byMaterial, EmptyAs(row.Material, "未设置"), row.Length);
                 Add(category.bySpecification, EmptyAs(row.Diameter, "未设置"), row.Length);
                 Add(category.byType, branch ? EmptyAs(row.BranchType, "未设置") : "主管", row.Length);
-                Add(category.byLayerMaterial, "中粗砂", row.SandCushion + row.SandBackfill);
-                Add(category.byLayerMaterial, "碎石", row.GravelCushion);
-                Add(category.byLayerMaterial, "原土回填", row.OriginalSoilBackfill);
-                Add(category.byLayerMaterial, "混凝土", row.C25Restore + row.C25PipeEncasement);
+                Add(category.byBudgetClassification, BuildPipeBudgetName(row), row.Length);
+                AddPipeLayerMaterials(category, row);
+                if (row.RoadBreaking > 0) Add(category.byRestorationType, ResolveRestorationType(row.BackfillStructure, row.BranchType, row.BackfillType), row.RoadBreaking);
                 if (branch && ContainsAny(row.BranchType, "明管")) category.exposedPipeLength += row.Length;
-                if (branch && ContainsAny(row.BranchType, "并埋")) category.coBuriedLength += row.Length;
+                if (ContainsAny(row.BranchType, "并埋")) category.coBuriedLength += row.Length;
                 snapshot.details.Add(new QuantityDashboardDetailRow
                 {
                     handle = row.HandleText,
@@ -371,14 +387,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (attrs != null)
                 {
                     Check(detail, snapshot, "missingParent", "缺少父属性", string.IsNullOrWhiteSpace(attrs.LayerParentGroup), "warning");
-                    Check(detail, snapshot, "missingCategory", "缺少分类", string.IsNullOrWhiteSpace(attrs.LayerParentClass), "warning");
+                    Check(detail, snapshot, "missingCategory", "缺少分类", detail.category != "主管" && string.IsNullOrWhiteSpace(attrs.LayerParentClass), "warning");
                     Check(detail, snapshot, "missingTags", "缺少标签", string.IsNullOrWhiteSpace(attrs.LayerTags), "info");
                     if (detail.category == "主管" || detail.category == "支管")
                     {
                         Check(detail, snapshot, "missingDiameter", "缺少管径", string.IsNullOrWhiteSpace(attrs.Diameter), "warning");
-                        Check(detail, snapshot, "missingDepth", "缺少平均深度", detail.depth <= 0 && !ContainsAny(attrs.BranchType, "明管"), "warning");
-                        Check(detail, snapshot, "missingWidth", "开挖宽度无法确定", detail.width <= 0 && !ContainsAny(attrs.BranchType, "明管"), "warning");
-                        Check(detail, snapshot, "missingStructure", "缺少结构层", string.IsNullOrWhiteSpace(attrs.BackfillStructure) && !ContainsAny(attrs.BranchType, "明管"), "warning");
+                        bool lengthOnly = ContainsAny(attrs.BranchType, "明管", "并埋");
+                        Check(detail, snapshot, "missingDepth", "缺少平均深度", detail.depth <= 0 && !lengthOnly, "warning");
+                        Check(detail, snapshot, "missingWidth", "开挖宽度无法确定", detail.width <= 0 && !lengthOnly, "warning");
+                        Check(detail, snapshot, "missingStructure", "缺少结构层", string.IsNullOrWhiteSpace(attrs.BackfillStructure) && !lengthOnly, "warning");
                         if (detail.category == "主管")
                         {
                             Check(detail, snapshot, "missingStartNode", "缺少起点井", string.IsNullOrWhiteSpace(attrs.StartNode), "warning");
@@ -424,6 +441,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             snapshot.summary.backfillVolume = snapshot.wells.backfillVolume + snapshot.mainPipes.backfillVolume + snapshot.branchPipes.backfillVolume + snapshot.others.backfillVolume;
             snapshot.summary.beddingVolume = snapshot.wells.beddingVolume + snapshot.mainPipes.beddingVolume + snapshot.branchPipes.beddingVolume + snapshot.others.beddingVolume;
             snapshot.summary.restorationArea = snapshot.wells.restorationArea + snapshot.mainPipes.restorationArea + snapshot.branchPipes.restorationArea + snapshot.others.restorationArea;
+            snapshot.summary.roadCuttingLength = snapshot.wells.roadCuttingLength + snapshot.mainPipes.roadCuttingLength + snapshot.branchPipes.roadCuttingLength + snapshot.others.roadCuttingLength;
+            snapshot.summary.roadBreakingArea = snapshot.wells.roadBreakingArea + snapshot.mainPipes.roadBreakingArea + snapshot.branchPipes.roadBreakingArea + snapshot.others.roadBreakingArea;
+            snapshot.summary.roadWasteVolume = snapshot.wells.roadWasteVolume + snapshot.mainPipes.roadWasteVolume + snapshot.branchPipes.roadWasteVolume + snapshot.others.roadWasteVolume;
+            snapshot.summary.mechanicalExcavationVolume = snapshot.wells.mechanicalExcavationVolume + snapshot.mainPipes.mechanicalExcavationVolume + snapshot.branchPipes.mechanicalExcavationVolume + snapshot.others.mechanicalExcavationVolume;
+            snapshot.summary.manualExcavationVolume = snapshot.wells.manualExcavationVolume + snapshot.mainPipes.manualExcavationVolume + snapshot.branchPipes.manualExcavationVolume + snapshot.others.manualExcavationVolume;
+            snapshot.summary.earthworkOutVolume = snapshot.wells.earthworkOutVolume + snapshot.mainPipes.earthworkOutVolume + snapshot.branchPipes.earthworkOutVolume + snapshot.others.earthworkOutVolume;
             snapshot.summary.concreteVolume = snapshot.wells.concreteVolume + snapshot.mainPipes.concreteVolume + snapshot.branchPipes.concreteVolume + snapshot.others.concreteVolume;
             snapshot.summary.sandVolume = snapshot.wells.sandVolume + snapshot.mainPipes.sandVolume + snapshot.branchPipes.sandVolume;
             snapshot.summary.gravelVolume = snapshot.wells.gravelVolume + snapshot.mainPipes.gravelVolume + snapshot.branchPipes.gravelVolume;
@@ -435,15 +458,38 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void BuildReferenceItems(QuantityDashboardSnapshot snapshot)
         {
-            snapshot.referenceItems.Add(Item("主管管线", snapshot.mainPipes.length, "m", "按现有属性统计", QuantityDashboardSources.Property));
-            snapshot.referenceItems.Add(Item("支管管线", snapshot.branchPipes.length, "m", "包含明管与并埋长度", QuantityDashboardSources.Property));
-            AddCountItems(snapshot.referenceItems, snapshot.wells.byType, "座", QuantityDashboardSources.Property);
+            Dictionary<string, double> pipeTypes = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            Merge(pipeTypes, snapshot.mainPipes.byBudgetClassification);
+            Merge(pipeTypes, snapshot.branchPipes.byBudgetClassification);
+            AddBudgetItems(snapshot.referenceItems, pipeTypes, "m", string.Empty, QuantityDashboardSources.Property);
+            AddCountItems(snapshot.referenceItems, snapshot.wells.byBudgetClassification, "座", QuantityDashboardSources.Property);
             AddCountItems(snapshot.referenceItems, snapshot.others.byType, "个", "混合来源");
-            snapshot.referenceItems.Add(Item("土方开挖", snapshot.summary.excavationVolume, "m³", "当前图纸参考估算", "混合来源"));
-            snapshot.referenceItems.Add(Item("回填工程量", snapshot.summary.backfillVolume, "m³", "砂回填与原土回填合计", "混合来源"));
-            snapshot.referenceItems.Add(Item("垫层工程量", snapshot.summary.beddingVolume, "m³", "砂、碎石及基础垫层", "混合来源"));
-            snapshot.referenceItems.Add(Item("路面恢复面积", snapshot.summary.restorationArea, "㎡", "按沟槽或构筑物开挖面", "混合来源"));
-            snapshot.referenceItems.Add(Item("混凝土工程量", snapshot.summary.concreteVolume, "m³", "恢复、包管和基础", "混合来源"));
+            snapshot.referenceItems.Add(Item("路面机械切缝", snapshot.summary.roadCuttingLength, "m", "按沟槽及构筑物边界", "混合来源"));
+            snapshot.referenceItems.Add(Item("路面破碎", snapshot.summary.roadBreakingArea, "㎡", "按实际恢复范围", "混合来源"));
+            snapshot.referenceItems.Add(Item("拆除路面弃置", snapshot.summary.roadWasteVolume, "m³", "路面破碎面积×结构层厚度", "混合来源"));
+            snapshot.referenceItems.Add(Item("开挖基坑/沟槽土方（机械）", snapshot.summary.mechanicalExcavationVolume, "m³", "并埋不计开挖", "混合来源"));
+            snapshot.referenceItems.Add(Item("开挖基坑/沟槽土方（人工）", snapshot.summary.manualExcavationVolume, "m³", "并埋不计开挖", "混合来源"));
+            Dictionary<string, double> materials = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            Merge(materials, snapshot.mainPipes.byLayerMaterial);
+            Merge(materials, snapshot.branchPipes.byLayerMaterial);
+            Merge(materials, snapshot.wells.byLayerMaterial);
+            Merge(materials, snapshot.others.byLayerMaterial);
+            foreach (KeyValuePair<string, double> pair in materials.OrderBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
+                snapshot.referenceItems.Add(Item(pair.Key, pair.Value, "m³", "按结构层材料/强度分列", "混合来源"));
+            Dictionary<string, double> restorations = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            Merge(restorations, snapshot.mainPipes.byRestorationType);
+            Merge(restorations, snapshot.branchPipes.byRestorationType);
+            Merge(restorations, snapshot.wells.byRestorationType);
+            foreach (KeyValuePair<string, double> pair in restorations.Where(x => x.Value > 0).OrderBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
+                snapshot.referenceItems.Add(Item(pair.Key + "（路面恢复）", pair.Value, "㎡", "不同恢复材料单独计价", "混合来源"));
+            AddCountItems(snapshot.referenceItems, snapshot.wells.byCoverMaterial, "个", QuantityDashboardSources.Property);
+            snapshot.referenceItems.Add(Item("余土及道渣弃置（外运）", snapshot.summary.earthworkOutVolume, "m³", "开挖及拆除量扣除可利用原土", "混合来源"));
+        }
+
+        private static void AddBudgetItems(List<QuantityDashboardReferenceItem> items, Dictionary<string, double> values, string unit, string remark, string source)
+        {
+            foreach (KeyValuePair<string, double> pair in values.OrderBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
+                items.Add(Item(pair.Key, pair.Value, unit, remark, source));
         }
 
         private static void AddCountItems(List<QuantityDashboardReferenceItem> items, Dictionary<string, double> values, string unit, string source)
@@ -514,11 +560,91 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return Math.Max(0.0, Math.Min(100.0, weighted * 100.0 / total - issuePenalty));
         }
 
+        private static string BuildPipeBudgetName(QuantityMainPipeCalculationRow row)
+        {
+            return QuantityDashboardClassification.BuildPipeType(row.Diameter, row.Material);
+        }
+
+        private static string BuildWellBudgetName(QuantityWellCalculationRow row)
+        {
+            var parts = new List<string>();
+            parts.Add(EmptyAs(row.WellSpec, "未设置井规格"));
+            parts.Add(EmptyAs(row.WellMaterialType, "未设置井材料"));
+            parts.Add(EmptyAs(row.WellType, "检查井"));
+            return string.Join(" · ", parts.ToArray());
+        }
+
+        private static void AddPipeLayerMaterials(QuantityDashboardCategorySummary category, QuantityMainPipeCalculationRow row)
+        {
+            List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(row.BackfillStructure);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsSandCushion, "中粗砂垫层"), row.SandCushion);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsSandBackfill, "中粗砂回填（包管）"), row.SandBackfill);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsGravel, "碎石垫层"), row.GravelCushion);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
+            {
+                return QuantityStructureLayer.IsC25(layer) && !ContainsAny((layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty), "包管", "包封");
+            }, "C25混凝土恢复"), row.C25Restore);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
+            {
+                return ContainsAny((layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty), "包管", "包封");
+            }, "混凝土包管"), row.C25PipeEncasement);
+        }
+
+        private static void AddWellLayerMaterials(QuantityDashboardCategorySummary category, QuantityWellCalculationRow row)
+        {
+            List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(row.BackfillStructure);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsSandCushion, "中粗砂垫层"), row.SandCushion);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
+            {
+                return QuantityStructureLayer.IsC25(layer) && !QuantityStructureLayer.IsCoverPlateLayer(layer);
+            }, "C25混凝土垫层"), row.C25Cushion);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
+            {
+                return QuantityStructureLayer.IsCoverPlateLayer(layer) && QuantityStructureLayer.IsGravel(layer);
+            }, "承压盖板碎石垫层"), row.CoverPlateGravelCushion);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
+            {
+                return QuantityStructureLayer.IsCoverPlateLayer(layer) && QuantityStructureLayer.IsC25(layer);
+            }, "承压盖板C25混凝土基础"), row.CoverPlateC25Foundation);
+            AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsSandBackfill, "中粗砂回填"), row.SandBackfill);
+        }
+
+        private static string FirstLayerName(IEnumerable<QuantityStructureLayer> layers, Predicate<QuantityStructureLayer> predicate, string fallback)
+        {
+            if (layers != null && predicate != null)
+            {
+                foreach (QuantityStructureLayer layer in layers)
+                {
+                    if (layer != null && predicate(layer) && !string.IsNullOrWhiteSpace(layer.Name)) return layer.Name.Trim();
+                }
+            }
+            return fallback;
+        }
+
+        private static string ResolveRestorationType(string structureText, string branchType, string backfillType)
+        {
+            foreach (QuantityStructureLayer layer in QuantityStructureLayer.Parse(structureText))
+            {
+                string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
+                if (ContainsAny(text, "恢复") && !string.IsNullOrWhiteSpace(layer.Name)) return layer.Name.Trim();
+            }
+            if (ContainsAny(branchType, "恢复")) return branchType.Trim();
+            if (ContainsAny(backfillType, "恢复")) return backfillType.Trim();
+            return "未设置恢复材料";
+        }
+
+        private static void AddPositive(Dictionary<string, double> values, string key, double amount)
+        {
+            if (amount > 0) Add(values, key, amount);
+        }
+
         private static void RoundSummary(QuantityDashboardSummary s)
         {
             s.totalPipeLength = Round(s.totalPipeLength); s.mainPipeLength = Round(s.mainPipeLength); s.branchPipeLength = Round(s.branchPipeLength);
             s.excavationVolume = Round(s.excavationVolume); s.backfillVolume = Round(s.backfillVolume); s.beddingVolume = Round(s.beddingVolume);
             s.restorationArea = Round(s.restorationArea); s.concreteVolume = Round(s.concreteVolume); s.sandVolume = Round(s.sandVolume); s.gravelVolume = Round(s.gravelVolume);
+            s.roadCuttingLength = Round(s.roadCuttingLength); s.roadBreakingArea = Round(s.roadBreakingArea); s.roadWasteVolume = Round(s.roadWasteVolume);
+            s.mechanicalExcavationVolume = Round(s.mechanicalExcavationVolume); s.manualExcavationVolume = Round(s.manualExcavationVolume); s.earthworkOutVolume = Round(s.earthworkOutVolume);
         }
 
         private static void RoundCategory(QuantityDashboardCategorySummary c)
@@ -527,7 +653,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             c.pipeDeductionVolume = Round(c.pipeDeductionVolume); c.beddingVolume = Round(c.beddingVolume); c.restorationArea = Round(c.restorationArea);
             c.concreteVolume = Round(c.concreteVolume); c.sandVolume = Round(c.sandVolume); c.gravelVolume = Round(c.gravelVolume); c.originalSoilVolume = Round(c.originalSoilVolume);
             c.cumulativeDepth = Round(c.cumulativeDepth); c.exposedPipeLength = Round(c.exposedPipeLength); c.coBuriedLength = Round(c.coBuriedLength);
+            c.roadCuttingLength = Round(c.roadCuttingLength); c.roadBreakingArea = Round(c.roadBreakingArea); c.roadWasteVolume = Round(c.roadWasteVolume);
+            c.mechanicalExcavationVolume = Round(c.mechanicalExcavationVolume); c.manualExcavationVolume = Round(c.manualExcavationVolume); c.earthworkOutVolume = Round(c.earthworkOutVolume);
             RoundDictionary(c.byMaterial); RoundDictionary(c.bySpecification); RoundDictionary(c.byType); RoundDictionary(c.byLayerMaterial);
+            RoundDictionary(c.byBudgetClassification); RoundDictionary(c.byRestorationType); RoundDictionary(c.byCoverMaterial);
         }
 
         private static void RoundDictionary(Dictionary<string, double> values)

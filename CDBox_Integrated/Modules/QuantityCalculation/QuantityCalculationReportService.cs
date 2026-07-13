@@ -183,8 +183,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             bool exposedBranch = isBranch && ContainsAny(attrs.BranchType, "明管");
+            bool coBuried = ContainsAny(attrs.BranchType, "并埋");
             bool hasExplicitEarthwork = avgDepth > 0 && width > 0 && (!string.IsNullOrWhiteSpace(attrs.BackfillStructure) || attrs.RoadThickness > 0);
-            bool calculateEarthwork = !isBranch || (attrs.BranchIncludeInCalculation && (!exposedBranch || hasExplicitEarthwork));
+            bool calculateEarthwork = !coBuried && (!isBranch || (attrs.BranchIncludeInCalculation && (!exposedBranch || hasExplicitEarthwork)));
             double pipeVolume = calculateEarthwork && attrs.DeductPipeVolume ? PipeVolume(length, attrs.PipeOuterDiameter) : 0.0;
             double c25Height = SumPipeC25Height(layers, attrs);
             double gravelHeight = SumLayerHeight(layers, QuantityStructureLayer.IsGravel, attrs.GravelCushionThickness);
@@ -260,7 +261,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.ObjectKind = isBranch ? QuantityPipeAttributes.KindBranchPipe : QuantityPipeAttributes.KindMainPipe;
             row.BranchType = attrs.BranchType ?? string.Empty;
             row.CalculationSource = QuantityDashboardSources.Property;
-            row.DataStatus = calculateEarthwork || !isBranch ? "正常" : "仅统计长度";
+            row.DataStatus = coBuried ? "仅统计长度（并埋）" : (calculateEarthwork || !isBranch ? "正常" : "仅统计长度");
             row.FormulaText = BuildMainFormulaText(row, c25Height, gravelHeight, sandCushionHeight, sandBackfillHeight, soilBackfillHeight);
             return row;
         }

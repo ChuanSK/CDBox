@@ -80,6 +80,8 @@ namespace TCPipeAutoDraw.UI.Studio
             html = html.Replace("{{UPDATE_CHANNEL}}", HtmlAttr(settings.UpdateChannel));
             html = html.Replace("{{UPDATE_SOURCE_URL}}", HtmlAttr(settings.UpdateSourceUrl));
             html = html.Replace("{{DEFAULT_UPDATE_SOURCE_URL}}", Html(CDBoxStudioUpdateService.DefaultUpdateSourceUrl));
+            html = html.Replace(".card-actions{position:absolute;", ".card-actions{display:flex;gap:2px;position:absolute;");
+            html = html.Replace(".card:hover{", ".card.dragging{opacity:.45;transform:scale(.98)}.card.drag-target{border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,130,246,.12)}.card:hover{");
             return html;
         }
 
@@ -121,7 +123,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     .Append(" data-recent-rank=\"").Append(recentRank).Append("\"")
                     .Append(" style=\"--i:").Append(index).Append("\">");
 
-                cards.Append("<div class=\"card-actions\"><button class=\"star\" data-favorite-button title=\"").Append(favoriteTitle).Append("\" aria-label=\"").Append(favoriteTitle).Append("\">")
+                cards.Append("<div class=\"card-actions\"><button class=\"star\" data-card-drag title=\"拖拽调整卡片顺序\" aria-label=\"拖拽调整卡片顺序\">↕</button><button class=\"star\" data-favorite-button title=\"").Append(favoriteTitle).Append("\" aria-label=\"").Append(favoriteTitle).Append("\">")
                     .Append("<svg viewBox=\"0 0 24 24\"><path d=\"M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.2-4.1 5.8-.8L12 3.6z\"/></svg>")
                     .Append("</button></div>");
 
@@ -130,7 +132,6 @@ namespace TCPipeAutoDraw.UI.Studio
                 cards.Append(">");
                 cards.Append("<div class=\"card-top\"><div class=\"icon\">").Append(BuildIcon(action.Category)).Append("</div><div class=\"card-meta\">")
                      .Append("<h3>").Append(Html(action.Title)).Append("</h3>")
-                     .Append("<p>").Append(Html(action.Description)).Append("</p>")
                      .Append("</div></div>")
                      .Append("<div class=\"card-foot\"><span class=\"category\">").Append(Html(action.Category)).Append("</span>")
                      .Append(commandLine).Append(badge).Append(recentBadge).Append("</div></button></article>");
@@ -142,22 +143,22 @@ namespace TCPipeAutoDraw.UI.Studio
         private static string BuildCommandRows(List<CDBoxStudioAction> actions)
         {
             var rows = new StringBuilder();
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__layerManager\" data-search=\"图层管理器 layer manager 父属性 分类 标签 锁定 冻结\"><span><strong>打开图层管理器</strong><em>打开新版 WebView2 图层管理器工作台内嵌页面。</em></span><kbd>LAYER</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__layerManagerWindow\" data-search=\"图层管理器 独立窗口 layer manager standalone\"><span><strong>图层管理器 · 独立窗口</strong><em>使用通用独立 WebView2 宿主打开图层管理器。</em></span><kbd>NEW</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityDashboard\" data-search=\"工程量 动态看板 当前工程量 预算 参考 quantity dashboard gcl\"><span><strong>打开工程量动态看板</strong><em>查看当前图纸的工程量参考估算、明细、图表和数据质量。</em></span><kbd>QTY</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityDashboardWindow\" data-search=\"工程量 动态看板 独立窗口 quantity dashboard standalone cdqboard\"><span><strong>工程量动态看板 · 独立窗口</strong><em>使用与 Studio 内嵌页相同的共享组件打开独立 WebView2 看板。</em></span><kbd>NEW</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityAttributeEditor\" data-search=\"属性编辑器 主管 支管 检查井 quantity attribute sx preview 9\"><span><strong>属性编辑器 · Preview 9</strong><em>在 Studio 内选择对象并编辑工程量属性。</em></span><kbd>SX</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityFormalReport\" data-search=\"正式工程量表 GCL 工程量计算表 export report\"><span><strong>生成正式工程量表</strong><em>调用现有 GCL 正式工程量表生成流程。</em></span><kbd>GCL</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__settings\" data-search=\"studio 设置 外观 theme animation sidebar favorite recent update 检查更新\"><span><strong>Studio 设置 / 外观设置</strong><em>切换主题、动画、侧栏默认折叠、清空最近使用、管理收藏与更新。</em></span><kbd>SET</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationSettings\" data-search=\"标注设置 annotation settings 表面积 管线长度 节点\"><span><strong>打开标注设置</strong><em>打开统一的表面积、管线长度和节点标注设置页面。</em></span><kbd>ANN</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationSurface\" data-search=\"表面积标注设置 surface annotation settings\"><span><strong>打开表面积标注设置</strong><em>进入同一标注设置页面并激活表面积标注模块。</em></span><kbd>SURF</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationPipeLength\" data-search=\"管线长度标注设置 pipe length annotation settings\"><span><strong>打开管线长度标注设置</strong><em>进入同一标注设置页面并激活管线长度模块。</em></span><kbd>PIPE</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationNode\" data-search=\"节点标注设置 node annotation settings\"><span><strong>打开节点标注设置</strong><em>进入同一标注设置页面并激活节点模块。</em></span><kbd>NODE</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__checkUpdate\" data-search=\"检查更新 update update.json 国内源 版本 channel sha256 updater\"><span><strong>检查更新</strong><em>从国内 update.json 读取版本信息，支持后续多源下载与 SHA256 校验。</em></span><kbd>UPD</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__defaultProfiles\" data-search=\"属性默认表 主管 支管 节点 检查井 默认 sxmrb profiles defaults\"><span><strong>属性默认表</strong><em>在 Studio 内维护主管、支管、节点/检查井三类默认属性。</em></span><kbd>DEF</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__defaultProfilesWindow\" data-search=\"属性默认表 独立窗口 WebView2 sxmrb defaults window\"><span><strong>属性默认表 · 独立窗口</strong><em>使用通用独立 WebView2 宿主维护默认表，保留旧版兜底。</em></span><kbd>NEW</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__recognitionRules\" data-search=\"属性识别表 图层 规则 父属性 分类 标签 match rules layer\"><span><strong>属性识别表</strong><em>在 Studio 内读取、编辑并保存图层父属性/分类/标签识别规则。</em></span><kbd>RULE</kbd></button>");
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__recognitionRulesWindow\" data-search=\"属性识别表 独立窗口 WebView2 替换旧版 rules window\"><span><strong>属性识别表 · 独立窗口</strong><em>用独立 WebView2 页面维护识别规则，用于逐步替换旧 WinForms 表。</em></span><kbd>NEW</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__layerManager\" data-search=\"图层管理器 layer manager 父属性 分类 标签 锁定 冻结\"><span><strong>打开图层管理器</strong></span><kbd>LAYER</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__layerManagerWindow\" data-search=\"图层管理器 独立窗口 layer manager standalone\"><span><strong>图层管理器 · 独立窗口</strong></span><kbd>NEW</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityDashboard\" data-search=\"工程量 看板 当前工程量 预算 参考 quantity dashboard gcl\"><span><strong>打开工程量看板</strong></span><kbd>QTY</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityDashboardWindow\" data-search=\"工程量 看板 独立窗口 quantity dashboard standalone cdqboard\"><span><strong>工程量看板 · 独立窗口</strong></span><kbd>NEW</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityAttributeEditor\" data-search=\"属性编辑器 主管 支管 检查井 quantity attribute sx preview 9\"><span><strong>属性编辑器 · Preview 9</strong></span><kbd>SX</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__quantityFormalReport\" data-search=\"正式工程量表 GCL 工程量计算表 export report\"><span><strong>生成正式工程量表</strong></span><kbd>GCL</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__settings\" data-search=\"studio 设置 外观 theme animation sidebar favorite recent update 检查更新\"><span><strong>Studio 设置 / 外观设置</strong></span><kbd>SET</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationSettings\" data-search=\"标注设置 annotation settings 表面积 管线长度 节点\"><span><strong>打开标注设置</strong></span><kbd>ANN</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationSurface\" data-search=\"表面积标注设置 surface annotation settings\"><span><strong>打开表面积标注设置</strong></span><kbd>SURF</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationPipeLength\" data-search=\"管线长度标注设置 pipe length annotation settings\"><span><strong>打开管线长度标注设置</strong></span><kbd>PIPE</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__annotationNode\" data-search=\"节点标注设置 node annotation settings\"><span><strong>打开节点标注设置</strong></span><kbd>NODE</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__checkUpdate\" data-search=\"检查更新 update update.json 国内源 版本 channel sha256 updater\"><span><strong>检查更新</strong></span><kbd>UPD</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__defaultProfiles\" data-search=\"属性默认表 主管 支管 节点 检查井 默认 sxmrb profiles defaults\"><span><strong>属性默认表</strong></span><kbd>DEF</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__defaultProfilesWindow\" data-search=\"属性默认表 独立窗口 WebView2 sxmrb defaults window\"><span><strong>属性默认表 · 独立窗口</strong></span><kbd>NEW</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__recognitionRules\" data-search=\"属性识别表 图层 规则 父属性 分类 标签 match rules layer\"><span><strong>属性识别表</strong></span><kbd>RULE</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__recognitionRulesWindow\" data-search=\"属性识别表 独立窗口 WebView2 rules window\"><span><strong>属性识别表 · 独立窗口</strong></span><kbd>NEW</kbd></button>");
 
             foreach (CDBoxStudioAction action in SortActions(actions, new CDBoxStudioState()))
             {
@@ -166,12 +167,12 @@ namespace TCPipeAutoDraw.UI.Studio
                 rows.Append("<button class=\"cmd-row").Append(disabled).Append("\" data-command-row data-id=\"").Append(HtmlAttr(action.Id)).Append("\"")
                     .Append(" data-search=\"").Append(HtmlAttr((action.Title + " " + action.Category + " " + action.Description + " " + action.CommandName).ToLowerInvariant())).Append("\"");
                 if (!action.Enabled) rows.Append(" disabled");
-                rows.Append("><span><strong>").Append(Html(action.Title)).Append("</strong><em>").Append(Html(action.Description)).Append("</em></span>");
+                rows.Append("><span><strong>").Append(Html(action.Title)).Append("</strong></span>");
                 if (!string.IsNullOrWhiteSpace(action.CommandName)) rows.Append("<kbd>").Append(Html(action.CommandName)).Append("</kbd>");
                 rows.Append("</button>");
             }
 
-            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__openLogs\" data-search=\"studio 日志 log openlogs\"><span><strong>打开 Studio 日志目录</strong><em>查看 WebView2 初始化、路由调用和错误记录。</em></span><kbd>LOG</kbd></button>");
+            rows.Append("<button class=\"cmd-row\" data-command-row data-id=\"__openLogs\" data-search=\"studio 日志 log openlogs\"><span><strong>打开 Studio 日志目录</strong></span><kbd>LOG</kbd></button>");
             return rows.ToString();
         }
 
@@ -179,37 +180,36 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             var page = new StringBuilder();
             page.Append("<section id=\"settingsPage\" class=\"settings-page\" style=\"display:none\">");
-            page.Append("<div class=\"settings-head\"><div><span class=\"kicker\">Studio Preview 6</span><h2>Studio 设置 / 外观设置</h2><p>这些设置只作用于 WebView2 工作台外壳；更新包校验通过后会启动独立 CDBoxUpdater.exe，等待 AutoCAD 正常退出后完成 bundle 替换。</p></div><button class=\"ghost-btn\" id=\"backToHome\">返回总览</button></div>");
+            page.Append("<div class=\"settings-head\"><div><span class=\"kicker\">Studio Preview 9</span><h2>Studio 设置 / 外观设置</h2></div><button class=\"ghost-btn\" id=\"backToHome\">返回总览</button></div>");
 
             page.Append("<div class=\"settings-grid\">");
-            page.Append("<article class=\"setting-card wide\"><h3>主题选择</h3><p>选择 Studio 工作台的整体视觉风格。</p><div class=\"theme-options\">");
+            page.Append("<article class=\"setting-card wide\"><h3>主题选择</h3><div class=\"theme-options\">");
             AppendThemeOption(page, "light", "明亮浅色", "稳定默认，适合长期使用", settings.Theme);
             AppendThemeOption(page, "fresh", "蓝紫现代", "更接近后台工作台 Preview 风格", settings.Theme);
             AppendThemeOption(page, "dark", "深色护眼", "夜间或低亮度环境使用", settings.Theme);
             page.Append("</div></article>");
 
-            page.Append("<article class=\"setting-card\"><h3>动画</h3><p>关闭后页面切换、卡片和 Toast 动画会尽量收敛。</p><label class=\"switch\"><input id=\"animationsToggle\" type=\"checkbox\"");
+            page.Append("<article class=\"setting-card\"><h3>动画</h3><label class=\"switch\"><input id=\"animationsToggle\" type=\"checkbox\"");
             if (settings.AnimationsEnabled) page.Append(" checked");
             page.Append("/><span></span><em>启用页面 / 卡片动画</em></label></article>");
 
-            page.Append("<article class=\"setting-card\"><h3>侧栏默认值</h3><p>决定下次打开 Studio 时左侧导航是否默认折叠。</p><label class=\"switch\"><input id=\"sidebarToggle\" type=\"checkbox\"");
+            page.Append("<article class=\"setting-card\"><h3>侧栏默认值</h3><label class=\"switch\"><input id=\"sidebarToggle\" type=\"checkbox\"");
             if (settings.SidebarCollapsedDefault) page.Append(" checked");
             page.Append("/><span></span><em>默认折叠左侧导航</em></label></article>");
 
-            page.Append("<article class=\"setting-card\"><h3>最近使用记录</h3><p>当前记录 ").Append(state.RecentItems.Count).Append(" 项。清空后仅影响 Studio 首页筛选，不影响任何 CAD 数据。</p><button id=\"clearRecentButton\" class=\"danger-btn\">清空最近使用</button></article>");
-            page.Append("<article class=\"setting-card\"><h3>配置文件</h3><p>设置保存到 C# 侧 XML 配置文件。</p><code>").Append(Html(settingsFilePath ?? string.Empty)).Append("</code><p class=\"muted-path\">日志：").Append(Html(logFilePath ?? string.Empty)).Append("</p></article>");
+            page.Append("<article class=\"setting-card\"><h3>最近使用记录</h3><strong>当前 ").Append(state.RecentItems.Count).Append(" 项</strong><button id=\"clearRecentButton\" class=\"danger-btn\">清空最近使用</button></article>");
+            page.Append("<article class=\"setting-card\"><h3>配置文件</h3><code>").Append(Html(settingsFilePath ?? string.Empty)).Append("</code></article>");
 
-            page.Append("<article class=\"setting-card wide update-card\"><div class=\"settings-subhead\"><div><h3>插件内联网更新</h3><p>固定读取 studio-preview 格式 update.json；支持多源下载、SHA256 二次校验、等待 AutoCAD 退出、备份替换和失败回滚。</p></div><strong>当前 {{CURRENT_VERSION}}</strong></div>");
+            page.Append("<article class=\"setting-card wide update-card\"><div class=\"settings-subhead\"><div><h3>插件内联网更新</h3></div><strong>当前 {{CURRENT_VERSION}}</strong></div>");
             page.Append("<div class=\"update-controls full\"><label><span>更新通道</span><select id=\"updateChannel\"><option value=\"studio-preview\"");
             if (string.Equals(settings.UpdateChannel, "studio-preview", StringComparison.OrdinalIgnoreCase)) page.Append(" selected");
             page.Append(">studio-preview</option></select></label>");
             page.Append("<label class=\"source\"><span>国内 update.json 更新源</span><input id=\"updateSourceUrl\" type=\"text\" value=\"").Append(HtmlAttr(settings.UpdateSourceUrl)).Append("\" placeholder=\"").Append(HtmlAttr(CDBoxStudioUpdateService.DefaultUpdateSourceUrl)).Append("\" /></label><div class=\"update-actions\"><button id=\"checkUpdateButton\" class=\"primary-btn\">检查更新</button><button id=\"downloadUpdateButton\" class=\"ghost-btn\" disabled>下载、校验并准备安装</button></div></div>");
             page.Append("<div id=\"updateProgress\" class=\"update-progress idle\"><div><span></span></div><em>等待操作</em></div>");
-            page.Append("<div id=\"updateResult\" class=\"update-result idle\"><strong>尚未检查更新</strong><p>点击“检查更新”后会展示版本、版本码、发布日期、强制更新、更新说明、包大小、SHA256 和下载源。下载阶段会保存到 Studio 更新缓存目录并校验 SHA256；成功后生成 pending-update.json 并启动独立更新器。</p></div>");
-            page.Append("<p class=\"muted-path\">固定 update.json 格式：channel / latestVersion / versionCode / title / releaseDate / mandatory / package.fileName / package.size / package.sha256 / package.urls[] / notes[]。默认国内源：{{DEFAULT_UPDATE_SOURCE_URL}}</p></article>");
+            page.Append("<div id=\"updateResult\" class=\"update-result idle\"><strong>尚未检查更新</strong></div></article>");
             page.Append("</div>");
 
-            page.Append("<article class=\"setting-card favorites-manager\"><div class=\"settings-subhead\"><div><h3>收藏管理</h3><p>可在这里移除已收藏入口；添加收藏仍可在功能卡片右上角点星标。</p></div><strong>").Append(state.FavoriteIds.Count).Append(" 项</strong></div>");
+            page.Append("<article class=\"setting-card favorites-manager\"><div class=\"settings-subhead\"><div><h3>收藏管理</h3></div><strong>").Append(state.FavoriteIds.Count).Append(" 项</strong></div>");
             List<CDBoxStudioAction> favorites = SortActions(actions.Where(a => state.IsFavorite(a.Id)).ToList(), state).ToList();
             if (favorites.Count == 0)
             {
@@ -260,7 +260,7 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             page.Append("<label class=\"theme-option theme-").Append(HtmlAttr(value)).Append("\"><input type=\"radio\" name=\"studioTheme\" value=\"").Append(HtmlAttr(value)).Append("\"");
             if (string.Equals(value, current, StringComparison.OrdinalIgnoreCase)) page.Append(" checked");
-            page.Append("/><span><strong>").Append(Html(title)).Append("</strong><em>").Append(Html(description)).Append("</em></span></label>");
+            page.Append("/><span><strong>").Append(Html(title)).Append("</strong></span></label>");
         }
 
         private static string Template()
@@ -298,12 +298,12 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
 <div id=""shell"" class=""shell{{SIDEBAR_CLASS}}"">
   <aside class=""sidebar"">
     <button id=""collapseSidebar"" class=""collapse-btn"" title=""折叠 / 展开侧栏"">☰</button>
-    <div class=""brand""><div class=""logo"">CD</div><div><h1>CDBox Studio</h1><p>WebView2 实验工作台</p></div></div>
+    <div class=""brand""><div class=""logo"">CD</div><div><h1>CDBox Studio</h1></div></div>
     <div class=""nav-title"">Navigation</div><nav class=""nav"">{{NAV}}</nav>
     <div class=""side-tip"">Ctrl+K 可打开命令面板。Studio 不替换旧窗口，所有业务功能仍调用原命令或原窗口。<br><button id=""openLogsSide"">打开日志目录</button></div>
   </aside>
   <main class=""main"">
-    <div id=""homePage""><section class=""hero""><div class=""hero-card""><span class=""kicker"">CDBox v2.2.2 Stable · Studio Preview 8</span><h2>把稳定功能装进一个现代工作台。</h2><p>本版新增工程量动态看板：优先展示当前工程量参考结果，并保留旧 GCL 正式工程量表流程。</p></div><div class=""stats""><div class=""stat""><strong>{{TOTAL}}</strong><span>已接入卡片</span></div><div class=""stat""><strong>{{FAVORITES}}</strong><span>收藏功能</span></div><div class=""stat""><strong>{{RECENT}}</strong><span>最近使用</span></div><div class=""stat""><strong>{{ENABLED}}</strong><span>可直接调用</span></div></div></section><section class=""toolbar""><div class=""section-title""><h2 id=""sectionTitle"">全部功能</h2><p>按分类、收藏、最近使用筛选，也可以搜索功能名称、说明或命令。</p></div><div class=""toolbar-actions""><input id=""search"" class=""search"" placeholder=""搜索：表面积、GCL、断面、属性..."" /><button id=""cmdButton"" class=""ghost-btn"">Ctrl+K 命令面板</button></div></section><section id=""grid"" class=""grid"">{{CARDS}}</section><div id=""empty"" class=""empty"">没有匹配的功能卡片。</div><p style=""margin:22px 0 0;color:var(--muted);font-size:12px"">Runtime：{{RUNTIME}}　日志：{{LOG_PATH}}　设置：{{SETTINGS_PATH}}</p></div>
+    <div id=""homePage""><section class=""hero""><div class=""hero-card""><span class=""kicker"">CDBox v2.2.2 Stable · Studio Preview 8</span></div><div class=""stats""><div class=""stat""><strong>{{TOTAL}}</strong><span>已接入卡片</span></div><div class=""stat""><strong>{{FAVORITES}}</strong><span>收藏功能</span></div><div class=""stat""><strong>{{RECENT}}</strong><span>最近使用</span></div><div class=""stat""><strong>{{ENABLED}}</strong><span>可直接调用</span></div></div></section><section class=""toolbar""><div class=""section-title""><h2 id=""sectionTitle"">全部功能</h2></div><div class=""toolbar-actions""><input id=""search"" class=""search"" placeholder=""搜索：表面积、GCL、断面、属性..."" /><button id=""cmdButton"" class=""ghost-btn"">Ctrl+K 命令面板</button></div></section><section id=""grid"" class=""grid"">{{CARDS}}</section><div id=""empty"" class=""empty"">没有匹配的功能卡片。</div></div>
     {{SETTINGS_PAGE}}
     {{ANNOTATION_SETTINGS_PAGE}}
     {{LAYER_MANAGER_PAGE}}
@@ -321,6 +321,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   var search=document.getElementById('search');
   var title=document.getElementById('sectionTitle');
   var empty=document.getElementById('empty');
+  var grid=document.getElementById('grid');
   var cards=[].slice.call(document.querySelectorAll('[data-card]'));
   var overlay=document.getElementById('cmdOverlay');
   var cmdInput=document.getElementById('cmdInput');
@@ -355,6 +356,11 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   var layerManagerEditor=null;
   var quantityDashboardEditor=null;
   var quantityAttributeEditor=null;
+  var cardOrderKey='CDBoxStudio.CardOrder.v1';
+
+  function saveCardOrder(){try{localStorage.setItem(cardOrderKey,JSON.stringify([].slice.call(grid.querySelectorAll('[data-card]')).map(function(x){return x.getAttribute('data-id');})));}catch(ignore){}}
+  function restoreCardOrder(){try{var order=JSON.parse(localStorage.getItem(cardOrderKey)||'[]'),map={};cards.forEach(function(x){map[x.getAttribute('data-id')]=x;});order.forEach(function(id){if(map[id])grid.appendChild(map[id]);});cards.forEach(function(x){if(order.indexOf(x.getAttribute('data-id'))<0)grid.appendChild(x);});cards=[].slice.call(grid.querySelectorAll('[data-card]'));}catch(ignore){}}
+  function bindCardDragging(){var dragged=null;cards.forEach(function(card){var handle=card.querySelector('[data-card-drag]');if(!handle)return;handle.addEventListener('mousedown',function(ev){ev.stopPropagation();card.setAttribute('draggable','true');});handle.addEventListener('mouseup',function(){card.removeAttribute('draggable');});handle.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();});card.addEventListener('dragstart',function(ev){if(card.getAttribute('draggable')!=='true'){ev.preventDefault();return;}dragged=card;card.classList.add('dragging');if(ev.dataTransfer)ev.dataTransfer.effectAllowed='move';});card.addEventListener('dragover',function(ev){if(!dragged||dragged===card)return;ev.preventDefault();card.classList.add('drag-target');});card.addEventListener('dragleave',function(){card.classList.remove('drag-target');});card.addEventListener('drop',function(ev){if(!dragged||dragged===card)return;ev.preventDefault();var box=card.getBoundingClientRect(),after=ev.clientY>box.top+box.height/2||(Math.abs(ev.clientY-(box.top+box.height/2))<box.height*.25&&ev.clientX>box.left+box.width/2);grid.insertBefore(dragged,after?card.nextSibling:card);cards=[].slice.call(grid.querySelectorAll('[data-card]'));saveCardOrder();card.classList.remove('drag-target');});card.addEventListener('dragend',function(){cards.forEach(function(x){x.classList.remove('dragging','drag-target');x.removeAttribute('draggable');});dragged=null;saveCardOrder();});});}
 
   function post(name,arg){if(window.chrome&&chrome.webview){chrome.webview.postMessage('studio|'+name+'|'+encodeURIComponent(arg||''));}}
   function toast(message,kind){var stack=document.getElementById('toastStack');var node=document.createElement('div');node.className='toast '+(kind||'info');node.textContent=message||'';stack.appendChild(node);setTimeout(function(){node.style.opacity='0';node.style.transform='translateX(10px)';},2600);setTimeout(function(){if(node.parentNode)node.parentNode.removeChild(node);},3100);} window.CDBoxStudioToast=toast;
@@ -403,6 +409,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   function renderRules(){initRecognitionRulesPage().render();}
 
   document.querySelectorAll('[data-filter]').forEach(function(btn){btn.addEventListener('click',function(){var target=btn.getAttribute('data-filter')||'总览';if(target===active){apply();return;}withPageLeave(function(){active=target;apply();});});});
+  restoreCardOrder();bindCardDragging();
   cards.forEach(function(card){var run=card.querySelector('[data-run-button]');var fav=card.querySelector('[data-favorite-button]');if(run){run.addEventListener('click',function(){if(run.disabled)return;runId(card.getAttribute('data-id'));});}if(fav){fav.addEventListener('click',function(ev){ev.stopPropagation();post('favorite',card.getAttribute('data-id'));});}});
   cmdRows.forEach(function(row){row.addEventListener('click',function(){if(row.disabled)return;runId(row.getAttribute('data-id'));closeCommandPanel();});});
   document.querySelectorAll('input[name=studioTheme]').forEach(function(x){x.addEventListener('change',saveSettings);});

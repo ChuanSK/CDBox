@@ -163,6 +163,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public double backfillVolume { get; set; }
         public double beddingVolume { get; set; }
         public double restorationArea { get; set; }
+        public double roadCuttingLength { get; set; }
+        public double roadBreakingArea { get; set; }
+        public double roadWasteVolume { get; set; }
+        public double mechanicalExcavationVolume { get; set; }
+        public double manualExcavationVolume { get; set; }
+        public double earthworkOutVolume { get; set; }
         public double concreteVolume { get; set; }
         public double sandVolume { get; set; }
         public double gravelVolume { get; set; }
@@ -183,6 +189,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public double pipeDeductionVolume { get; set; }
         public double beddingVolume { get; set; }
         public double restorationArea { get; set; }
+        public double roadCuttingLength { get; set; }
+        public double roadBreakingArea { get; set; }
+        public double roadWasteVolume { get; set; }
+        public double mechanicalExcavationVolume { get; set; }
+        public double manualExcavationVolume { get; set; }
+        public double earthworkOutVolume { get; set; }
         public double concreteVolume { get; set; }
         public double sandVolume { get; set; }
         public double gravelVolume { get; set; }
@@ -195,6 +207,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public Dictionary<string, double> bySpecification { get; set; }
         public Dictionary<string, double> byType { get; set; }
         public Dictionary<string, double> byLayerMaterial { get; set; }
+        public Dictionary<string, double> byBudgetClassification { get; set; }
+        public Dictionary<string, double> byRestorationType { get; set; }
+        public Dictionary<string, double> byCoverMaterial { get; set; }
 
         public QuantityDashboardCategorySummary()
         {
@@ -204,6 +219,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             bySpecification = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
             byType = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
             byLayerMaterial = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            byBudgetClassification = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            byRestorationType = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
+            byCoverMaterial = new Dictionary<string, double>(StringComparer.CurrentCultureIgnoreCase);
         }
     }
 

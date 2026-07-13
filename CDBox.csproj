@@ -10,16 +10,16 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>2.6.0-studio-preview.6</Version>
-    <AssemblyVersion>2.6.0.0</AssemblyVersion>
-    <FileVersion>2.6.0.0</FileVersion>
-    <InformationalVersion>2.6.0-studio-preview.6</InformationalVersion>
+    <Version>2.9.0-studio-preview.9</Version>
+    <AssemblyVersion>2.9.0.0</AssemblyVersion>
+    <FileVersion>2.9.0.0</FileVersion>
+    <InformationalVersion>2.9.0-studio-preview.9</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <CDBoxVersionCode>20600</CDBoxVersionCode>
-    <CDBoxReleaseIdentity>CDBox-Studio-Preview-6</CDBoxReleaseIdentity>
-    <CDBoxReleaseTitle>CDBox Studio Preview 6</CDBoxReleaseTitle>
-    <CDBoxPackageFileName>CDBox.Studio.Preview.6.zip</CDBoxPackageFileName>
-    <CDBoxAppVersion>2.6.0</CDBoxAppVersion>
+    <CDBoxVersionCode>20900</CDBoxVersionCode>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-9</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 9</CDBoxReleaseTitle>
+    <CDBoxPackageFileName>CDBox.Studio.Preview.9.zip</CDBoxPackageFileName>
+    <CDBoxAppVersion>2.9.0</CDBoxAppVersion>
     <CDBoxUpdateChannel>studio-preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
