@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using CDBox.Shared;
 
 namespace TCPipeAutoDraw.Core.Startup
 {
@@ -19,10 +20,18 @@ namespace TCPipeAutoDraw.Core.Startup
             var missing = new List<string>();
             string sourceDir = string.IsNullOrWhiteSpace(selectedDllPath) ? string.Empty : Path.GetDirectoryName(selectedDllPath);
             CheckFile(selectedDllPath, "CDBox.dll", missing);
-            CheckFile(Path.Combine(sourceDir ?? string.Empty, "Microsoft.Web.WebView2.Core.dll"), "Microsoft.Web.WebView2.Core.dll", missing);
-            CheckFile(Path.Combine(sourceDir ?? string.Empty, "Microsoft.Web.WebView2.WinForms.dll"), "Microsoft.Web.WebView2.WinForms.dll", missing);
-            CheckFile(Path.Combine(sourceDir ?? string.Empty, "Updater", "CDBoxUpdater.exe"), "Updater\\CDBoxUpdater.exe", missing);
-            if (!FindFile(sourceDir, "WebView2Loader.dll")) missing.Add("runtimes\\win-x64\\native\\WebView2Loader.dll");
+            foreach (string dependency in CDBoxRequiredRuntimeFiles.ManagedDependencies)
+            {
+                CheckFile(Path.Combine(sourceDir ?? string.Empty, dependency), dependency, missing);
+            }
+            CheckFile(
+                Path.Combine(sourceDir ?? string.Empty, CDBoxRequiredRuntimeFiles.UpdaterRelativePath),
+                CDBoxRequiredRuntimeFiles.UpdaterRelativePath,
+                missing);
+            CheckFile(
+                Path.Combine(sourceDir ?? string.Empty, CDBoxRequiredRuntimeFiles.WebView2LoaderRelativePath),
+                CDBoxRequiredRuntimeFiles.WebView2LoaderRelativePath,
+                missing);
 
             bool valid = missing.Count == 0;
             string message = valid
@@ -37,14 +46,5 @@ namespace TCPipeAutoDraw.Core.Startup
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) missing.Add(displayName);
         }
 
-        private static bool FindFile(string root, string fileName)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return false;
-                return Directory.GetFiles(root, fileName, SearchOption.AllDirectories).Length > 0;
-            }
-            catch { return false; }
-        }
     }
 }

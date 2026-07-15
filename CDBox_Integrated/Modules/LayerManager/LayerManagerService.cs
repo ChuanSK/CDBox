@@ -14,6 +14,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
     public static class LayerManagerService
     {
         private const string LayerMetadataXrecordName = "CDBoxLayerMetadata";
+        private const string LayerMetadataIndexDictionaryName = "CDBoxLayerMetadataIndex";
         public const string MatchModeExact = "精确";
         public const string MatchModeContains = "包含";
         public const string MatchModeWildcard = "通配符";
@@ -968,14 +969,11 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         private static LayerMetadata ReadLayerMetadata(LayerTableRecord layer, Transaction tr)
         {
             var metadata = new LayerMetadata();
-            if (layer == null || tr == null || layer.ExtensionDictionary.IsNull) return metadata;
+            if (layer == null || tr == null) return metadata;
 
             try
             {
-                DBDictionary dict = tr.GetObject(layer.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                if (dict == null || !dict.Contains(LayerMetadataXrecordName)) return metadata;
-
-                Xrecord record = tr.GetObject(dict.GetAt(LayerMetadataXrecordName), OpenMode.ForRead, false) as Xrecord;
+                Xrecord record = GetLayerMetadataRecord(layer, tr);
                 if (record == null || record.Data == null) return metadata;
 
                 foreach (TypedValue value in record.Data)
@@ -1033,7 +1031,71 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     new TypedValue((int)DxfCode.Text, "ParentGroup=" + metadata.ParentGroup),
                     new TypedValue((int)DxfCode.Text, "ParentClass=" + metadata.ParentClass),
                     new TypedValue((int)DxfCode.Text, "Tags=" + metadata.TagText));
+                WriteLayerMetadataBackup(layer, tr, record.Data);
             }
+        }
+
+        private static Xrecord GetLayerMetadataRecord(LayerTableRecord layer, Transaction tr)
+        {
+            if (layer == null || tr == null) return null;
+            try
+            {
+                if (!layer.ExtensionDictionary.IsNull)
+                {
+                    DBDictionary dict = tr.GetObject(layer.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
+                    if (dict != null && dict.Contains(LayerMetadataXrecordName))
+                    {
+                        Xrecord primary = tr.GetObject(dict.GetAt(LayerMetadataXrecordName), OpenMode.ForRead, false) as Xrecord;
+                        if (primary != null && primary.Data != null) return primary;
+                    }
+                }
+
+                Database db = layer.Database;
+                DBDictionary index = GetLayerMetadataIndex(db, tr, false);
+                string key = layer.Handle.ToString();
+                return index != null && index.Contains(key)
+                    ? tr.GetObject(index.GetAt(key), OpenMode.ForRead, false) as Xrecord
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WriteLayerMetadataBackup(LayerTableRecord layer, Transaction tr, ResultBuffer data)
+        {
+            if (layer == null || tr == null || data == null) return;
+            DBDictionary index = GetLayerMetadataIndex(layer.Database, tr, true);
+            if (index == null) return;
+            string key = layer.Handle.ToString();
+            Xrecord record;
+            if (index.Contains(key))
+            {
+                record = tr.GetObject(index.GetAt(key), OpenMode.ForWrite, false) as Xrecord;
+            }
+            else
+            {
+                if (!index.IsWriteEnabled) index.UpgradeOpen();
+                record = new Xrecord();
+                index.SetAt(key, record);
+                tr.AddNewlyCreatedDBObject(record, true);
+            }
+            if (record != null) record.Data = new ResultBuffer(data.AsArray());
+        }
+
+        private static DBDictionary GetLayerMetadataIndex(Database db, Transaction tr, bool create)
+        {
+            if (db == null || tr == null) return null;
+            DBDictionary nod = tr.GetObject(db.NamedObjectsDictionaryId, create ? OpenMode.ForWrite : OpenMode.ForRead, false) as DBDictionary;
+            if (nod == null) return null;
+            if (nod.Contains(LayerMetadataIndexDictionaryName))
+                return tr.GetObject(nod.GetAt(LayerMetadataIndexDictionaryName), create ? OpenMode.ForWrite : OpenMode.ForRead, false) as DBDictionary;
+            if (!create) return null;
+            var index = new DBDictionary();
+            nod.SetAt(LayerMetadataIndexDictionaryName, index);
+            tr.AddNewlyCreatedDBObject(index, true);
+            return index;
         }
 
         private static List<string> NormalizeTags(IEnumerable<string> tags)

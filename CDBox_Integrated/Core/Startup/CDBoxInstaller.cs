@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using Autodesk.AutoCAD.DatabaseServices;
 using Microsoft.Win32;
+using TCPipeAutoDraw.UI.Studio;
 
 namespace TCPipeAutoDraw.Core.Startup
 {
@@ -196,6 +199,7 @@ namespace TCPipeAutoDraw.Core.Startup
         public static CDBoxInstallResult ScheduleUpdateFromDll(string newDllPath)
         {
             string installRoot = GetInstallRoot();
+            string packageSourceRoot = string.Empty;
 
             try
             {
@@ -225,9 +229,16 @@ namespace TCPipeAutoDraw.Core.Startup
                     return CDBoxInstallResult.Fail(sourceValidation.Message, installRoot);
                 }
 
-                string tempRoot = Path.Combine(Path.GetTempPath(), "CDBox_Update_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff"));
-                string stagingBundle = Path.Combine(tempRoot, BundleFolderName);
+                string updateDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CDBox",
+                    "Updates",
+                    "Local",
+                    DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + "_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                packageSourceRoot = Path.Combine(updateDirectory, "package-source");
+                string stagingBundle = Path.Combine(packageSourceRoot, BundleFolderName);
                 string stagingContents = Path.Combine(stagingBundle, ContentsFolderName);
+                string packagePath = Path.Combine(updateDirectory, "CDBox.Local.Update.zip");
 
                 Directory.CreateDirectory(stagingContents);
                 CopyRuntimeFiles(sourceDir, stagingContents);
@@ -244,10 +255,40 @@ namespace TCPipeAutoDraw.Core.Startup
                     return CDBoxInstallResult.Fail("更新暂存包未通过完整性检查，现有安装不会被替换。\r\n\r\n" + selfCheck, installRoot);
                 }
 
-                bool started = TryStartDeferredUpdate(stagingBundle, installRoot, tempRoot, Path.GetFileName(newDllPath), out string message);
-                if (!started)
+                ZipFile.CreateFromDirectory(packageSourceRoot, packagePath, CompressionLevel.Optimal, false);
+                string packageSha256 = ComputeSha256(packagePath);
+                Directory.Delete(packageSourceRoot, true);
+                packageSourceRoot = string.Empty;
+
+                string targetVersion = ReadFileVersion(newDllPath);
+                var download = new CDBoxStudioUpdateDownloadResult
                 {
-                    return CDBoxInstallResult.Fail("已准备更新文件，但未能创建关闭 CAD 后自动替换的脚本：" + message + "\r\n\r\n临时目录：" + stagingBundle, installRoot);
+                    Success = true,
+                    Verified = true,
+                    CurrentVersion = CDBoxStudioUpdateService.CurrentVersion,
+                    CurrentVersionCode = CDBoxStudioUpdateService.CurrentVersionCode,
+                    LatestVersion = targetVersion,
+                    VersionCode = CDBoxStudioUpdateService.CurrentVersionCode,
+                    Channel = "local",
+                    PackageFileName = Path.GetFileName(packagePath),
+                    PackageSizeBytes = new FileInfo(packagePath).Length,
+                    Sha256Expected = packageSha256,
+                    Sha256Actual = packageSha256,
+                    FilePath = packagePath,
+                    SourceName = "本地完整构建输出",
+                    SourceUrl = Path.GetFullPath(newDllPath),
+                    FinishedAt = DateTime.Now
+                };
+
+                string sourceUpdater = Path.Combine(sourceDir, "Updater", "CDBoxUpdater.exe");
+                CDBoxStudioUpdaterLaunchResult launch = CDBoxStudioUpdaterLauncher.PrepareAndLaunch(download, sourceUpdater);
+                if (launch == null || !launch.Started)
+                {
+                    string launchError = launch == null ? "更新器未返回启动结果。" : launch.ErrorMessage;
+                    return CDBoxInstallResult.Fail(
+                        "本地更新包已完成依赖收集和校验，但独立更新器启动失败：" + launchError
+                        + "\r\n\r\n已保留更新包：" + packagePath,
+                        installRoot);
                 }
 
                 return new CDBoxInstallResult
@@ -257,7 +298,9 @@ namespace TCPipeAutoDraw.Core.Startup
                     DeferredDeleteStarted = true,
                     SelfCheckReport = selfCheck,
                     LogFilePath = CDBoxInstallLogger.LogFilePath,
-                    Message = BuildInstallMessage("CDBox 更新已准备完成。请关闭 CAD，更新脚本会在 CAD 退出后自动替换安装目录；下次启动 CAD 即为新版。", selfCheck)
+                    Message = BuildInstallMessage(
+                        "本地更新包已完成全部依赖收集与校验，独立更新器已启动。请正常关闭 AutoCAD，并在更新完成提示出现前不要再次打开 CAD；安装阶段将显示与网络更新相同的进度窗口。",
+                        selfCheck)
                 };
             }
             catch (Exception ex)
@@ -265,6 +308,40 @@ namespace TCPipeAutoDraw.Core.Startup
                 CDBoxInstallLogger.Error("安排更新失败。", ex);
                 return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "\r\n\r\n日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
             }
+            finally
+            {
+                if (!string.IsNullOrWhiteSpace(packageSourceRoot) && Directory.Exists(packageSourceRoot))
+                {
+                    try { Directory.Delete(packageSourceRoot, true); }
+                    catch (Exception ex) { CDBoxInstallLogger.Warn("清理本地更新暂存目录失败：" + ex.Message); }
+                }
+            }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (FileStream stream = File.OpenRead(path))
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(stream);
+                var text = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash) text.Append(value.ToString("x2"));
+                return text.ToString();
+            }
+        }
+
+        private static string ReadFileVersion(string path)
+        {
+            try
+            {
+                FileVersionInfo info = FileVersionInfo.GetVersionInfo(path);
+                if (!string.IsNullOrWhiteSpace(info.ProductVersion)) return info.ProductVersion.Trim();
+                if (!string.IsNullOrWhiteSpace(info.FileVersion)) return info.FileVersion.Trim();
+            }
+            catch
+            {
+            }
+            return "local-" + DateTime.Now.ToString("yyyyMMddHHmmss");
         }
 
         private static void CopyRuntimeFiles(string sourceDir, string contentsDir)
@@ -650,70 +727,6 @@ namespace TCPipeAutoDraw.Core.Startup
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
             return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
-        }
-
-        private static bool TryStartDeferredUpdate(string stagingBundleRoot, string installRoot, string tempRoot, string assemblyFileName, out string message)
-        {
-            message = string.Empty;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(stagingBundleRoot) || !Directory.Exists(stagingBundleRoot))
-                {
-                    message = "更新临时目录不存在。";
-                    return false;
-                }
-
-                string installParent = Path.GetDirectoryName(installRoot);
-                if (string.IsNullOrWhiteSpace(installParent))
-                {
-                    message = "无法定位安装目录的上级目录。";
-                    return false;
-                }
-
-                int pid = Process.GetCurrentProcess().Id;
-                string cmdPath = Path.Combine(Path.GetTempPath(), "CDBox_Update_" + pid.ToString() + ".cmd");
-                string backupRoot = installRoot + ".update-backup";
-                string installedDll = Path.Combine(Path.Combine(installRoot, ContentsFolderName), string.IsNullOrWhiteSpace(assemblyFileName) ? "CDBox.dll" : assemblyFileName);
-                string script = "@echo off\r\n" +
-                    "setlocal\r\n" +
-                    ":wait\r\n" +
-                    "tasklist /FI \"PID eq " + pid.ToString() + "\" | find \"" + pid.ToString() + "\" >nul\r\n" +
-                    "if not errorlevel 1 (\r\n" +
-                    "  timeout /t 2 /nobreak >nul\r\n" +
-                    "  goto wait\r\n" +
-                    ")\r\n" +
-                    "if not exist \"" + installParent + "\" mkdir \"" + installParent + "\"\r\n" +
-                    "if exist \"" + backupRoot + "\" rmdir /S /Q \"" + backupRoot + "\"\r\n" +
-                    "if exist \"" + installRoot + "\" move /Y \"" + installRoot + "\" \"" + backupRoot + "\" >nul\r\n" +
-                    "xcopy /E /I /Y \"" + stagingBundleRoot + "\" \"" + installRoot + "\" >nul\r\n" +
-                    "if errorlevel 1 goto rollback\r\n" +
-                    "if not exist \"" + installedDll + "\" goto rollback\r\n" +
-                    "if exist \"" + backupRoot + "\" rmdir /S /Q \"" + backupRoot + "\"\r\n" +
-                    "rmdir /S /Q \"" + tempRoot + "\"\r\n" +
-                    "del \"%~f0\"\r\n" +
-                    "exit /b 0\r\n" +
-                    ":rollback\r\n" +
-                    "if exist \"" + installRoot + "\" rmdir /S /Q \"" + installRoot + "\"\r\n" +
-                    "if exist \"" + backupRoot + "\" move /Y \"" + backupRoot + "\" \"" + installRoot + "\" >nul\r\n" +
-                    "rmdir /S /Q \"" + tempRoot + "\"\r\n" +
-                    "del \"%~f0\"\r\n" +
-                    "exit /b 1\r\n";
-
-                File.WriteAllText(cmdPath, script, Encoding.Default);
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = cmdPath,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    UseShellExecute = false
-                });
-                return true;
-            }
-            catch (Exception ex)
-            {
-                message = ex.Message;
-                return false;
-            }
         }
 
         private static bool TryStartDeferredDelete(string installRoot, out string message)

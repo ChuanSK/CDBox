@@ -288,9 +288,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 if (row == null) continue;
                 double excavation = row.MechanicalExcavation + row.ManualExcavation;
-                double backfill = row.SandBackfill;
+                double backfill = row.SandBackfill + row.OriginalSoilBackfill;
                 double bedding = row.SandCushion + row.GravelCushion;
-                double pipeDeduction = row.PipeOuterDiameter > 0 ? Math.PI * Math.Pow(row.PipeOuterDiameter / 2.0, 2.0) * row.Length : 0.0;
+                double pipeDeduction = row.PipeDeductionVolume;
                 category.count++;
                 category.length += row.Length;
                 depthSum += row.AverageDepth;
@@ -582,11 +582,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             AddPositive(category.byLayerMaterial, FirstLayerName(layers, QuantityStructureLayer.IsGravel, "碎石垫层"), row.GravelCushion);
             AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
             {
-                return QuantityStructureLayer.IsC25(layer) && !ContainsAny((layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty), "包管", "包封");
+                return QuantityStructureLayer.IsC25Restore(layer);
             }, "C25混凝土恢复"), row.C25Restore);
             AddPositive(category.byLayerMaterial, FirstLayerName(layers, delegate(QuantityStructureLayer layer)
             {
-                return ContainsAny((layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty), "包管", "包封");
+                return QuantityStructureLayer.IsConcretePipeEncasement(layer);
             }, "混凝土包管"), row.C25PipeEncasement);
         }
 

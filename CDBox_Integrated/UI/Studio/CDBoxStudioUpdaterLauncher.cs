@@ -14,6 +14,11 @@ namespace TCPipeAutoDraw.UI.Studio
 
         public static CDBoxStudioUpdaterLaunchResult PrepareAndLaunch(CDBoxStudioUpdateDownloadResult download)
         {
+            return PrepareAndLaunch(download, string.Empty);
+        }
+
+        public static CDBoxStudioUpdaterLaunchResult PrepareAndLaunch(CDBoxStudioUpdateDownloadResult download, string preferredUpdaterPath)
+        {
             var result = new CDBoxStudioUpdaterLaunchResult();
 
             try
@@ -36,7 +41,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 EnsureNoUpdaterIsRunning();
 
-                string sourceUpdater = FindBundledUpdater();
+                string sourceUpdater = !string.IsNullOrWhiteSpace(preferredUpdaterPath) && File.Exists(preferredUpdaterPath)
+                    ? Path.GetFullPath(preferredUpdaterPath)
+                    : FindBundledUpdater();
                 if (string.IsNullOrWhiteSpace(sourceUpdater) || !File.Exists(sourceUpdater))
                 {
                     throw new FileNotFoundException("未找到 CDBoxUpdater.exe。请确认发布包包含 Contents\\Updater\\CDBoxUpdater.exe。", sourceUpdater ?? string.Empty);

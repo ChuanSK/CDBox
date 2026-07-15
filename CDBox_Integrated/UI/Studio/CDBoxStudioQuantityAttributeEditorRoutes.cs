@@ -15,6 +15,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (name == "getquantityattributecontext") context = CDBoxStudioQuantityAttributeEditorApi.GetContext(request.Argument);
                 else if (name == "selectquantityattributeobject") context = CDBoxStudioQuantityAttributeEditorApi.Select(request.Argument);
                 else if (name == "savequantityattributes") context = CDBoxStudioQuantityAttributeEditorApi.Save(request.Argument);
+                else if (name == "calculatequantitydraft") context = CDBoxStudioQuantityAttributeEditorApi.CalculateDraft(request.Argument);
                 else if (name == "refreshquantityattributes") context = CDBoxStudioQuantityAttributeEditorApi.Refresh(request.Argument);
                 else if (name == "reloadquantityattributedefault") context = CDBoxStudioQuantityAttributeEditorApi.ReloadDefault(request.Argument);
                 else if (name == "selectquantityattributenode") context = CDBoxStudioQuantityAttributeEditorApi.SelectNode(request.Argument);
@@ -32,7 +33,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
                 else return false;
 
-                result = new CDBoxStudioRouteResult { Handled = true, ToastKind = name == "savequantityattributes" ? "success" : "info", ToastMessage = context.message,
+                bool draftCalculation = name == "calculatequantitydraft";
+                result = new CDBoxStudioRouteResult { Handled = true, ToastKind = name == "savequantityattributes" ? "success" : "info", ToastMessage = draftCalculation ? null : context.message,
                     ExecuteScript = "window.CDBoxQuantityAttributeEditorLoad && window.CDBoxQuantityAttributeEditorLoad(" + CDBoxStudioQuantityAttributeEditorApi.Serialize(context) + ");" };
                 return true;
             }

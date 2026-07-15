@@ -18,6 +18,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     public static class QuantityPipeAttributeService
     {
         public const string PipeAttributeXrecordName = "CDBoxQuantityPipeAttributes";
+        private const string PipeAttributeIndexDictionaryName = "CDBoxQuantityAttributeIndex";
 
         public static QuantityPipeSelectionInfo SelectPipeAndRead(Document doc)
         {
@@ -229,8 +230,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     return new QuantityPipeWriteResult { Success = false, Message = "选中对象不是有效实体。" };
                 }
 
-                if (string.IsNullOrWhiteSpace(attributes.ObjectKind)) attributes.ObjectKind = InferObjectKind(db, tr, entity);
-                ApplyLayerMetadata(db, tr, entity, attributes);
+                QuantityPipeAttributes previous = HasPipeAttributes(entity, tr) ? ReadPipeAttributes(entity, tr) : attributes.Clone();
+                attributes = NormalizeAttributesForWrite(db, tr, entity, attributes, previous, "Save");
                 WritePipeAttributes(entity, tr, attributes);
 
                 // 保存井属性后，同步刷新已绑定该井编号的主管起终点深度与平均开挖深度。
@@ -284,7 +285,21 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
 
                     if (!changed) continue;
-                    RecalculateMainPipeAverageDepth(pipeAttrs);
+                    QuantityPipeAttributes startWell = !string.IsNullOrWhiteSpace(pipeAttrs.StartNode)
+                        && string.Equals(pipeAttrs.StartNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase)
+                        ? nodeAttrs : null;
+                    QuantityPipeAttributes endWell = !string.IsNullOrWhiteSpace(pipeAttrs.EndNode)
+                        && string.Equals(pipeAttrs.EndNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase)
+                        ? nodeAttrs : null;
+                    QuantityDependencyResult normalized = QuantityDependencyService.NormalizeDraft(
+                        pipeAttrs,
+                        QuantityStructureLayer.Parse(pipeAttrs.BackfillStructure),
+                        pipeAttrs,
+                        startWell,
+                        endWell,
+                        null,
+                        "ConnectedWell");
+                    pipeAttrs = normalized.Attributes;
 
                     if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                     WritePipeAttributes(entity, tr, pipeAttrs);
@@ -351,9 +366,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         if (string.IsNullOrWhiteSpace(attrs.ObjectKind)) attrs.ObjectKind = InferObjectKind(db, tr, entity);
                         ApplyLayerMetadata(db, tr, entity, attrs);
 
-                        if (keepIdentityFields && HasPipeAttributes(entity, tr))
+                        bool hasOld = HasPipeAttributes(entity, tr);
+                        QuantityPipeAttributes old = hasOld ? ReadPipeAttributes(entity, tr) : attrs.Clone();
+                        if (keepIdentityFields && hasOld)
                         {
-                            QuantityPipeAttributes old = ReadPipeAttributes(entity, tr);
                             attrs.StartNode = old.StartNode;
                             attrs.EndNode = old.EndNode;
                             attrs.NodeNo = old.NodeNo;
@@ -367,6 +383,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             attrs.Remark = old.Remark;
                         }
 
+                        attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, old, "BatchWrite");
                         WritePipeAttributes(entity, tr, attrs);
                         success++;
                     }
@@ -463,6 +480,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                             bool hasSavedAttributes = HasPipeAttributes(entity, tr);
                             QuantityPipeAttributes attrs = hasSavedAttributes ? ReadPipeAttributes(entity, tr) : defaultAttrs.Clone();
+                            QuantityPipeAttributes previous = attrs.Clone();
                             attrs.ObjectKind = kind;
                             ApplyLayerMetadata(db, tr, entity, attrs);
 
@@ -471,6 +489,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             // 并始终执行一次识别/规格解析/依赖字段刷新，避免默认表调整后旧对象数据不更新。
                             RefreshAttributeModel(db, tr, entity, attrs, defaultAttrs, kind, true, false);
 
+                            attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, previous, "ApplyDefaults");
                             if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                             WritePipeAttributes(entity, tr, attrs);
                             tr.Commit();
@@ -704,6 +723,111 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return attributes;
         }
 
+        public static QuantityDependencyResult CalculateDraft(
+            Document doc,
+            ObjectId objectId,
+            QuantityPipeAttributes attributes,
+            IEnumerable<QuantityStructureLayer> layers,
+            string changedField)
+        {
+            return CalculateDraft(doc, objectId, attributes, layers, changedField, null);
+        }
+
+        public static QuantityDependencyResult CalculateDraft(
+            Document doc,
+            ObjectId objectId,
+            QuantityPipeAttributes attributes,
+            IEnumerable<QuantityStructureLayer> layers,
+            string changedField,
+            QuantityPipeAttributes previousDraft)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
+
+            Database db = doc.Database;
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                Entity entity = objectId.IsNull ? null : tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
+                string kind = entity == null ? attributes.ObjectKind : InferSupportedObjectKind(db, tr, entity);
+                if (!string.IsNullOrWhiteSpace(kind)) attributes.ObjectKind = kind;
+                if (entity != null) ApplyLayerMetadata(db, tr, entity, attributes);
+
+                QuantityPipeAttributes previous = previousDraft == null ? attributes.Clone() : previousDraft.Clone();
+                if (previousDraft == null && entity != null && HasPipeAttributes(entity, tr)) previous = ReadPipeAttributes(entity, tr);
+
+                QuantityPipeAttributes startWell = null;
+                QuantityPipeAttributes endWell = null;
+                if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind))
+                {
+                    ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
+                    List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
+                    startWell = FindNodeAttributesByNo(candidates, attributes.StartNode);
+                    endWell = FindNodeAttributesByNo(candidates, attributes.EndNode);
+                }
+
+                QuantityPipeAttributes branchDefaults = QuantityPipeAttributes.IsBranchKind(attributes.ObjectKind)
+                    ? QuantityAttributeDefaultStore.LoadForKind(QuantityPipeAttributes.KindBranchPipe)
+                    : null;
+                QuantityDependencyResult result = QuantityDependencyService.NormalizeDraft(
+                    attributes, layers, previous, startWell, endWell, branchDefaults, changedField);
+                tr.Commit();
+                return result;
+            }
+        }
+
+        private static QuantityPipeAttributes FindNodeAttributesByNo(IEnumerable<NodeCandidate> candidates, string nodeNo)
+        {
+            if (candidates == null || string.IsNullOrWhiteSpace(nodeNo)) return null;
+            string wanted = nodeNo.Trim();
+            foreach (NodeCandidate candidate in candidates)
+            {
+                QuantityPipeAttributes attrs = candidate == null ? null : candidate.Attributes;
+                if (attrs == null || string.IsNullOrWhiteSpace(attrs.NodeNo)) continue;
+                if (string.Equals(attrs.NodeNo.Trim(), wanted, StringComparison.CurrentCultureIgnoreCase)) return attrs.Clone();
+            }
+            return null;
+        }
+
+        private static QuantityPipeAttributes NormalizeAttributesForWrite(
+            Database db,
+            Transaction tr,
+            Entity entity,
+            QuantityPipeAttributes attributes,
+            QuantityPipeAttributes previous,
+            string changedField)
+        {
+            attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
+            previous = previous == null ? attributes.Clone() : previous.Clone();
+
+            if (entity != null)
+            {
+                if (string.IsNullOrWhiteSpace(attributes.ObjectKind)) attributes.ObjectKind = InferObjectKind(db, tr, entity);
+                ApplyLayerMetadata(db, tr, entity, attributes);
+            }
+
+            QuantityPipeAttributes startWell = null;
+            QuantityPipeAttributes endWell = null;
+            if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind))
+            {
+                ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
+                List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
+                startWell = FindNodeAttributesByNo(candidates, attributes.StartNode);
+                endWell = FindNodeAttributesByNo(candidates, attributes.EndNode);
+            }
+
+            QuantityPipeAttributes branchDefaults = QuantityPipeAttributes.IsBranchKind(attributes.ObjectKind)
+                ? QuantityAttributeDefaultStore.LoadForKind(QuantityPipeAttributes.KindBranchPipe)
+                : null;
+            return QuantityDependencyService.NormalizeDraft(
+                attributes,
+                QuantityStructureLayer.Parse(attributes.BackfillStructure),
+                previous,
+                startWell,
+                endWell,
+                branchDefaults,
+                changedField).Attributes;
+        }
+
         public static QuantityPipeAttributes SelectConnectedNodeForMainPipe(Document doc, ObjectId pipeObjectId, QuantityPipeAttributes attributes, bool forStart)
         {
             if (doc == null) throw new ArgumentNullException("doc");
@@ -765,28 +889,40 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         /// </summary>
         public static QuantityPipeAttributes LoadDefaultProfileForObject(Document doc, ObjectId objectId, string kind)
         {
+            return LoadDefaultProfileForObject(doc, objectId, kind, null);
+        }
+
+        public static QuantityPipeAttributes LoadDefaultProfileForObject(Document doc, ObjectId objectId, string kind, QuantityPipeAttributes currentAttributes)
+        {
             if (doc == null) throw new ArgumentNullException("doc");
 
-            QuantityPipeAttributes attrs = LoadDefaultProfile(kind);
-            attrs.ObjectKind = string.IsNullOrWhiteSpace(kind) ? attrs.ObjectKind : kind;
-            if (objectId.IsNull) return attrs;
+            QuantityPipeAttributes defaults = LoadDefaultProfile(kind);
+            defaults.ObjectKind = string.IsNullOrWhiteSpace(kind) ? defaults.ObjectKind : kind;
+            if (objectId.IsNull)
+            {
+                QuantityPipeAttributes detached = currentAttributes == null ? defaults.Clone() : currentAttributes.Clone();
+                ApplyDefaultControlledFields(detached, defaults, defaults.ObjectKind);
+                return detached;
+            }
 
             Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Entity entity = tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
-                ApplySmartDefaults(db, tr, entity, entity == null ? string.Empty : entity.Layer, attrs, false);
+                string effectiveKind = entity == null ? kind : InferSupportedObjectKind(db, tr, entity);
+                if (string.IsNullOrWhiteSpace(effectiveKind)) effectiveKind = kind;
+                if (string.IsNullOrWhiteSpace(effectiveKind)) effectiveKind = defaults.ObjectKind;
+                defaults.ObjectKind = effectiveKind;
 
-                Curve curve = entity as Curve;
-                if (curve != null && QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
-                {
-                    TryFillConnectedNodeInfo(db, tr, entity, curve, attrs);
-                }
+                QuantityPipeAttributes attrs = currentAttributes == null
+                    ? (entity != null && HasPipeAttributes(entity, tr) ? ReadPipeAttributes(entity, tr) : defaults.Clone())
+                    : currentAttributes.Clone();
+                attrs.ObjectKind = effectiveKind;
+                RefreshAttributeModel(db, tr, entity, attrs, defaults, effectiveKind, true, false);
 
                 tr.Commit();
+                return attrs;
             }
-
-            return attrs;
         }
 
         private static QuantityPipeAttributes BuildDefaultAttributesFromEntity(Database db, Transaction tr, Entity entity, string inferredKind)
@@ -1017,14 +1153,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static HashSet<string> ReadPipeAttributeKeySet(Entity entity, Transaction tr)
         {
             HashSet<string> keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (entity == null || tr == null || entity.ExtensionDictionary.IsNull) return keys;
+            if (entity == null || tr == null) return keys;
 
             try
             {
-                DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                if (dict == null || !dict.Contains(PipeAttributeXrecordName)) return keys;
-
-                Xrecord record = tr.GetObject(dict.GetAt(PipeAttributeXrecordName), OpenMode.ForRead, false) as Xrecord;
+                Xrecord record = GetPipeAttributeRecord(entity, tr);
                 if (record == null || record.Data == null) return keys;
 
                 foreach (TypedValue value in record.Data)
@@ -1281,28 +1414,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static bool HasPipeAttributes(Entity entity, Transaction tr)
         {
-            if (entity == null || tr == null || entity.ExtensionDictionary.IsNull) return false;
-            try
-            {
-                DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                return dict != null && dict.Contains(PipeAttributeXrecordName);
-            }
-            catch
-            {
-                return false;
-            }
+            return GetPipeAttributeRecord(entity, tr) != null;
         }
 
         private static bool HasPipeAttributeKey(Entity entity, Transaction tr, string keyName)
         {
-            if (entity == null || tr == null || string.IsNullOrWhiteSpace(keyName) || entity.ExtensionDictionary.IsNull) return false;
+            if (entity == null || tr == null || string.IsNullOrWhiteSpace(keyName)) return false;
 
             try
             {
-                DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                if (dict == null || !dict.Contains(PipeAttributeXrecordName)) return false;
-
-                Xrecord record = tr.GetObject(dict.GetAt(PipeAttributeXrecordName), OpenMode.ForRead, false) as Xrecord;
+                Xrecord record = GetPipeAttributeRecord(entity, tr);
                 if (record == null || record.Data == null) return false;
 
                 foreach (TypedValue value in record.Data)
@@ -1326,44 +1447,49 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static bool RemovePipeAttributes(Entity entity, Transaction tr)
         {
-            if (entity == null || tr == null || entity.ExtensionDictionary.IsNull) return false;
+            if (entity == null || tr == null) return false;
+            bool removed = false;
             try
             {
-                DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                if (dict == null || !dict.Contains(PipeAttributeXrecordName)) return false;
-                if (!dict.IsWriteEnabled) dict.UpgradeOpen();
-
-                ObjectId recordId = dict.GetAt(PipeAttributeXrecordName);
-                dict.Remove(PipeAttributeXrecordName);
-
-                try
+                if (!entity.ExtensionDictionary.IsNull)
                 {
-                    DBObject obj = tr.GetObject(recordId, OpenMode.ForWrite, false);
-                    if (obj != null && !obj.IsErased) obj.Erase();
-                }
-                catch
-                {
+                    DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
+                    if (dict != null && dict.Contains(PipeAttributeXrecordName))
+                    {
+                        if (!dict.IsWriteEnabled) dict.UpgradeOpen();
+                        ObjectId recordId = dict.GetAt(PipeAttributeXrecordName);
+                        dict.Remove(PipeAttributeXrecordName);
+                        EraseRecord(tr, recordId);
+                        removed = true;
+                    }
                 }
 
-                return true;
+                DBDictionary index = GetPipeAttributeIndex(entity.Database, tr, false);
+                string key = entity.Handle.ToString();
+                if (index != null && index.Contains(key))
+                {
+                    if (!index.IsWriteEnabled) index.UpgradeOpen();
+                    ObjectId backupId = index.GetAt(key);
+                    index.Remove(key);
+                    EraseRecord(tr, backupId);
+                    removed = true;
+                }
+                return removed;
             }
             catch
             {
-                return false;
+                return removed;
             }
         }
 
         private static QuantityPipeAttributes ReadPipeAttributes(Entity entity, Transaction tr)
         {
             QuantityPipeAttributes attrs = QuantityPipeAttributes.Default.Clone();
-            if (entity == null || tr == null || entity.ExtensionDictionary.IsNull) return attrs;
+            if (entity == null || tr == null) return attrs;
 
             try
             {
-                DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
-                if (dict == null || !dict.Contains(PipeAttributeXrecordName)) return attrs;
-
-                Xrecord record = tr.GetObject(dict.GetAt(PipeAttributeXrecordName), OpenMode.ForRead, false) as Xrecord;
+                Xrecord record = GetPipeAttributeRecord(entity, tr);
                 if (record == null || record.Data == null) return attrs;
 
                 bool hasDrawLengthWidthHeightFlag = false;
@@ -1468,6 +1594,81 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Pair("DeductPipeVolume", attrs.DeductPipeVolume),
                 Pair("Remark", attrs.Remark),
                 Pair("LastModified", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
+            WritePipeAttributeBackup(entity, tr, record.Data);
+        }
+
+        private static Xrecord GetPipeAttributeRecord(Entity entity, Transaction tr)
+        {
+            if (entity == null || tr == null) return null;
+            try
+            {
+                if (!entity.ExtensionDictionary.IsNull)
+                {
+                    DBDictionary dict = tr.GetObject(entity.ExtensionDictionary, OpenMode.ForRead, false) as DBDictionary;
+                    if (dict != null && dict.Contains(PipeAttributeXrecordName))
+                    {
+                        Xrecord primary = tr.GetObject(dict.GetAt(PipeAttributeXrecordName), OpenMode.ForRead, false) as Xrecord;
+                        if (primary != null && primary.Data != null) return primary;
+                    }
+                }
+
+                DBDictionary index = GetPipeAttributeIndex(entity.Database, tr, false);
+                string key = entity.Handle.ToString();
+                return index != null && index.Contains(key)
+                    ? tr.GetObject(index.GetAt(key), OpenMode.ForRead, false) as Xrecord
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WritePipeAttributeBackup(Entity entity, Transaction tr, ResultBuffer data)
+        {
+            if (entity == null || tr == null || data == null) return;
+            DBDictionary index = GetPipeAttributeIndex(entity.Database, tr, true);
+            if (index == null) return;
+            string key = entity.Handle.ToString();
+            Xrecord record;
+            if (index.Contains(key))
+            {
+                record = tr.GetObject(index.GetAt(key), OpenMode.ForWrite, false) as Xrecord;
+            }
+            else
+            {
+                if (!index.IsWriteEnabled) index.UpgradeOpen();
+                record = new Xrecord();
+                index.SetAt(key, record);
+                tr.AddNewlyCreatedDBObject(record, true);
+            }
+            if (record != null) record.Data = new ResultBuffer(data.AsArray());
+        }
+
+        private static DBDictionary GetPipeAttributeIndex(Database db, Transaction tr, bool create)
+        {
+            if (db == null || tr == null) return null;
+            DBDictionary nod = tr.GetObject(db.NamedObjectsDictionaryId, create ? OpenMode.ForWrite : OpenMode.ForRead, false) as DBDictionary;
+            if (nod == null) return null;
+            if (nod.Contains(PipeAttributeIndexDictionaryName))
+                return tr.GetObject(nod.GetAt(PipeAttributeIndexDictionaryName), create ? OpenMode.ForWrite : OpenMode.ForRead, false) as DBDictionary;
+            if (!create) return null;
+            var index = new DBDictionary();
+            nod.SetAt(PipeAttributeIndexDictionaryName, index);
+            tr.AddNewlyCreatedDBObject(index, true);
+            return index;
+        }
+
+        private static void EraseRecord(Transaction tr, ObjectId id)
+        {
+            try
+            {
+                DBObject obj = tr.GetObject(id, OpenMode.ForWrite, false);
+                if (obj != null && !obj.IsErased) obj.Erase();
+            }
+            catch
+            {
+            }
         }
 
         private static TypedValue Pair(string key, string value)

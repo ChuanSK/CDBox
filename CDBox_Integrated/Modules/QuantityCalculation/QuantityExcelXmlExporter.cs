@@ -140,6 +140,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                     QuantityPipeLayerHeights h = QuantityPipeLayerHeights.FromRow(row);
                     double pipeRadius = row.PipeOuterDiameter > 0 ? row.PipeOuterDiameter / 2.0 : InferPipeRadius(row.Diameter);
+                    string pipeVolumeFormula = "3.14*" + Format(pipeRadius) + "^2*" + Format(row.Length);
 
                     SetText(excelRow, 0, row.StartNode);
                     SetText(excelRow, 1, row.EndNode);
@@ -177,9 +178,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     if (row.SandBackfill > 0)
                     {
                         if (h.SandBackfillHeight > 0)
-                            sandBackfillFormula = Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(h.SandBackfillHeight) + "-3.14*" + Format(pipeRadius) + "^2*" + Format(row.Length);
+                            sandBackfillFormula = Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(h.SandBackfillHeight) + (row.PipeDeductionTarget == "sand" ? "-" + pipeVolumeFormula : string.Empty);
                         else
-                            sandBackfillFormula = Format(row.Length) + "*" + Format(row.TrenchWidth) + "*(" + Format(row.AverageDepth) + "-" + Format(h.C25RestoreHeight) + "-" + Format(h.GravelHeight) + "-" + Format(h.SandCushionHeight) + ")-3.14*" + Format(pipeRadius) + "^2*" + Format(row.Length);
+                            sandBackfillFormula = Format(row.Length) + "*" + Format(row.TrenchWidth) + "*(" + Format(row.AverageDepth) + "-" + Format(h.C25RestoreHeight) + "-" + Format(h.GravelHeight) + "-" + Format(h.SandCushionHeight) + ")" + (row.PipeDeductionTarget == "sand" ? "-" + pipeVolumeFormula : string.Empty);
                     }
                     SetFormulaAndValue(excelRow, 25, 26, row.SandBackfill, sandBackfillFormula);
 
@@ -189,8 +190,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     SetNumber(excelRow, 30, h.C25RestoreHeight);
                     SetFormulaAndValue(excelRow, 31, 32, row.C25Restore, h.C25RestoreHeight > 0 ? Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(h.C25RestoreHeight) : string.Empty);
 
-                    SetFormulaAndValue(excelRow, 33, 34, row.OriginalSoilBackfill, row.OriginalSoilBackfill > 0 ? Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(row.AverageDepth) + "-3.14*" + Format(pipeRadius) + "^2*" + Format(row.Length) : string.Empty);
-                    SetFormulaAndValue(excelRow, 35, 36, row.C25PipeEncasement, row.C25PipeEncasement > 0 ? Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(h.PipeEncasementHeight) : string.Empty);
+                    double soilHeight = h.OriginalSoilBackfillHeight;
+                    double pipeBaseArea = row.Length * row.TrenchWidth;
+                    if (soilHeight <= 0 && pipeBaseArea > 0 && row.OriginalSoilBackfill > 0)
+                        soilHeight = (row.OriginalSoilBackfill + (row.PipeDeductionTarget == "soil" ? row.PipeDeductionVolume : 0.0)) / pipeBaseArea;
+                    string soilFormula = row.OriginalSoilBackfill > 0
+                        ? Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(soilHeight) + (row.PipeDeductionTarget == "soil" ? "-" + pipeVolumeFormula : string.Empty)
+                        : string.Empty;
+                    SetFormulaAndValue(excelRow, 33, 34, row.OriginalSoilBackfill, soilFormula);
+                    string encasementFormula = row.C25PipeEncasement > 0
+                        ? Format(row.Length) + "*" + Format(row.TrenchWidth) + "*" + Format(h.PipeEncasementHeight) + (row.PipeDeductionTarget == "encasement" ? "-" + pipeVolumeFormula : string.Empty)
+                        : string.Empty;
+                    SetFormulaAndValue(excelRow, 35, 36, row.C25PipeEncasement, encasementFormula);
                     SetNumber(excelRow, 37, row.EarthworkOut);
                     SetText(excelRow, 38, string.Empty);
 
@@ -693,27 +704,26 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 h.PipeEncasementHeight = SumHeight(layers, IsPipeEncasementLayer);
 
                 double baseArea = row.Length * row.TrenchWidth;
+                if (h.SandBackfillHeight <= 0 && baseArea > 0 && row.SandBackfill > 0)
+                    h.SandBackfillHeight = (row.SandBackfill + (row.PipeDeductionTarget == "sand" ? row.PipeDeductionVolume : 0.0)) / baseArea;
                 if (h.SandCushionHeight <= 0 && baseArea > 0 && row.SandCushion > 0) h.SandCushionHeight = row.SandCushion / baseArea;
                 if (h.GravelHeight <= 0 && baseArea > 0 && row.GravelCushion > 0) h.GravelHeight = row.GravelCushion / baseArea;
                 if (h.C25RestoreHeight <= 0 && baseArea > 0 && row.C25Restore > 0) h.C25RestoreHeight = row.C25Restore / baseArea;
-                if (h.PipeEncasementHeight <= 0 && baseArea > 0 && row.C25PipeEncasement > 0) h.PipeEncasementHeight = row.C25PipeEncasement / baseArea;
+                if (h.PipeEncasementHeight <= 0 && baseArea > 0 && row.C25PipeEncasement > 0)
+                    h.PipeEncasementHeight = (row.C25PipeEncasement + (row.PipeDeductionTarget == "encasement" ? row.PipeDeductionVolume : 0.0)) / baseArea;
                 return h;
             }
 
             private static bool IsPipeC25RestoreLayer(QuantityStructureLayer layer)
             {
                 if (layer == null) return false;
-                string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-                if (!QuantityStructureLayer.IsC25(layer)) return false;
-                if (QuantityStructureLayer.ContainsAny(text, "包管")) return false;
-                return true;
+                return QuantityStructureLayer.IsC25Restore(layer);
             }
 
             private static bool IsPipeEncasementLayer(QuantityStructureLayer layer)
             {
                 if (layer == null) return false;
-                string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-                return QuantityStructureLayer.ContainsAny(text, "包管");
+                return QuantityStructureLayer.IsConcretePipeEncasement(layer);
             }
         }
 

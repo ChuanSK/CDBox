@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 
 namespace TCPipeAutoDraw.UI.Studio
@@ -7,7 +8,16 @@ namespace TCPipeAutoDraw.UI.Studio
         public string documentId { get; set; }
         public string handle { get; set; }
         public QuantityPipeAttributes attributes { get; set; }
+        public List<QuantityStructureLayer> layers { get; set; }
+        public string changedField { get; set; }
+        public long requestId { get; set; }
         public bool forStart { get; set; }
+
+        public CDBoxStudioQuantityAttributeEditorRequest()
+        {
+            layers = new List<QuantityStructureLayer>();
+            changedField = string.Empty;
+        }
     }
 
     internal sealed class CDBoxStudioQuantityAttributeEditorContext
@@ -24,12 +34,18 @@ namespace TCPipeAutoDraw.UI.Studio
         public bool hasSavedAttributes { get; set; }
         public string message { get; set; }
         public QuantityPipeAttributes attributes { get; set; }
+        public List<QuantityStructureLayer> layers { get; set; }
+        public List<string> warnings { get; set; }
+        public object calculation { get; set; }
+        public double realExcavationDepth { get; set; }
+        public long requestId { get; set; }
 
         public CDBoxStudioQuantityAttributeEditorContext()
         {
             documentId = string.Empty; documentName = string.Empty; handle = string.Empty;
             layerName = string.Empty; objectTypeName = string.Empty; inferredKind = string.Empty;
             message = string.Empty; attributes = QuantityPipeAttributes.Default;
+            layers = new List<QuantityStructureLayer>(); warnings = new List<string>();
         }
     }
 }

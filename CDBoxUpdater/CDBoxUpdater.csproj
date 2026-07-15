@@ -17,4 +17,8 @@
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Security" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CDBox_Integrated\Core\Startup\CDBoxRequiredRuntimeFiles.cs" Link="Shared\CDBoxRequiredRuntimeFiles.cs" />
+  </ItemGroup>
 </Project>

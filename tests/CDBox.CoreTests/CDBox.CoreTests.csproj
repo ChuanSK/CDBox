@@ -13,18 +13,22 @@
     <Reference Include="System.IO.Compression.FileSystem" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityCalculationReportModels.cs" Link="Source\QuantityCalculationReportModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDependencyService.cs" Link="Source\QuantityDependencyService.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardClassification.cs" Link="Source\QuantityDashboardClassification.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioState.cs" Link="Source\CDBoxStudioState.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLayerManagerPage.cs" Link="Source\CDBoxStudioLayerManagerPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDefaultsPage.cs" Link="Source\CDBoxStudioQuantityDefaultsPage.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallException.cs" Link="Source\Updater\BundleInstallException.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallOutcome.cs" Link="Source\Updater\BundleInstallOutcome.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstaller.cs" Link="Source\Updater\BundleInstaller.cs" />
     <Compile Include="..\..\CDBoxUpdater\PendingUpdateManifest.cs" Link="Source\Updater\PendingUpdateManifest.cs" />
     <Compile Include="..\..\CDBoxUpdater\UpdaterLogger.cs" Link="Source\Updater\UpdaterLogger.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxRequiredRuntimeFiles.cs" Link="Source\CDBoxRequiredRuntimeFiles.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxUpdateSourceValidator.cs" Link="Source\CDBoxUpdateSourceValidator.cs" />
   </ItemGroup>
 </Project>

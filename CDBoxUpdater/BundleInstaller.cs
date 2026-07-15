@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using CDBox.Shared;
 
 namespace CDBoxUpdater
 {
@@ -15,7 +16,13 @@ namespace CDBoxUpdater
 
         public static BundleInstallOutcome Install(PendingUpdateManifest pending)
         {
+            return Install(pending, null);
+        }
+
+        public static BundleInstallOutcome Install(PendingUpdateManifest pending, Action<int, string> progress)
+        {
             if (pending == null) throw new ArgumentNullException("pending");
+            Report(progress, 25, "正在校验更新包…");
             ValidatePending(pending);
 
             var outcome = new BundleInstallOutcome();
@@ -35,6 +42,7 @@ namespace CDBoxUpdater
                 throw new InvalidOperationException("更新包 SHA256 二次校验失败。期望 " + pending.PackageSha256 + "，实际 " + actualHash + "。");
             }
             UpdaterLogger.Info("更新包 SHA256 二次校验通过。Hash=" + actualHash);
+            Report(progress, 40, "更新包校验完成，正在解压…");
 
             string workRoot = string.IsNullOrWhiteSpace(pending.WorkDirectory)
                 ? Path.Combine(Path.GetDirectoryName(packagePath) ?? Path.GetTempPath(), "installer-work")
@@ -53,11 +61,13 @@ namespace CDBoxUpdater
                 string extractedBundle = FindExtractedBundle(extractionRoot);
                 ValidateBundle(extractedBundle);
                 UpdaterLogger.Info("更新包解压和必要文件校验通过。Bundle=" + extractedBundle);
+                Report(progress, 58, "正在准备新版本文件…");
 
                 DeleteDirectoryIfExists(localNewBundle);
                 CopyDirectory(extractedBundle, localNewBundle);
                 ValidateBundle(localNewBundle);
                 UpdaterLogger.Info("目标磁盘暂存 bundle 校验通过。Staging=" + localNewBundle);
+                Report(progress, 74, "正在备份当前版本…");
 
                 if (Directory.Exists(targetBundle))
                 {
@@ -69,8 +79,10 @@ namespace CDBoxUpdater
 
                 try
                 {
+                    Report(progress, 88, "正在替换 CDBox 文件…");
                     MoveDirectoryWithRetry(localNewBundle, targetBundle);
                     ValidateBundle(targetBundle);
+                    Report(progress, 98, "正在完成最终校验…");
                     outcome.Success = true;
                     outcome.Message = "CDBox.bundle 已成功替换。旧版本备份保留在：" + (string.IsNullOrWhiteSpace(outcome.BackupBundlePath) ? "无" : outcome.BackupBundlePath);
                     UpdaterLogger.Info(outcome.Message);
@@ -102,6 +114,12 @@ namespace CDBoxUpdater
                     UpdaterLogger.Warn("清理目标磁盘暂存 bundle 失败：" + ex.Message);
                 }
             }
+        }
+
+        private static void Report(Action<int, string> progress, int percent, string message)
+        {
+            if (progress == null) return;
+            try { progress(percent, message); } catch { }
         }
 
         public static bool CanWriteTarget(string targetBundlePath)
@@ -222,12 +240,14 @@ namespace CDBoxUpdater
             var missing = new List<string>();
             RequireFile(bundleRoot, "PackageContents.xml", missing);
             RequireFile(bundleRoot, Path.Combine("Contents", "CDBox.dll"), missing);
-            RequireFile(bundleRoot, Path.Combine("Contents", "Microsoft.Web.WebView2.Core.dll"), missing);
-            RequireFile(bundleRoot, Path.Combine("Contents", "Microsoft.Web.WebView2.WinForms.dll"), missing);
+            foreach (string dependency in CDBoxRequiredRuntimeFiles.ManagedDependencies)
+            {
+                RequireFile(bundleRoot, Path.Combine("Contents", dependency), missing);
+            }
 
             string contents = Path.Combine(bundleRoot, "Contents");
-            if (!FindFileRecursive(contents, "WebView2Loader.dll")) missing.Add("Contents\\runtimes\\...\\WebView2Loader.dll");
-            if (requireUpdater && !FindFileRecursive(contents, "CDBoxUpdater.exe")) missing.Add("Contents\\Updater\\CDBoxUpdater.exe");
+            RequireFile(bundleRoot, Path.Combine("Contents", CDBoxRequiredRuntimeFiles.WebView2LoaderRelativePath), missing);
+            if (requireUpdater) RequireFile(bundleRoot, Path.Combine("Contents", CDBoxRequiredRuntimeFiles.UpdaterRelativePath), missing);
 
             if (missing.Count > 0)
             {
@@ -238,20 +258,6 @@ namespace CDBoxUpdater
         private static void RequireFile(string bundleRoot, string relativePath, IList<string> missing)
         {
             if (!File.Exists(Path.Combine(bundleRoot, relativePath))) missing.Add(relativePath);
-        }
-
-        private static bool FindFileRecursive(string root, string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return false;
-            try
-            {
-                string[] files = Directory.GetFiles(root, fileName, SearchOption.AllDirectories);
-                return files != null && files.Length > 0;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private static bool Rollback(string targetBundle, string backupBundle, bool oldBundleMoved)

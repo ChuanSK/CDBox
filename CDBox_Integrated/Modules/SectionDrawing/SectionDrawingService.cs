@@ -313,6 +313,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (string.IsNullOrWhiteSpace(patternName)) return true;
             string name = patternName.Trim();
             return string.Equals(name, "无", StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(name, "无填充", StringComparison.CurrentCultureIgnoreCase)
                 || string.Equals(name, "NONE", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "NO", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "OFF", StringComparison.OrdinalIgnoreCase);

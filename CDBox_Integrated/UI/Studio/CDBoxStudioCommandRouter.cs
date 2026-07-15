@@ -48,6 +48,9 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioRouteResult quantityAttributeResult;
             if (CDBoxStudioQuantityAttributeEditorRoutes.TryRoute(request, out quantityAttributeResult)) return quantityAttributeResult;
 
+            CDBoxStudioRouteResult sectionDrawingResult;
+            if (CDBoxStudioSectionDrawingRoutes.TryRoute(request, _scriptSink, out sectionDrawingResult)) return sectionDrawingResult;
+
             CDBoxStudioRouteResult layerManagerResult;
             if (CDBoxStudioLayerManagerRoutes.TryRoute(request, false, out layerManagerResult)) return layerManagerResult;
 
@@ -107,6 +110,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "openquantityattributeeditorwindow":
                     return RouteOpenQuantityAttributeEditorWindow(request.Argument);
+
+                case "opensectiondrawingwindow":
+                    return RouteOpenSectionDrawingWindow();
 
                 case "layermanageropened":
                     return RouteLayerManagerOpened();
@@ -512,6 +518,23 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
                 CDBoxStudioLogger.Error("打开属性编辑器 Preview 9 独立窗口失败。", ex);
+            }
+            return result;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenSectionDrawingWindow()
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioSectionDrawingWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开断面图生成独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "断面图生成独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开断面图生成 Preview 10 独立窗口失败。", ex);
             }
             return result;
         }

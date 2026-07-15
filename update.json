@@ -1,14 +1,14 @@
 {
     "channel":  "studio-preview",
     "latestVersion":  "CDBox-Studio-Preview-9",
-    "versionCode":  20900,
+    "versionCode":  20901,
     "title":  "CDBox Studio Preview 9",
-    "releaseDate":  "2026-07-13",
+    "releaseDate":  "2026-07-15",
     "mandatory":  false,
     "package":  {
                     "fileName":  "CDBox.Studio.Preview.9.zip",
-                    "size":  7007293,
-                    "sha256":  "377AA515A942B8B7AB8D342A94BD8B84E4A9180F1A75E121AD5620254E81320E",
+                    "size":  7037592,
+                    "sha256":  "E2B1D22EB8FC53001280DDA03EE9068E6224E7346ABA3E2F69ACFC87187BF371",
                     "urls":  [
                                  {
                                      "name":  "GitHub备用",
@@ -25,10 +25,11 @@
                              ]
                 },
     "notes":  [
-                  "新增 Preview 9 属性编辑器内嵌与独立界面。",
-                  "新增工程量看板独立界面，并统一工程量分类与表格交互。",
-                  "图层管理器及属性默认表支持直接编辑和条目拖拽。",
-                  "修复图层管理器内嵌与独立界面样式异常。",
-                  "更新器改为校验并安装包含 WebView2 依赖的完整发布包。"
+                  "新增 Preview 10 断面图生成共享界面、独立窗口与自定义预览。",
+                  "修正属性编辑器实时联动、结构层计算、工程量分类和正式 Excel 导出。",
+                  "图层管理器、属性默认表等表格统一支持直接编辑与拖拽排序。",
+                  "完善 DWG 属性持久化，支持跨设备继续编辑。",
+                  "本地与网络更新统一安装链路、完整依赖校验和安装进度提示。",
+                  "更新器在 AutoCAD 退出前静默等待，退出后才显示安装窗口。"
               ]
 }

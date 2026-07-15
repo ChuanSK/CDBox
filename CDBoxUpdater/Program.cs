@@ -18,6 +18,8 @@ namespace CDBoxUpdater
         {
             string pendingPath = GetArgument(args, "--pending");
             bool elevatedContinuation = HasFlag(args, "--elevated");
+            UpdateProgressWindowHost progressWindow = null;
+            bool autoCadExitConfirmed = false;
             var result = new UpdateResultRecord
             {
                 PendingUpdatePath = pendingPath ?? string.Empty
@@ -39,14 +41,20 @@ namespace CDBoxUpdater
                     + ", ElevatedContinuation=" + elevatedContinuation
                     + ", Target=" + pending.TargetBundlePath);
 
-                ValidatePendingRuntimePaths(pending);
                 result.Status = "waiting-for-autocad";
                 result.Message = "正在等待 AutoCAD 退出。";
                 WriteResult(pending.LastResultPath, result);
 
+                // 等待阶段保持完全后台运行。网络更新和本地更新入口已经提示用户关闭 AutoCAD，
+                // 因此只有确认所有相关 AutoCAD 进程退出后才创建安装窗口。
                 WaitForAutoCadExit(pending);
+                autoCadExitConfirmed = true;
+                progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
+                progressWindow.Report(15, "已确认 AutoCAD 退出，正在准备安装…");
                 Thread.Sleep(1500);
 
+                progressWindow.Report(20, "正在检查安装目录权限…");
+                ValidatePendingRuntimePaths(pending);
                 if (!BundleInstaller.CanWriteTarget(pending.TargetBundlePath))
                 {
                     if (!elevatedContinuation)
@@ -60,6 +68,7 @@ namespace CDBoxUpdater
                             result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
                             WriteResult(pending.LastResultPath, result);
                             UpdaterLogger.Info(result.Message);
+                            progressWindow.CloseForRelaunch();
                             return 0;
                         }
 
@@ -76,7 +85,10 @@ namespace CDBoxUpdater
                 BundleInstallOutcome outcome;
                 try
                 {
-                    outcome = BundleInstaller.Install(pending);
+                    outcome = BundleInstaller.Install(pending, delegate(int percent, string message)
+                    {
+                        progressWindow.Report(percent, message);
+                    });
                 }
                 catch (Exception installEx)
                 {
@@ -93,6 +105,7 @@ namespace CDBoxUpdater
                         result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
                         WriteResult(pending.LastResultPath, result);
                         UpdaterLogger.Info(result.Message);
+                        progressWindow.CloseForRelaunch();
                         return 0;
                     }
                     throw;
@@ -110,6 +123,10 @@ namespace CDBoxUpdater
                 UpdaterLogger.Info("CDBoxUpdater 完成。Success=" + result.Success
                     + ", RolledBack=" + result.RolledBack
                     + ", Backup=" + result.BackupBundlePath);
+                progressWindow.Complete(result.Success,
+                    result.Success
+                        ? "更新已完成，现在可以重新打开 AutoCAD。"
+                        : (string.IsNullOrWhiteSpace(result.Message) ? "更新未完成，请查看更新日志。" : result.Message));
                 return result.Success ? 0 : 1;
             }
             catch (Exception ex)
@@ -137,6 +154,17 @@ namespace CDBoxUpdater
                 catch (Exception writeEx)
                 {
                     UpdaterLogger.Error("写入 last-update-result.json 失败。", writeEx);
+                }
+
+                if (progressWindow == null && autoCadExitConfirmed)
+                {
+                    try { progressWindow = UpdateProgressWindowHost.Start(result.TargetVersion); }
+                    catch (Exception windowEx) { UpdaterLogger.Error("打开更新失败提示窗口失败。", windowEx); }
+                }
+
+                if (progressWindow != null)
+                {
+                    progressWindow.Complete(false, "更新未完成：" + ex.Message);
                 }
 
                 return 1;

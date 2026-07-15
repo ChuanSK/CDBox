@@ -4,7 +4,7 @@
 
 1. Preview 8 前置收口：工程量动态看板增加独立 WebView2 窗口；Studio 内嵌页和独立页复用 `CDBoxStudioQuantityDashboardPage`、同一套路由与实时数据源。
 2. Preview 9：属性编辑器界面。已建立共享页面、Studio 内嵌页和独立窗口；`SX` 进入新版，`SXLEGACY` 保留旧 WinForms 兜底。桌面验收通过后再切换正式发布身份。
-3. Preview 10：断面图生成界面。保留现有 `DM` / `PLDM` 计算与绘图服务，界面层采用与 Preview 9 相同的共享组件双宿主结构。
+3. Preview 10：断面图生成界面。已建立共享页面、Studio 内嵌页和独立窗口，自定义 SVG 预览支持填充、管道、尺寸、缩放和平移；`DM` 进入新版，`DMLEGACY` 保留旧 WinForms 兜底，`PLDM` 继续复用原批量绘图服务。
 
 ## 统一约束
 

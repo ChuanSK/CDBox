@@ -179,7 +179,7 @@ namespace TCPipeAutoDraw.UI
 
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
+                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll（将安装同目录全部依赖）";
                 dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;
@@ -222,7 +222,7 @@ namespace TCPipeAutoDraw.UI
                 "安装目录：" + installRoot + "\r\n" +
                 "注册加载：" + (string.IsNullOrWhiteSpace(registered) ? "未注册" : registered) + "\r\n" +
                 "当前是否从安装目录运行：" + running + "\r\n\r\n" +
-                "更新方式：点击“更新插件”选择新版 CDBox.dll，关闭 CAD 后自动替换，下次启动生效。" + "\r\n" +
+                "更新方式：点击“更新插件”选择完整构建输出中的 CDBox.dll；依赖校验通过后，关闭 CAD 并按进度窗口完成安装。" + "\r\n" +
                 "设置文件：" + CDBoxAppSettingsStore.GetSettingsPath();
         }
     }

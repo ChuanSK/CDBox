@@ -73,6 +73,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeAttributes attrs = info.Attributes;
                 if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind))
                 {
+                    QuantityDependencyResult normalized = QuantityDependencyService.NormalizeDraft(
+                        attrs, QuantityStructureLayer.Parse(attrs.BackfillStructure), attrs, null, null, null, "Report");
+                    attrs = normalized.Attributes;
                     QuantityWellCalculationRow row = BuildWellRow(info, attrs, wellIndex);
                     report.Wells.Add(row);
                     wellIndex++;
@@ -87,6 +90,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeAttributes attrs = info.Attributes;
                 if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
                 {
+                    attrs = NormalizeForReport(attrs, wellLookup, false);
                     QuantityMainPipeCalculationRow row = BuildMainPipeRow(info, attrs, mainIndex, wellLookup);
                     report.MainPipes.Add(row);
                     mainIndex++;
@@ -101,6 +105,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeAttributes attrs = info.Attributes;
                 if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
                 {
+                    attrs = NormalizeForReport(attrs, wellLookup, true);
                     QuantityMainPipeCalculationRow row = BuildBranchPipeRow(info, attrs, branchIndex, wellLookup);
                     report.BranchPipes.Add(row);
                     branchIndex++;
@@ -113,6 +118,20 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (report.BranchPipes.Count == 0) report.Warnings.Add("未找到已写入属性且启用统计的支管对象。");
             if (report.Wells.Count == 0) report.Warnings.Add("未找到已写入属性且启用统计的节点/检查井对象。");
             return report;
+        }
+
+        private static QuantityPipeAttributes NormalizeForReport(QuantityPipeAttributes attrs, IDictionary<string, QuantityPipeAttributes> wellLookup, bool branch)
+        {
+            QuantityPipeAttributes startWell = null;
+            QuantityPipeAttributes endWell = null;
+            if (!branch && wellLookup != null)
+            {
+                if (!string.IsNullOrWhiteSpace(attrs.StartNode)) wellLookup.TryGetValue(attrs.StartNode.Trim(), out startWell);
+                if (!string.IsNullOrWhiteSpace(attrs.EndNode)) wellLookup.TryGetValue(attrs.EndNode.Trim(), out endWell);
+            }
+            QuantityPipeAttributes defaults = branch ? QuantityAttributeDefaultStore.LoadForKind(QuantityPipeAttributes.KindBranchPipe) : null;
+            return QuantityDependencyService.NormalizeDraft(
+                attrs, QuantityStructureLayer.Parse(attrs.BackfillStructure), attrs, startWell, endWell, defaults, "Report").Attributes;
         }
 
         private static void ReportProgress(Action<int, int, string> progress, int current, int total, string message)
@@ -168,18 +187,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 startDepth = ResolvePipeEndpointDepth(attrs.StartNode, attrs.StartDepth, wellLookup, pipeCushionHeightForDepth);
                 endDepth = ResolvePipeEndpointDepth(attrs.EndNode, attrs.EndDepth, wellLookup, pipeCushionHeightForDepth);
-                double rawAverageDepth = 0.0;
-                if (attrs.StartDepth > 0 && attrs.EndDepth > 0) rawAverageDepth = (attrs.StartDepth + attrs.EndDepth) / 2.0;
-                else if (attrs.StartDepth > 0) rawAverageDepth = attrs.StartDepth;
-                else if (attrs.EndDepth > 0) rawAverageDepth = attrs.EndDepth;
-
                 avgDepth = 0.0;
-                bool hasManualAverageDepth = attrs.AverageDepth > 0 && (rawAverageDepth <= 0 || Math.Abs(attrs.AverageDepth - rawAverageDepth) > 0.005);
-                if (hasManualAverageDepth) avgDepth = attrs.AverageDepth;
-                else if (startDepth > 0 && endDepth > 0) avgDepth = (startDepth + endDepth) / 2.0;
+                if (startDepth > 0 && endDepth > 0) avgDepth = (startDepth + endDepth) / 2.0;
                 else if (startDepth > 0) avgDepth = startDepth;
                 else if (endDepth > 0) avgDepth = endDepth;
-                else avgDepth = attrs.AverageDepth;
+                else avgDepth = 0.0;
             }
 
             bool exposedBranch = isBranch && ContainsAny(attrs.BranchType, "明管");
@@ -194,10 +206,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double soilBackfillHeight = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsOriginalSoilBackfill);
             double encasementHeight = QuantityStructureLayer.SumHeight(layers, IsPipeEncasementLayer);
 
-            if (sandBackfillHeight <= 0 && soilBackfillHeight <= 0)
+            if (!HasLayer(layers, QuantityStructureLayer.IsSandBackfill) && !HasLayer(layers, QuantityStructureLayer.IsOriginalSoilBackfill))
             {
-                double remain = avgDepth - c25Height - gravelHeight - sandCushionHeight;
-                if (remain < 0) remain = 0;
+                double remain = QuantityEngineeringMath.CalculatePipeRemainingBackfillHeight(avgDepth, layers);
                 if (ContainsAny(attrs.BackfillType, "原土")) soilBackfillHeight = remain;
                 else sandBackfillHeight = remain;
             }
@@ -219,13 +230,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double mechanical = IsManualExcavation(attrs.ExcavationType) ? 0.0 : excavation;
             double manual = IsManualExcavation(attrs.ExcavationType) ? excavation : 0.0;
 
+            string pipeDeductionTarget = ResolvePipeDeductionTarget(layers, sandBackfillHeight, soilBackfillHeight, encasementHeight);
             double sandCushion = length * width * sandCushionHeight;
-            double sandBackfill = Math.Max(0.0, length * width * sandBackfillHeight - (sandBackfillHeight > 0 ? pipeVolume : 0.0));
+            double sandBackfill = Math.Max(0.0, length * width * sandBackfillHeight - (pipeDeductionTarget == "sand" ? pipeVolume : 0.0));
             double gravel = length * width * gravelHeight;
             double c25Restore = length * width * c25Height;
-            double originalSoil = Math.Max(0.0, length * width * soilBackfillHeight - (soilBackfillHeight > 0 ? pipeVolume : 0.0));
-            double encasement = length * width * encasementHeight;
-            double earthOut = Math.Max(0.0, roadWaste + excavation - originalSoil);
+            double originalSoil = Math.Max(0.0, length * width * soilBackfillHeight - (pipeDeductionTarget == "soil" ? pipeVolume : 0.0));
+            double encasement = Math.Max(0.0, length * width * encasementHeight - (pipeDeductionTarget == "encasement" ? pipeVolume : 0.0));
+            double earthOut = QuantityEngineeringMath.CalculateEarthworkOut(roadWaste, excavation, originalSoil);
 
             QuantityMainPipeCalculationRow row = new QuantityMainPipeCalculationRow();
             row.Index = index;
@@ -245,6 +257,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.BackfillType = attrs.BackfillType ?? string.Empty;
             row.BackfillStructure = attrs.BackfillStructure ?? string.Empty;
             row.PipeOuterDiameter = Round(attrs.PipeOuterDiameter);
+            row.PipeDeductionVolume = Round(pipeVolume);
+            row.PipeDeductionTarget = pipeDeductionTarget;
             row.RoadCutting = Round(roadCutting);
             row.RoadBreaking = Round(roadBreaking);
             row.RoadWaste = Round(roadWaste);
@@ -262,7 +276,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.BranchType = attrs.BranchType ?? string.Empty;
             row.CalculationSource = QuantityDashboardSources.Property;
             row.DataStatus = coBuried ? "仅统计长度（并埋）" : (calculateEarthwork || !isBranch ? "正常" : "仅统计长度");
-            row.FormulaText = BuildMainFormulaText(row, c25Height, gravelHeight, sandCushionHeight, sandBackfillHeight, soilBackfillHeight);
+            row.FormulaText = BuildMainFormulaText(row, c25Height, gravelHeight, sandCushionHeight, sandBackfillHeight, soilBackfillHeight, pipeDeductionTarget);
             return row;
         }
 
@@ -291,14 +305,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double effectiveBackfillArea = Math.Max(0.0, area - wellArea);
 
             double sandCushionHeight = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsSandCushion);
-            if (sandCushionHeight <= 0) sandCushionHeight = attrs.SandCushionThickness;
+            if (layers.Count == 0) sandCushionHeight = attrs.SandCushionThickness;
             double wellBottomCushionHeight = SumWellBottomLayerHeight(layers, attrs);
             double c25CushionHeight = QuantityStructureLayer.SumHeight(layers, IsWellC25CushionLayer);
             double coverGravelHeight = QuantityStructureLayer.SumHeight(layers, IsCoverPlateGravelLayer);
             double coverC25Height = QuantityStructureLayer.SumHeight(layers, IsCoverPlateC25Layer);
             double sandBackfillHeight = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsSandBackfill);
 
-            if (sandBackfillHeight <= 0)
+            if (!HasLayer(layers, QuantityStructureLayer.IsSandBackfill))
             {
                 // 用户填写的井深只到井下方垫层上方；井下层在井深之下，不参与井内回填层扣减。
                 double known = QuantityStructureLayer.SumHeight(layers, IsWellUpperNonBackfillLayer);
@@ -313,10 +327,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double manual = IsManualExcavation(attrs.ExcavationType) ? excavation : 0.0;
             double sandCushion = area * sandCushionHeight;
             double c25Cushion = area * c25CushionHeight;
-            double coverGravel = area * coverGravelHeight;
-            double coverC25 = area * coverC25Height;
+            double coverGravel = effectiveBackfillArea * coverGravelHeight;
+            double coverC25 = effectiveBackfillArea * coverC25Height;
             double sandBackfill = effectiveBackfillArea * sandBackfillHeight;
-            double earthOut = Math.Max(0.0, roadWaste + excavation - sandBackfill);
+            // 中粗砂属于新购回填材料，不能抵扣开挖土方外运；只有可回用原土才能抵扣。
+            double earthOut = QuantityEngineeringMath.CalculateEarthworkOut(roadWaste, excavation, 0.0);
 
             QuantityWellCalculationRow row = new QuantityWellCalculationRow();
             row.Index = index;
@@ -359,18 +374,36 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return row;
         }
 
-        private static string BuildMainFormulaText(QuantityMainPipeCalculationRow row, double c25Height, double gravelHeight, double sandCushionHeight, double sandBackfillHeight, double soilBackfillHeight)
+        private static string BuildMainFormulaText(QuantityMainPipeCalculationRow row, double c25Height, double gravelHeight, double sandCushionHeight, double sandBackfillHeight, double soilBackfillHeight, string pipeDeductionTarget)
         {
             List<string> parts = new List<string>();
             parts.Add("路面切缝=L×2");
             parts.Add("路面破碎=L×W");
             parts.Add("开挖=L×W×(H-路面)");
             if (sandCushionHeight > 0) parts.Add("砂垫层=L×W×" + Format(sandCushionHeight));
-            if (sandBackfillHeight > 0) parts.Add("砂回填=L×W×" + Format(sandBackfillHeight) + "-管身体积");
+            if (sandBackfillHeight > 0) parts.Add("砂回填=L×W×" + Format(sandBackfillHeight) + (pipeDeductionTarget == "sand" ? "-管身体积" : string.Empty));
             if (gravelHeight > 0) parts.Add("碎石=L×W×" + Format(gravelHeight));
             if (c25Height > 0) parts.Add("C25=L×W×" + Format(c25Height));
-            if (soilBackfillHeight > 0) parts.Add("原土回填=L×W×" + Format(soilBackfillHeight) + "-管身体积");
+            if (soilBackfillHeight > 0) parts.Add("原土回填=L×W×" + Format(soilBackfillHeight) + (pipeDeductionTarget == "soil" ? "-管身体积" : string.Empty));
             return string.Join("；", parts.ToArray());
+        }
+
+        private static string ResolvePipeDeductionTarget(List<QuantityStructureLayer> layers, double sandHeight, double soilHeight, double encasementHeight)
+        {
+            if (layers != null)
+            {
+                foreach (QuantityStructureLayer layer in layers)
+                {
+                    if (layer == null || !layer.IsPipeLayer) continue;
+                    if (QuantityStructureLayer.IsSandBackfill(layer)) return "sand";
+                    if (QuantityStructureLayer.IsOriginalSoilBackfill(layer)) return "soil";
+                    if (IsPipeEncasementLayer(layer)) return "encasement";
+                }
+            }
+            if (sandHeight > 0) return "sand";
+            if (soilHeight > 0) return "soil";
+            if (encasementHeight > 0) return "encasement";
+            return string.Empty;
         }
 
         private static string BuildWellFormulaText(QuantityWellCalculationRow row, double sandCushionHeight, double wellBottomCushionHeight, double c25CushionHeight, double coverGravelHeight, double coverC25Height, double sandBackfillHeight)
@@ -390,7 +423,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static double SumLayerHeight(List<QuantityStructureLayer> layers, Predicate<QuantityStructureLayer> predicate, double fallback)
         {
             double sum = QuantityStructureLayer.SumHeight(layers, predicate);
-            return sum > 0 ? sum : fallback;
+            return layers != null && layers.Count > 0 ? sum : fallback;
         }
 
         private static double SumPipeC25Height(List<QuantityStructureLayer> layers, QuantityPipeAttributes attrs)
@@ -398,18 +431,25 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double sum = QuantityStructureLayer.SumHeight(layers, delegate(QuantityStructureLayer layer)
             {
                 if (layer == null) return false;
-                if (!QuantityStructureLayer.IsC25(layer)) return false;
-                if (IsPipeEncasementLayer(layer)) return false;
-                return true;
+                return QuantityStructureLayer.IsC25Restore(layer);
             });
-            return sum > 0 ? sum : attrs.C25RestoreThickness;
+            return layers != null && layers.Count > 0 ? sum : attrs.C25RestoreThickness;
         }
 
         private static bool IsPipeEncasementLayer(QuantityStructureLayer layer)
         {
             if (layer == null) return false;
-            string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-            return QuantityStructureLayer.ContainsAny(text, "包管");
+            return QuantityStructureLayer.IsConcretePipeEncasement(layer);
+        }
+
+        private static bool HasLayer(IEnumerable<QuantityStructureLayer> layers, Predicate<QuantityStructureLayer> predicate)
+        {
+            if (layers == null || predicate == null) return false;
+            foreach (QuantityStructureLayer layer in layers)
+            {
+                if (layer != null && predicate(layer)) return true;
+            }
+            return false;
         }
 
         private static double SumWellBottomLayerHeight(List<QuantityStructureLayer> layers, QuantityPipeAttributes attrs)
@@ -424,7 +464,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
             }
 
-            if (height <= 0 && attrs != null) height = attrs.SandCushionThickness;
+            if ((layers == null || layers.Count == 0) && attrs != null) height = attrs.SandCushionThickness;
             return height < 0 ? 0.0 : height;
         }
 

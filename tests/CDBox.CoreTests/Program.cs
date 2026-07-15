@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using CDBox.Shared;
 using CDBoxUpdater;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
@@ -23,12 +24,14 @@ namespace CDBox.CoreTests
             Run("结构层解析", TestStructureLayers);
             Run("工程量管线分类", TestQuantityPipeClassification);
             Run("沉泥井管沟深度", TestSiltWellDepth);
+            Run("工程量依赖联动", TestQuantityDependencyRules);
             Run("常用文本解析", TestPrimitiveParsing);
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("Studio 收藏与最近使用", TestStudioState);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
             Run("图层管理器自定义父级", TestLayerManagerCustomParents);
+            Run("断面图 Preview 10 共享页面", TestSectionDrawingSharedPage);
             Run("属性默认表统一表格交互", TestQuantityDefaultsTableInteraction);
             Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
@@ -102,6 +105,28 @@ namespace CDBox.CoreTests
             True(layers[2].IsPipeLayer, "管线层标记");
             True(QuantityStructureLayer.IsSandBackfill(layers[2]), "中粗砂回填分类");
             True(QuantityStructureLayer.IsSandCushion(layers[3]), "中粗砂垫层分类");
+            Equal("C25砼恢复", QuantityStructureLayer.Parse("C25砼恢复 0.15 锁定")[0].Name, "结构层名称中的材料强度数字应保留");
+            Equal("C25砼恢复", QuantityStructureLayer.Parse("C 砼恢复 0.15 锁定")[0].Name, "旧版损坏的 C25 层名应自动修复");
+
+            QuantityStructureLayer sandEncasement = QuantityStructureLayer.Parse("中粗砂包管 0.60 管线层")[0];
+            True(QuantityStructureLayer.IsSandBackfill(sandEncasement), "中粗砂包管应归入中粗砂回填");
+            False(QuantityStructureLayer.IsConcretePipeEncasement(sandEncasement), "中粗砂包管不得归入 C25 砼包管");
+            QuantityStructureLayer concreteEncasement = QuantityStructureLayer.Parse("C25砼包管 0.30 管线层")[0];
+            True(QuantityStructureLayer.IsConcretePipeEncasement(concreteEncasement), "只有混凝土包管层才归入 C25 砼包管");
+            False(QuantityStructureLayer.IsC25Restore(concreteEncasement), "C25 砼包管不得重复归入 C25 恢复");
+
+            var noConcrete = new QuantityPipeAttributes
+            {
+                C25RestoreThickness = 0.25,
+                BackfillStructure = "中粗砂回填 0.80 管线层\n中粗砂垫层 0.15 锁定"
+            };
+            QuantityPipeAttributes.ApplyStructureLayerText(noConcrete);
+            Near(0.0, noConcrete.C25RestoreThickness, 1e-9, "显式结构层没有 C25 时应清除旧缓存厚度");
+
+            List<QuantityStructureLayer> withoutBackfill = QuantityStructureLayer.Parse("C25砼包管 0.30 管线层\n中粗砂垫层 0.10 锁定");
+            Near(0.60, QuantityEngineeringMath.CalculatePipeRemainingBackfillHeight(1.00, withoutBackfill), 1e-9, "推算剩余回填高度时必须扣除混凝土包管层");
+            Near(1.10, QuantityEngineeringMath.CalculateEarthworkOut(0.10, 1.00, 0.0), 1e-9, "新增中粗砂不得抵扣土方外运");
+            Near(0.70, QuantityEngineeringMath.CalculateEarthworkOut(0.10, 1.00, 0.40), 1e-9, "只有可回用原土才能抵扣土方外运");
         }
 
         private static void TestQuantityPipeClassification()
@@ -121,6 +146,120 @@ namespace CDBox.CoreTests
 
             Near(0.50, QuantityPipeAttributes.GetSiltWellDeductDepth(well), 1e-9, "φ700 沉泥井扣减");
             Near(1.65, QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(well, 0.15, 9.0), 1e-9, "管沟深度");
+            Near(1.50, QuantityPipeAttributes.CalculatePipeExcavationDepthByWell(well, 9.0), 1e-9, "未传主管垫层时不得误用井下垫层");
+        }
+
+        private static void TestQuantityDependencyRules()
+        {
+            QuantityPipeAttributes pipe = QuantityPipeAttributes.DefaultMainPipe;
+            pipe.StartNode = "W1";
+            pipe.EndNode = "W2";
+            QuantityPipeAttributes startWell = QuantityPipeAttributes.DefaultNodeWell;
+            startWell.NodeNo = "W1";
+            startWell.WellDepth = 1.00;
+            startWell.WellType = "检查井";
+            QuantityPipeAttributes endWell = QuantityPipeAttributes.DefaultNodeWell;
+            endWell.NodeNo = "W2";
+            endWell.WellDepth = 1.20;
+            endWell.WellType = "沉泥井";
+            endWell.WellSpec = "φ500";
+
+            QuantityDependencyResult main = QuantityDependencyService.NormalizeDraft(
+                pipe,
+                QuantityStructureLayer.Parse(pipe.BackfillStructure),
+                pipe,
+                startWell,
+                endWell,
+                null,
+                "Load");
+            Near(1.15, main.Attributes.StartDepth, 1e-9, "检查井端点应使用井深加当前主管垫层");
+            Near(1.15, main.Attributes.EndDepth, 1e-9, "沉泥井端点应扣除沉泥深度");
+            Near(1.15, main.Attributes.AverageDepth, 1e-9, "平均深度不得再次叠加垫层");
+
+            QuantityPipeAttributes well = QuantityPipeAttributes.DefaultNodeWell;
+            well.WellDepth = 0.46;
+            well.BackfillStructure = "承压盖板C25基础 0.30 锁定\n承压盖板碎石垫层 0.10 锁定\n中粗砂回填 0.80\n中粗砂垫层 0.10 锁定 井下层";
+            QuantityDependencyResult node = QuantityDependencyService.NormalizeDraft(
+                well,
+                QuantityStructureLayer.Parse(well.BackfillStructure),
+                well,
+                null,
+                null,
+                null,
+                "WellDepth");
+            QuantityStructureLayer backfill = node.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x));
+            Near(0.06, backfill.Height, 1e-9, "井下层不得参与井深范围内结构层扣减");
+            Near(0.56, node.RealExcavationDepth, 1e-9, "井真实开挖深度应包含井下层");
+
+            well.WellDepth = 0.20;
+            QuantityDependencyResult negative = QuantityDependencyService.NormalizeDraft(
+                well,
+                QuantityStructureLayer.Parse(well.BackfillStructure),
+                well,
+                null,
+                null,
+                null,
+                "WellDepth");
+            True(negative.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height < 0, "锁定层超过井深时应保留负数");
+            True(negative.Warnings.Count > 0, "负结构层应返回校验提示");
+
+            QuantityPipeAttributes manualPipe = QuantityPipeAttributes.DefaultMainPipe;
+            manualPipe.StartDepth = 1.20;
+            manualPipe.EndDepth = 1.40;
+            manualPipe.BackfillStructure = "中粗砂回填 0.90\n中粗砂垫层 0.10 锁定 管线层";
+            QuantityDependencyResult manualDepth = QuantityDependencyService.NormalizeDraft(
+                manualPipe,
+                QuantityStructureLayer.Parse(manualPipe.BackfillStructure),
+                manualPipe,
+                null,
+                null,
+                null,
+                "StartDepth");
+            Near(1.30, manualDepth.Attributes.AverageDepth, 1e-9, "手工修改端点后平均深度应直接取两端平均");
+            Near(1.20, manualDepth.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9, "端点变化应实时重算非锁定层");
+
+            QuantityPipeAttributes oldPipe = QuantityPipeAttributes.DefaultMainPipe;
+            oldPipe.StartDepth = 1.10;
+            oldPipe.EndDepth = 1.10;
+            oldPipe.BackfillStructure = "中粗砂回填 1.00\n中粗砂垫层 0.10 锁定 管线层";
+            List<QuantityStructureLayer> changedLayers = QuantityStructureLayer.Parse("中粗砂回填 1.00\n中粗砂垫层 0.20 锁定 管线层");
+            QuantityDependencyResult cushionChanged = QuantityDependencyService.NormalizeDraft(
+                oldPipe,
+                changedLayers,
+                oldPipe,
+                null,
+                null,
+                null,
+                "StructureLayers");
+            Near(1.20, cushionChanged.Attributes.StartDepth, 1e-9, "无法读取井时应按主管垫层变化量调整端点");
+            Near(1.00, cushionChanged.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9, "垫层变化后应以新平均深度重算结构层");
+
+            QuantityPipeAttributes exposed = QuantityPipeAttributes.DefaultBranchPipe;
+            exposed.BranchType = "明管";
+            QuantityDependencyResult emptyBranch = QuantityDependencyService.NormalizeDraft(
+                exposed,
+                new List<QuantityStructureLayer>(),
+                exposed,
+                null,
+                null,
+                null,
+                "BranchType");
+            Equal(0, emptyBranch.Layers.Count, "明管应允许并保持空结构层");
+            False(emptyBranch.Attributes.BranchIncludeInCalculation, "明管不得加入工程量计算");
+
+            QuantityPipeAttributes soilBranch = QuantityPipeAttributes.DefaultBranchPipe;
+            soilBranch.BranchType = "原土回填";
+            soilBranch.BranchDepth = 0.85;
+            QuantityDependencyResult soil = QuantityDependencyService.NormalizeDraft(
+                soilBranch,
+                new List<QuantityStructureLayer>(),
+                soilBranch,
+                null,
+                null,
+                null,
+                "BranchType");
+            Equal(1, soil.Layers.Count, "原土支管应建立唯一结构层");
+            Near(0.85, soil.Layers[0].Height, 1e-9, "原土支管层高应等于支管深度");
         }
 
         private static void TestPrimitiveParsing()
@@ -193,6 +332,18 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
             True(standalone.IndexOf("bindLayerDrag", StringComparison.Ordinal) >= 0, "结构层应支持拖动排序");
+            True(standalone.IndexOf("calculateQuantityDraft", StringComparison.Ordinal) >= 0, "源字段变化应调用统一 C# 草稿联动服务");
+            True(standalone.IndexOf("scheduleDraft", StringComparison.Ordinal) >= 0, "属性编辑器应实时请求派生值更新");
+            True(standalone.IndexOf("captureFocus", StringComparison.Ordinal) >= 0, "草稿回传后应恢复当前输入焦点");
+            True(standalone.IndexOf("stash.appendChild(e)", StringComparison.Ordinal) >= 0, "草稿重绘时应保留原输入控件及数字光标位置");
+            True(standalone.IndexOf("oncompositionstart", StringComparison.Ordinal) >= 0, "中文输入法合成期间不应触发页面重绘");
+            True(standalone.IndexOf("function fmtInput", StringComparison.Ordinal) >= 0, "界面数值应清除浮点尾差");
+            False(standalone.IndexOf("data-sec=", StringComparison.Ordinal) >= 0, "属性编辑器不应保留左侧导航");
+            False(standalone.IndexOf("图层识别信息", StringComparison.Ordinal) >= 0, "属性编辑器不应显示图层识别信息卡片");
+            True(standalone.IndexOf("属性与结构层", StringComparison.Ordinal) >= 0, "基本参数与结构层应合并显示");
+            False(standalone.IndexOf("function parseLayers", StringComparison.Ordinal) >= 0, "前端不得自行解析结构层业务文本");
+            False(standalone.IndexOf("function encodeLayers", StringComparison.Ordinal) >= 0, "前端不得建立第二套结构层序列化逻辑");
+            False(standalone.IndexOf("['Remark','备注'", StringComparison.Ordinal) >= 0, "新界面不应恢复已删除的备注字段");
         }
 
         private static void TestLayerManagerCustomParents()
@@ -221,6 +372,33 @@ namespace CDBox.CoreTests
             False(script.IndexOf("data-layer-row-action=\"down\"", StringComparison.Ordinal) >= 0, "默认表不应保留行下移操作");
         }
 
+        private static void TestSectionDrawingSharedPage()
+        {
+            string script = CDBoxStudioSectionDrawingPage.BuildComponentScript();
+            string styles = CDBoxStudioSectionDrawingPage.BuildStyles(false);
+            var settings = new CDBoxStudioSettings { Theme = "dark", AnimationsEnabled = false };
+            string standalone = CDBoxStudioSectionDrawingPage.BuildStandaloneDocument(settings, "studio.log");
+
+            True(styles.Length > 8000, "断面图共享样式不应缺失");
+            True(script.IndexOf("<svg data-preview", StringComparison.Ordinal) >= 0, "断面图应使用自定义 SVG 预览");
+            True(script.IndexOf("sd-hatch-diag", StringComparison.Ordinal) >= 0, "断面图预览应包含矢量填充图案");
+            True(script.IndexOf("bindLayerDrag", StringComparison.Ordinal) >= 0, "结构层表格应支持拖动排序");
+            True(script.IndexOf("bindPipeDrag", StringComparison.Ordinal) >= 0, "管道表格应支持拖动排序");
+            True(script.IndexOf("addEventListener('wheel'", StringComparison.Ordinal) >= 0, "预览应支持滚轮缩放");
+            True(styles.IndexOf("grid-template-columns:minmax(0,1fr) 460px", StringComparison.Ordinal) >= 0, "右侧预览区应保持固定宽度");
+            True(script.IndexOf("rebalanceHeights", StringComparison.Ordinal) >= 0, "锁定总高度后应自动重算未锁定层");
+            True(script.IndexOf("data-field='TotalHeight' value='${fmt(o.TotalHeight)}'></label>", StringComparison.Ordinal) >= 0, "总高度输入框应始终允许编辑");
+            True(script.IndexOf("if(key==='TotalHeight'){this.options.LockTotalHeight=true", StringComparison.Ordinal) >= 0, "直接修改总高度时应自动切换到锁定输入值");
+            True(script.IndexOf("<span>管段注记</span><textarea", StringComparison.Ordinal) >= 0, "管段注记应支持多行输入");
+            True(script.IndexOf("titleLines", StringComparison.Ordinal) >= 0, "多行管段注记应逐行预览");
+            True(script.IndexOf("<span>注记样式</span><select data-field='TextStyleName'", StringComparison.Ordinal) >= 0, "注记样式应使用当前图纸样式下拉框");
+            True(script.IndexOf("data-layer-field='HatchPatternName'", StringComparison.Ordinal) >= 0, "填充图案应使用选择控件");
+            False(script.IndexOf("data-layer-field='HatchAngle'", StringComparison.Ordinal) >= 0, "结构层表格不应保留填充角度选项");
+            True(standalone.IndexOf("Preview 10", StringComparison.Ordinal) >= 0, "独立页应显示 Preview 10 身份");
+            True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
+            True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
+        }
+
         private static void TestLegacyUpdateSourceValidation()
         {
             string root = NewTemporaryDirectory("update-source");
@@ -232,8 +410,10 @@ namespace CDBox.CoreTests
                 False(invalid.Valid, "只有 CDBox.dll 的目录必须拒绝更新");
                 True(invalid.Message.IndexOf("Microsoft.Web.WebView2.WinForms.dll", StringComparison.Ordinal) >= 0, "错误应指出缺失的 WebView2 依赖");
 
-                File.WriteAllText(Path.Combine(root, "Microsoft.Web.WebView2.Core.dll"), "core");
-                File.WriteAllText(Path.Combine(root, "Microsoft.Web.WebView2.WinForms.dll"), "forms");
+                foreach (string dependency in CDBoxRequiredRuntimeFiles.ManagedDependencies)
+                {
+                    File.WriteAllText(Path.Combine(root, dependency), dependency);
+                }
                 Directory.CreateDirectory(Path.Combine(root, "Updater"));
                 File.WriteAllText(Path.Combine(root, "Updater", "CDBoxUpdater.exe"), "updater");
                 Directory.CreateDirectory(Path.Combine(root, "runtimes", "win-x64", "native"));
@@ -284,14 +464,23 @@ namespace CDBox.CoreTests
                 {
                     WriteEntry(archive, "CDBox.bundle/PackageContents.xml", "<ApplicationPackage />");
                     WriteEntry(archive, "CDBox.bundle/Contents/CDBox.dll", "new-version");
-                    WriteEntry(archive, "CDBox.bundle/Contents/Microsoft.Web.WebView2.Core.dll", "core");
-                    WriteEntry(archive, "CDBox.bundle/Contents/Microsoft.Web.WebView2.WinForms.dll", "forms");
+                    foreach (string dependency in CDBoxRequiredRuntimeFiles.ManagedDependencies)
+                    {
+                        WriteEntry(archive, "CDBox.bundle/Contents/" + dependency, dependency);
+                    }
                     WriteEntry(archive, "CDBox.bundle/Contents/runtimes/win-x64/native/WebView2Loader.dll", "loader");
                     WriteEntry(archive, "CDBox.bundle/Contents/Updater/CDBoxUpdater.exe", "updater");
                 }
 
-                BundleInstallOutcome outcome = BundleInstaller.Install(NewPending(packagePath, target, Path.Combine(root, "work")));
+                var progress = new List<int>();
+                BundleInstallOutcome outcome = BundleInstaller.Install(
+                    NewPending(packagePath, target, Path.Combine(root, "work")),
+                    delegate(int percent, string message) { progress.Add(percent); });
                 True(outcome.Success, "有效 bundle 应替换成功");
+                True(progress.Count >= 6, "更新器应报告实际安装阶段进度");
+                Equal(25, progress[0], "安装进度应从校验阶段开始");
+                Equal(98, progress[progress.Count - 1], "安装完成前应执行最终校验进度");
+                for (int i = 1; i < progress.Count; i++) True(progress[i] >= progress[i - 1], "安装进度不得倒退");
                 True(Directory.Exists(outcome.BackupBundlePath), "旧 bundle 应保留备份");
                 True(File.Exists(Path.Combine(outcome.BackupBundlePath, "Contents", "old-version.txt")), "备份应包含旧文件");
                 Equal("new-version", File.ReadAllText(Path.Combine(target, "Contents", "CDBox.dll"), Encoding.UTF8), "目标应包含新版文件");

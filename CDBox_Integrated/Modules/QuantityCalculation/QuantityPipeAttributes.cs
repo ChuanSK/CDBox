@@ -84,7 +84,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         [Category("02 主管属性")]
         [DisplayName("平均深度 m")]
-        [Description("可自动按起终点深度带入，也可手动修改；工程量计算优先使用用户手动调整后的平均深度。")]
+        [Description("由当前起点深度与终点深度自动计算，不重复叠加管线垫层。")]
         public double AverageDepth { get; set; }
 
         [Category("02 主管属性")]
@@ -147,12 +147,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         [Category("04 节点/井属性")]
         [DisplayName("500沉泥井扣减深度 m")]
-        [Description("管道端点连接500沉泥井时，管道开挖深度按：井深 + 井下方垫层厚度 - 本值。")]
+        [Description("管道端点连接500沉泥井时，管道开挖深度按：井深 + 当前主管管线垫层 - 本值。")]
         public double SiltWellDeductDepth500 { get; set; }
 
         [Category("04 节点/井属性")]
         [DisplayName("700沉泥井扣减深度 m")]
-        [Description("管道端点连接700沉泥井时，管道开挖深度按：井深 + 井下方垫层厚度 - 本值。")]
+        [Description("管道端点连接700沉泥井时，管道开挖深度按：井深 + 当前主管管线垫层 - 本值。")]
         public double SiltWellDeductDepth700 { get; set; }
 
         [Category("04 节点/井属性")]
@@ -410,44 +410,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (attrs == null || string.IsNullOrWhiteSpace(attrs.BackfillStructure)) return;
 
-            double sand = 0.0;
-            double gravel = 0.0;
-            double c25 = 0.0;
-            bool hasSand = false;
-            bool hasGravel = false;
-            bool hasC25 = false;
-
-            string[] lines = NormalizeStructureLines(attrs.BackfillStructure);
-            foreach (string raw in lines)
-            {
-                string line = raw == null ? string.Empty : raw.Trim();
-                if (line.Length == 0) continue;
-
-                double thickness;
-                if (!TryGetLastThickness(line, out thickness)) continue;
-                if (thickness <= 0) continue;
-
-                if (IsSandCushionLayer(line))
-                {
-                    sand += thickness;
-                    hasSand = true;
-                }
-                else if (ContainsAnyForStructure(line, "碎石"))
-                {
-                    gravel += thickness;
-                    hasGravel = true;
-                }
-
-                if (ContainsAnyForStructure(line, "C25", "砼", "混凝土"))
-                {
-                    c25 += thickness;
-                    hasC25 = true;
-                }
-            }
-
-            if (hasSand) attrs.SandCushionThickness = sand;
-            if (hasGravel) attrs.GravelCushionThickness = gravel;
-            if (hasC25) attrs.C25RestoreThickness = c25;
+            List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(attrs.BackfillStructure);
+            attrs.SandCushionThickness = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsSandCushion);
+            attrs.GravelCushionThickness = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsGravel);
+            attrs.C25RestoreThickness = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsC25Restore);
         }
 
         public static string NormalizeStructureLayerText(string text)
@@ -456,34 +422,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string normalized = text.Replace("；", "\n").Replace(";", "\n").Replace("，", "\n").Replace(",", "\n");
             string[] lines = normalized.Replace("\r\n", "\n").Replace('\r', '\n').Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
             return string.Join(Environment.NewLine, lines);
-        }
-
-        private static string[] NormalizeStructureLines(string text)
-        {
-            string normalized = NormalizeStructureLayerText(text);
-            if (string.IsNullOrWhiteSpace(normalized)) return new string[0];
-            return normalized.Replace("\r\n", "\n").Replace('\r', '\n').Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        private static bool TryGetLastThickness(string line, out double thickness)
-        {
-            thickness = 0.0;
-            if (string.IsNullOrWhiteSpace(line)) return false;
-
-            MatchCollection matches = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?");
-            if (matches == null || matches.Count == 0) return false;
-
-            string valueText = matches[matches.Count - 1].Value;
-            return double.TryParse(valueText, NumberStyles.Float, CultureInfo.InvariantCulture, out thickness)
-                || double.TryParse(valueText, NumberStyles.Float, CultureInfo.CurrentCulture, out thickness);
-        }
-
-        private static bool IsSandCushionLayer(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return false;
-            if (ContainsAnyForStructure(text, "回填")) return false;
-            if (ContainsAnyForStructure(text, "砂垫层", "中粗砂垫层", "粗砂垫层")) return true;
-            return ContainsAnyForStructure(text, "砂") && ContainsAnyForStructure(text, "垫层");
         }
 
         private static bool ContainsAnyForStructure(string text, params string[] values)
@@ -508,7 +446,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (layer.IsPipeLayer) height += layer.Height;
             }
 
-            if (height <= 0)
+            if (layers.Count == 0)
             {
                 height = attrs.SandCushionThickness;
             }
@@ -529,7 +467,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         public static double CalculatePipeExcavationDepthByWell(QuantityPipeAttributes wellAttrs, double fallback)
         {
-            return CalculatePipeExcavationDepthByWell(wellAttrs, GetWellBottomCushionHeight(wellAttrs), fallback);
+            return CalculatePipeExcavationDepthByWell(wellAttrs, 0.0, fallback);
         }
 
         public static double CalculatePipeExcavationDepthByWell(QuantityPipeAttributes wellAttrs, double pipeCushionHeight, double fallback)

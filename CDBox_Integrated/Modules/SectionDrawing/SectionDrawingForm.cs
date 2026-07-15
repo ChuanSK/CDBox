@@ -1231,6 +1231,15 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             return "0";
         }
 
+        public static List<string> GetAvailableHatchPatternNames(Document doc)
+        {
+            var names = new List<string>(HatchSettingDialog.GetAvailablePatternNameSet(doc));
+            names.Sort(StringComparer.CurrentCultureIgnoreCase);
+            if (ContainsIgnoreCase(names, "无填充")) MoveNameToTop(names, "无填充");
+            else if (ContainsIgnoreCase(names, "无")) MoveNameToTop(names, "无");
+            return names;
+        }
+
         private List<string> LoadTextStyleNames(string preferred)
         {
             var names = new List<string>();

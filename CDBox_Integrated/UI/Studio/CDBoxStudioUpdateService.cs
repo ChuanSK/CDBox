@@ -14,8 +14,8 @@ namespace TCPipeAutoDraw.UI.Studio
 {
     internal static class CDBoxStudioUpdateService
     {
-        public static readonly string CurrentVersion = ReadInformationalVersion("2.9.0-studio-preview.9");
-        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 20900);
+        public static readonly string CurrentVersion = ReadInformationalVersion("2.9.1-studio-preview.9");
+        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 20901);
         public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-9");
         public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 9");
         public static readonly string DefaultChannel = ReadAssemblyMetadata("CDBoxUpdateChannel", "studio-preview");

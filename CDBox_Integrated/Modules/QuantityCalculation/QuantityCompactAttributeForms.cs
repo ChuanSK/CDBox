@@ -181,7 +181,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             try
             {
-                QuantityPipeAttributes attrs = QuantityPipeAttributeService.LoadDefaultProfileForObject(_doc, _objectId, _kind);
+                _fields.FillAttributes(_attributes, false);
+                QuantityPipeAttributes attrs = QuantityPipeAttributeService.LoadDefaultProfileForObject(_doc, _objectId, _kind, _attributes);
                 attrs.ObjectKind = _kind;
                 _attributes = attrs;
                 _fields.LoadAttributes(_attributes, _cadLength);

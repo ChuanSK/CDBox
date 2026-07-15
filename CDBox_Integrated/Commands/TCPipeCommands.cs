@@ -85,7 +85,7 @@ namespace TCPipeAutoDraw.Commands
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
             check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-9", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 20900, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 20901, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -257,7 +257,7 @@ namespace TCPipeAutoDraw.Commands
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
+                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll（将安装同目录全部依赖）";
                 dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;
@@ -564,6 +564,12 @@ namespace TCPipeAutoDraw.Commands
             ShowSectionDrawing();
         }
 
+        [CommandMethod("DMLEGACY", CommandFlags.Modal)]
+        public void ShowLegacySectionDrawing()
+        {
+            ShowSectionDrawingLegacy();
+        }
+
 
         [CommandMethod("PLDM", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void GenerateSectionDrawingBatchByShortName()
@@ -851,15 +857,32 @@ namespace TCPipeAutoDraw.Commands
 
             try
             {
-                using (var form = new SectionDrawingForm(doc))
-                {
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioSectionDrawingWindow.ShowWindow(new AcadMainWindow());
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[断面图生成] 打开失败：" + ex.Message);
                 MessageBox.Show(ex.Message, "断面图生成打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ShowSectionDrawingLegacy()
+        {
+            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                MessageBox.Show("未找到当前图纸。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                using (var form = new SectionDrawingForm(doc)) form.ShowDialog(new AcadMainWindow());
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage("\n[断面图生成] 旧版界面打开失败：" + ex.Message);
+                MessageBox.Show(ex.Message, "断面图生成旧版界面打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
