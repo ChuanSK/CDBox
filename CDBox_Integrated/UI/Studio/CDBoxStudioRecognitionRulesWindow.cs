@@ -21,7 +21,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "属性识别表",
                 delegate { return CDBoxStudioRecognitionRulesWindowHtml.Build(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath); },
-                Route);
+                Route,
+                "recognition-rules");
             _current.FormClosed += delegate { _current = null; };
             _current.Width = 1520;
             _current.Height = 855;

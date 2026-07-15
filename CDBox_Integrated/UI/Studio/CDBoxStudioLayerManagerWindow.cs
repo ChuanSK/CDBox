@@ -26,7 +26,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "图层管理器",
                 delegate { return CDBoxStudioLayerManagerWindowHtml.Build(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath); },
-                Route);
+                Route,
+                "layer-manager");
             _current.Width = 1480;
             _current.Height = 900;
             _current.MinimumSize = new Size(1120, 700);

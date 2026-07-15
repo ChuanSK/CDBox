@@ -20,8 +20,8 @@ namespace TCPipeAutoDraw.Core.Startup
                 return new CDBoxAppSettings
                 {
                     PromptInstallOnLoad = true,
-                    PromptSidebarOnLoad = true,
-                    AutoShowSidebarOnLoad = true,
+                    PromptSidebarOnLoad = false,
+                    AutoShowSidebarOnLoad = false,
                     InstalledPath = string.Empty
                 };
             }

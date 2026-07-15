@@ -29,7 +29,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "标注设置",
                 delegate { return CDBoxStudioAnnotationSettingsWindowHtml.Build(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _initialSection); },
-                Route);
+                Route,
+                "annotation-settings");
             _current.Width = 1280;
             _current.Height = 820;
             _current.MinimumSize = new Size(980, 680);

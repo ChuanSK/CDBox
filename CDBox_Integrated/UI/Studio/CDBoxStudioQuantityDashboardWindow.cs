@@ -23,7 +23,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "工程量动态看板",
                 delegate { return CDBoxStudioQuantityDashboardWindowHtml.Build(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath); },
-                Route);
+                Route,
+                "quantity-dashboard");
             _current.Width = 1480;
             _current.Height = 900;
             _current.MinimumSize = new Size(1120, 700);

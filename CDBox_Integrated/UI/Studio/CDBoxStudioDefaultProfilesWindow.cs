@@ -21,7 +21,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "属性默认表",
                 delegate { return CDBoxStudioDefaultProfilesWindowHtml.Build(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath); },
-                Route);
+                Route,
+                "default-profiles");
             _current.FormClosed += delegate { _current = null; };
             _current.Width = 1360;
             _current.Height = 840;

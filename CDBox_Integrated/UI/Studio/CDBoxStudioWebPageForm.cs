@@ -32,6 +32,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private readonly Func<string> _htmlFactory;
         private readonly Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> _routeHandler;
         private readonly string _baseTitle;
+        private readonly string _windowStateKey;
         private readonly Color _chromeBackColor;
         private readonly List<Control> _resizeGrips = new List<Control>();
         private Panel _rootPanel;
@@ -40,15 +41,27 @@ namespace TCPipeAutoDraw.UI.Studio
         private Label _titleLabel;
         private WebView2 _webView;
         private bool _webViewReady;
+        private bool _windowStateRestored;
 
         public CDBoxStudioWebPageForm(string title, Func<string> htmlFactory, Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> routeHandler)
-            : this(title, htmlFactory, routeHandler, DefaultChromeBackColor)
+            : this(title, htmlFactory, routeHandler, DefaultChromeBackColor, title)
         {
         }
 
         public CDBoxStudioWebPageForm(string title, Func<string> htmlFactory, Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> routeHandler, Color chromeBackColor)
+            : this(title, htmlFactory, routeHandler, chromeBackColor, title)
+        {
+        }
+
+        public CDBoxStudioWebPageForm(string title, Func<string> htmlFactory, Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> routeHandler, string windowStateKey)
+            : this(title, htmlFactory, routeHandler, DefaultChromeBackColor, windowStateKey)
+        {
+        }
+
+        public CDBoxStudioWebPageForm(string title, Func<string> htmlFactory, Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> routeHandler, Color chromeBackColor, string windowStateKey)
         {
             _baseTitle = string.IsNullOrWhiteSpace(title) ? "CDBox Studio" : title.Trim();
+            _windowStateKey = "page:" + (string.IsNullOrWhiteSpace(windowStateKey) ? _baseTitle : windowStateKey.Trim());
             _htmlFactory = htmlFactory ?? throw new ArgumentNullException("htmlFactory");
             _routeHandler = routeHandler;
             _chromeBackColor = chromeBackColor.IsEmpty ? DefaultChromeBackColor : chromeBackColor;
@@ -80,10 +93,21 @@ namespace TCPipeAutoDraw.UI.Studio
 
         protected override async void OnShown(EventArgs e)
         {
+            if (!_windowStateRestored)
+            {
+                CDBoxWindowStateStore.Restore(this, _windowStateKey);
+                _windowStateRestored = true;
+            }
             base.OnShown(e);
             ApplyRoundedRegion();
             UpdateResizeGrips();
             await InitializeWebViewAsync();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            CDBoxWindowStateStore.Save(this, _windowStateKey);
+            base.OnFormClosed(e);
         }
 
         protected override void OnSizeChanged(EventArgs e)

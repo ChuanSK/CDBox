@@ -21,7 +21,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _current = new CDBoxStudioWebPageForm(
                 "断面图生成 · Preview 10",
                 delegate { return CDBoxStudioSectionDrawingPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath); },
-                Route);
+                Route,
+                "section-drawing");
             _current.Width = 1420;
             _current.Height = 880;
             _current.MinimumSize = new Size(1040, 700);

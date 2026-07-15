@@ -18,6 +18,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private WebView2 _webView;
         private bool _webViewReady;
         private string _runtimeVersion;
+        private bool _windowStateRestored;
 
         public CDBoxStudioForm(IEnumerable<CDBoxStudioAction> actions)
         {
@@ -56,8 +57,19 @@ namespace TCPipeAutoDraw.UI.Studio
 
         protected override async void OnShown(EventArgs e)
         {
+            if (!_windowStateRestored)
+            {
+                CDBoxWindowStateStore.Restore(this, "studio-main");
+                _windowStateRestored = true;
+            }
             base.OnShown(e);
             await InitializeWebViewAsync();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            CDBoxWindowStateStore.Save(this, "studio-main");
+            base.OnFormClosed(e);
         }
 
         private void BuildUi()

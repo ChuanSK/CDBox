@@ -28,6 +28,7 @@ namespace CDBox.CoreTests
             Run("常用文本解析", TestPrimitiveParsing);
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("Studio 收藏与最近使用", TestStudioState);
+            Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
             Run("图层管理器自定义父级", TestLayerManagerCustomParents);
@@ -297,6 +298,14 @@ namespace CDBox.CoreTests
             state.RemoveMissingActions(new[] { "action:28" });
             False(state.IsFavorite("action:29"), "不存在的收藏应被清理");
             True(state.HasRecent("action:28"), "仍存在的最近项应保留");
+        }
+
+        private static void TestStageANewInstallDefaults()
+        {
+            CDBoxAppSettings settings = CDBoxAppSettings.Default;
+            False(settings.PromptSidebarOnLoad, "新安装不应强制提示展开紧凑侧栏");
+            False(settings.AutoShowSidebarOnLoad, "新安装不应自动展开紧凑侧栏");
+            True(settings.PromptInstallOnLoad, "安装位置提示仍应保留");
         }
 
         private static void TestQuantityDashboardSharedPage()
