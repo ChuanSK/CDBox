@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -12,7 +12,6 @@ namespace TCPipeAutoDraw.UI.Studio
     internal sealed class CDBoxStudioForm : Form
     {
         private readonly Dictionary<string, CDBoxStudioAction> _actionsById = new Dictionary<string, CDBoxStudioAction>(StringComparer.OrdinalIgnoreCase);
-        private readonly CDBoxStudioState _state;
         private readonly CDBoxStudioSettings _settings;
         private CDBoxStudioCommandRouter _router;
         private WebView2 _webView;
@@ -22,7 +21,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         public CDBoxStudioForm(IEnumerable<CDBoxStudioAction> actions)
         {
-            Text = "CDBox Studio（WebView2 实验工作台）";
+            Text = "CDBox Studio";
             Width = 1220;
             Height = 780;
             MinimumSize = new Size(1000, 660);
@@ -30,7 +29,6 @@ namespace TCPipeAutoDraw.UI.Studio
             BackColor = Color.FromArgb(246, 248, 252);
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
 
-            _state = CDBoxStudioStateStore.Load();
             _settings = CDBoxStudioSettingsStore.Load();
             SetActions(actions);
             BuildUi();
@@ -49,9 +47,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
             }
 
-            _state.RemoveMissingActions(_actionsById.Keys);
-            CDBoxStudioStateStore.Save(_state);
-            _router = new CDBoxStudioCommandRouter(_actionsById, _state, _settings, PostScriptFromRouter);
+            _router = new CDBoxStudioCommandRouter(_actionsById, _settings, PostScriptFromRouter);
             RefreshPage();
         }
 
@@ -113,7 +109,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private void RefreshPage()
         {
             if (!_webViewReady || _webView == null || _webView.IsDisposed || _webView.CoreWebView2 == null) return;
-            _webView.NavigateToString(CDBoxStudioHtml.Build(_actionsById.Values, _state, _settings, _runtimeVersion, CDBoxStudioLogger.LogFilePath, CDBoxStudioSettingsStore.SettingsFilePath));
+            _webView.NavigateToString(CDBoxStudioHtml.Build(_actionsById.Values, _settings, _runtimeVersion, CDBoxStudioLogger.LogFilePath, CDBoxStudioSettingsStore.SettingsFilePath));
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -175,7 +171,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 CDBoxStudioLogger.Error(action.Title + " 运行失败。", ex);
-                MessageBox.Show(new AcadMainWindow(), ex.Message, action.Title + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, action.Title + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 shouldRestore = true;
             }
             finally

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -164,7 +164,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 _lblStatus.Text = result.Message;
                 if (!result.Success)
                 {
-                    MessageBox.Show(result.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -173,7 +173,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "保存属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -190,7 +190,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "载入默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "载入默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -206,7 +206,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "刷新属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "刷新属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -237,7 +237,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 Show();
                 Activate();
-                MessageBox.Show(ex.Message, "手动选择节点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "手动选择节点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -260,7 +260,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "识别起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "识别起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -274,7 +274,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "调换起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "调换起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
@@ -399,7 +399,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "保存默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -991,7 +991,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private void SetNumber(string key, double value)
         {
             if (Math.Abs(value) < 0.0000001) SetText(key, string.Empty);
-            else SetText(key, value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+            else SetText(key, value.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture));
         }
 
         private void SetCheck(string key, bool value)
@@ -1366,7 +1366,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (warning && popup && !_warningShownInCurrentOperation)
             {
                 _warningShownInCurrentOperation = true;
-                MessageBox.Show(message + Environment.NewLine + "当前计算结果已保留，可直接手动修改。", "结构层计算提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(message + Environment.NewLine + "当前计算结果已保留，可直接手动修改。", "结构层计算提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

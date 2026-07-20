@@ -8,6 +8,7 @@ using CDBox.Shared;
 using CDBoxUpdater;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
+using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.UI.Studio;
 
 namespace CDBox.CoreTests
@@ -27,13 +28,14 @@ namespace CDBox.CoreTests
             Run("工程量依赖联动", TestQuantityDependencyRules);
             Run("常用文本解析", TestPrimitiveParsing);
             Run("Studio 路由消息", TestStudioRouteRequest);
-            Run("Studio 收藏与最近使用", TestStudioState);
             Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
+            Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("属性编辑器共享页面", TestQuantityAttributeEditorSharedPage);
             Run("图层管理器自定义父级", TestLayerManagerCustomParents);
             Run("断面图 Preview 10 共享页面", TestSectionDrawingSharedPage);
             Run("属性默认表统一表格交互", TestQuantityDefaultsTableInteraction);
+            Run("标注浮窗文字组合与旧数据迁移", TestAnnotationHudTextComposition);
             Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
@@ -65,6 +67,36 @@ namespace CDBox.CoreTests
             True(QuantityPipeAttributes.IsMainPipeKind("污水主管"), "主管应识别为主管");
             Equal(QuantityPipeAttributes.KindNodeWell, QuantityPipeAttributes.DefaultForKind("检查井").ObjectKind, "井类默认表");
             Equal(QuantityPipeAttributes.KindBranchPipe, QuantityPipeAttributes.DefaultForKind("支管").ObjectKind, "支管默认表");
+        }
+
+        private static void TestAnnotationHudTextComposition()
+        {
+            Equal("给水长度：12.50m", PipeLengthAnnotationTextComposer.Compose("给水长度：", "12.50m"),
+                "绑定标注应组合用户文字与系统长度");
+
+            string user;
+            string system;
+            PipeLengthAnnotationTextComposer.SplitLegacyText("给水长度：12.50m", 12.5, out user, out system);
+            Equal("给水长度：", user, "旧标注应拆出用户文字");
+            Equal("12.50m", system, "旧标注应拆出系统长度");
+            Equal("9.20m", PipeLengthAnnotationTextComposer.FormatLike(9.2, system),
+                "更新长度应保留原小数位与单位");
+            Equal("9.20", PipeLengthAnnotationTextComposer.FormatLike(9.2, "12.50"),
+                "无单位的旧标注不应被强行追加单位");
+
+            string frozen = "给水长度：12.50m（复核）12.50m";
+            Equal("给水长度：12.50m（复核）",
+                PipeLengthAnnotationTextComposer.RemoveDetachedLengthToken(frozen, "12.50m"),
+                "重新绑定只应移除最后一个已记录长度片段");
+
+            PipeLengthAnnotationTextComposer.SplitLegacyText("人工说明", 12.5, out user, out system);
+            Equal("人工说明", user, "没有长度片段时必须保留原文字");
+            Equal(string.Empty, system, "没有长度片段时不得虚构系统长度");
+
+            PipeLengthAnnotationTextComposer.SplitLegacyText("DN110 给水长度：110.00m", 110.0,
+                out user, out system);
+            Equal("DN110 给水长度：", user, "管径与长度数值相同时应优先拆分末尾长度");
+            Equal("110.00m", system, "末尾长度片段应保持完整");
         }
 
         private static void TestEffectiveLengthAndDefaultClone()
@@ -232,8 +264,45 @@ namespace CDBox.CoreTests
                 null,
                 null,
                 "StructureLayers");
-            Near(1.20, cushionChanged.Attributes.StartDepth, 1e-9, "无法读取井时应按主管垫层变化量调整端点");
-            Near(1.00, cushionChanged.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9, "垫层变化后应以新平均深度重算结构层");
+            Near(1.10, cushionChanged.Attributes.StartDepth, 1e-9, "修改结构层不得反向改变主管起点深度");
+            Near(1.10, cushionChanged.Attributes.EndDepth, 1e-9, "修改结构层不得反向改变主管终点深度");
+            Near(0.90, cushionChanged.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9, "垫层变化后应按既有平均深度重算未锁定层");
+
+            QuantityPipeAttributes special = QuantityPipeAttributes.DefaultMainPipe;
+            special.IsSpecialObject = true;
+            special.StartDepth = 9.0;
+            special.EndDepth = 8.0;
+            special.AverageDepth = 0.25;
+            special.PipeOuterDiameter = 0.30;
+            special.BackfillStructure = "中粗砂回填 0.25 管线层";
+            QuantityDependencyResult specialResult = QuantityDependencyService.NormalizeDraft(
+                special,
+                QuantityStructureLayer.Parse(special.BackfillStructure),
+                special,
+                startWell,
+                endWell,
+                null,
+                "AverageDepth");
+            Near(9.0, specialResult.Attributes.StartDepth, 1e-9, "特殊对象不得自动识别并覆盖起点深度");
+            Near(8.0, specialResult.Attributes.EndDepth, 1e-9, "特殊对象不得自动识别并覆盖终点深度");
+            Near(0.25, specialResult.Attributes.AverageDepth, 1e-9, "特殊对象平均深度应完全由用户定义");
+            Near(0.25, specialResult.Layers[0].Height, 1e-9, "特殊对象结构层应从手工平均深度派生");
+            True(specialResult.Warnings.Exists(x => x.IndexOf("小于管道外径", StringComparison.Ordinal) >= 0), "管线层厚度小于管道外径时应提示");
+
+            QuantityPipeAttributes specialBranch = QuantityPipeAttributes.DefaultBranchPipe;
+            specialBranch.IsSpecialObject = true;
+            specialBranch.BranchType = "明管";
+            specialBranch.BranchIncludeInCalculation = true;
+            QuantityDependencyResult specialBranchResult = QuantityDependencyService.NormalizeDraft(
+                specialBranch,
+                QuantityStructureLayer.Parse("自定义结构层 0.18"),
+                specialBranch,
+                null,
+                null,
+                QuantityPipeAttributes.DefaultBranchPipe,
+                "BranchType");
+            True(specialBranchResult.Attributes.BranchIncludeInCalculation, "特殊对象不得套用支管类型自动规则");
+            Equal(1, specialBranchResult.Layers.Count, "特殊对象不得自动清空用户结构层");
 
             QuantityPipeAttributes exposed = QuantityPipeAttributes.DefaultBranchPipe;
             exposed.BranchType = "明管";
@@ -282,29 +351,9 @@ namespace CDBox.CoreTests
             Equal("工程量", legacy.Argument, "旧消息参数");
         }
 
-        private static void TestStudioState()
-        {
-            var state = new CDBoxStudioState();
-            True(state.ToggleFavorite("module:layer-manager"), "首次收藏应返回 true");
-            True(state.IsFavorite("MODULE:LAYER-MANAGER"), "收藏 Id 应忽略大小写");
-            False(state.ToggleFavorite("module:layer-manager"), "再次切换应取消收藏");
-
-            for (int i = 0; i < 30; i++) state.MarkRecent("action:" + i);
-            Equal(24, state.RecentItems.Count, "最近使用最多保留 24 项");
-            state.MarkRecent("action:29");
-            Equal(2, state.GetRecent("action:29").UseCount, "重复使用应累计次数");
-
-            state.ToggleFavorite("action:29");
-            state.RemoveMissingActions(new[] { "action:28" });
-            False(state.IsFavorite("action:29"), "不存在的收藏应被清理");
-            True(state.HasRecent("action:28"), "仍存在的最近项应保留");
-        }
-
         private static void TestStageANewInstallDefaults()
         {
             CDBoxAppSettings settings = CDBoxAppSettings.Default;
-            False(settings.PromptSidebarOnLoad, "新安装不应强制提示展开紧凑侧栏");
-            False(settings.AutoShowSidebarOnLoad, "新安装不应自动展开紧凑侧栏");
             True(settings.PromptInstallOnLoad, "安装位置提示仍应保留");
         }
 
@@ -336,11 +385,17 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("Preview 9", StringComparison.Ordinal) >= 0, "页面应显示 Preview 9 身份");
+            True(standalone.IndexOf("3.1.1", StringComparison.Ordinal) >= 0, "页面应显示 3.1.1 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
             True(standalone.IndexOf("bindLayerDrag", StringComparison.Ordinal) >= 0, "结构层应支持拖动排序");
+            True(standalone.IndexOf("['IsSpecialObject','特殊对象','bool']", StringComparison.Ordinal) >= 0, "属性编辑器应提供特殊对象开关");
+            True(standalone.IndexOf("!self.attrs.IsSpecialObject", StringComparison.Ordinal) >= 0, "特殊对象应解锁平均深度");
+            True(standalone.IndexOf("special?'disabled'", StringComparison.Ordinal) >= 0, "特殊对象应禁用自动识别");
+            True(standalone.IndexOf("step=\"0.01\"", StringComparison.Ordinal) >= 0, "常规数值输入应以 0.01 为步长");
+            True(standalone.IndexOf("class=\"qa-drag\" draggable=\"true\"", StringComparison.Ordinal) >= 0, "结构层应通过独立拖拽柄排序");
+            False(standalone.IndexOf("class=\"qa-layer-row\" draggable=\"true\"", StringComparison.Ordinal) >= 0, "结构层整行不得触发拖拽");
             True(standalone.IndexOf("calculateQuantityDraft", StringComparison.Ordinal) >= 0, "源字段变化应调用统一 C# 草稿联动服务");
             True(standalone.IndexOf("scheduleDraft", StringComparison.Ordinal) >= 0, "属性编辑器应实时请求派生值更新");
             True(standalone.IndexOf("captureFocus", StringComparison.Ordinal) >= 0, "草稿回传后应恢复当前输入焦点");
@@ -353,6 +408,32 @@ namespace CDBox.CoreTests
             False(standalone.IndexOf("function parseLayers", StringComparison.Ordinal) >= 0, "前端不得自行解析结构层业务文本");
             False(standalone.IndexOf("function encodeLayers", StringComparison.Ordinal) >= 0, "前端不得建立第二套结构层序列化逻辑");
             False(standalone.IndexOf("['Remark','备注'", StringComparison.Ordinal) >= 0, "新界面不应恢复已删除的备注字段");
+            False(standalone.IndexOf("打开旧版", StringComparison.Ordinal) >= 0, "属性编辑器不应保留旧版入口按钮");
+            False(embedded.IndexOf("独立窗口", StringComparison.Ordinal) >= 0, "内嵌属性编辑器不应保留独立窗口按钮");
+            False(standalone.IndexOf(">重新选择<", StringComparison.Ordinal) >= 0, "属性编辑器不应保留重新选择按钮");
+            False(standalone.IndexOf(">智能刷新<", StringComparison.Ordinal) >= 0, "属性编辑器刷新按钮不应保留旧文案");
+            False(standalone.IndexOf(">按默认表重填<", StringComparison.Ordinal) >= 0, "属性编辑器不应保留默认表重填按钮");
+            False(standalone.IndexOf("data-act=\"\"close\"\"", StringComparison.Ordinal) >= 0, "属性编辑器不应保留关闭按钮");
+            True(standalone.IndexOf(">刷新<", StringComparison.Ordinal) >= 0, "属性编辑器应显示精简后的刷新按钮");
+            True(standalone.IndexOf("<span>图层</span>", StringComparison.Ordinal) >= 0, "对象摘要应只显示图层信息");
+            True(standalone.IndexOf("<span>长度</span>", StringComparison.Ordinal) >= 0, "对象摘要应显示 CAD 长度");
+            False(standalone.IndexOf("<span>Handle</span>", StringComparison.Ordinal) >= 0, "对象摘要不应显示 Handle");
+            False(standalone.IndexOf("CAD / 有效长度", StringComparison.Ordinal) >= 0, "对象摘要不应显示有效长度");
+        }
+
+        private static void TestNumericInputSteps()
+        {
+            string annotationScript = CDBoxStudioAnnotationSettingsPage.BuildComponentScript();
+            string annotationEmbedded = CDBoxStudioAnnotationSettingsPage.BuildEmbeddedSection();
+            string annotationStandalone = CDBoxStudioAnnotationSettingsPage.BuildStandaloneDocument(new CDBoxStudioSettings(), "test.log", "pipeLength");
+            True(annotationScript.IndexOf("step=\"0.01\"", StringComparison.Ordinal) >= 0, "标注设置小数输入应以 0.01 为步长");
+            False(annotationScript.IndexOf("step=\"0.1\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.1 小数步长");
+            False(annotationScript.IndexOf("step=\"0.05\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.05 小数步长");
+            False(annotationScript.IndexOf("step=\"0.001\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.001 小数步长");
+            False(annotationEmbedded.IndexOf("data-action=\"reset-current\"", StringComparison.Ordinal) >= 0, "内嵌标注设置不应保留恢复默认按钮");
+            False(annotationStandalone.IndexOf("data-action=\"reset-current\"", StringComparison.Ordinal) >= 0, "独立标注设置不应保留恢复默认按钮");
+            False(annotationStandalone.IndexOf("data-action=\"close\">关闭", StringComparison.Ordinal) >= 0, "独立标注设置不应保留关闭按钮");
+            True(annotationStandalone.IndexOf("<h2>标注设置</h2></div><div class=\"as-head-actions\"><button", StringComparison.Ordinal) >= 0, "保存设置应与标题同排并靠右");
         }
 
         private static void TestLayerManagerCustomParents()
@@ -365,20 +446,36 @@ namespace CDBox.CoreTests
             True(styles.IndexOf(".lm-grid-row.dragging", StringComparison.Ordinal) >= 0, "Layer Manager drag state styles must be present");
             False(script.IndexOf("branch('other','其他'", StringComparison.Ordinal) >= 0, "不应再生成合成的“其他”父级");
             True(script.IndexOf("out+=otherChildren;", StringComparison.Ordinal) >= 0, "自定义父级应直接显示在树根");
-            True(script.IndexOf("draggedLayerName", StringComparison.Ordinal) >= 0, "图层表应支持拖动行");
-            True(script.IndexOf("draggable=\"true\"", StringComparison.Ordinal) >= 0, "图层行应启用拖动");
+            True(script.IndexOf("draggedLayerName", StringComparison.Ordinal) >= 0, "图层表应支持拖动排序");
+            True(script.IndexOf("class=\"lm-drag-handle\" draggable=\"true\"", StringComparison.Ordinal) >= 0, "图层表应使用独立拖拽柄");
+            False(script.IndexOf("lm-grid-row '+(dirty?'dirty ':'')+(selected?'selected ':'')+(failure?'failed ':'')+'\" draggable=\"true\"", StringComparison.Ordinal) >= 0, "图层整行不得触发拖拽");
             False(script.IndexOf("树状分类筛选、行内属性编辑", StringComparison.Ordinal) >= 0, "图层管理器不应显示冗余说明");
+            False(script.IndexOf(">独立窗口<", StringComparison.Ordinal) >= 0, "内嵌图层管理器不应保留独立窗口按钮");
+            False(script.IndexOf(">打开旧版<", StringComparison.Ordinal) >= 0, "独立图层管理器不应保留旧版入口");
+            False(script.IndexOf("data-action=\"close\">关闭", StringComparison.Ordinal) >= 0, "独立图层管理器不应保留关闭按钮");
         }
 
         private static void TestQuantityDefaultsTableInteraction()
         {
             string script = CDBoxStudioQuantityDefaultsPage.BuildEmbeddedBridgeScript();
-            True(script.IndexOf("draggable=\"true\"", StringComparison.Ordinal) >= 0, "默认表结构层应支持拖动行");
+            True(script.IndexOf("class=\"layer-drag-handle\" draggable=\"true\"", StringComparison.Ordinal) >= 0, "默认表结构层应使用独立拖拽柄");
             True(script.IndexOf("draggedLayer", StringComparison.Ordinal) >= 0, "默认表应绑定拖动排序");
+            False(script.IndexOf("<tr draggable=\"true\"", StringComparison.Ordinal) >= 0, "默认表整行不得触发拖拽");
             False(script.IndexOf(">上移<", StringComparison.Ordinal) >= 0, "默认表不应保留上移按钮");
             False(script.IndexOf(">下移<", StringComparison.Ordinal) >= 0, "默认表不应保留下移按钮");
             False(script.IndexOf("data-layer-row-action=\"up\"", StringComparison.Ordinal) >= 0, "默认表不应保留行上移操作");
             False(script.IndexOf("data-layer-row-action=\"down\"", StringComparison.Ordinal) >= 0, "默认表不应保留行下移操作");
+            False(script.IndexOf("恢复此表默认结构层", StringComparison.Ordinal) >= 0, "默认表不应保留结构层恢复按钮");
+            string standalone = CDBoxStudioQuantityDefaultsPage.BuildStandaloneDocument(new CDBoxStudioSettings(), "test.log");
+            False(standalone.IndexOf("打开旧版", StringComparison.Ordinal) >= 0, "属性默认表不应保留旧版入口按钮");
+            False(standalone.IndexOf("id=\"restoreDefaultProfilesButton\"", StringComparison.Ordinal) >= 0, "独立默认表不应保留恢复默认按钮");
+            False(standalone.IndexOf("id=\"closeWindow\"", StringComparison.Ordinal) >= 0, "独立默认表不应保留关闭按钮");
+            True(standalone.IndexOf("class=\"qd-tabs-row\"", StringComparison.Ordinal) >= 0, "独立默认表保存按钮应与默认表标签同排");
+            string embedded = CDBoxStudioQuantityDefaultsPage.BuildEmbeddedSection();
+            False(embedded.IndexOf("返回总览", StringComparison.Ordinal) >= 0, "内嵌默认表不应保留返回总览按钮");
+            False(embedded.IndexOf("settings-head", StringComparison.Ordinal) >= 0, "内嵌默认表不应保留标题卡片");
+            False(embedded.IndexOf("restoreDefaultProfilesButton", StringComparison.Ordinal) >= 0, "内嵌默认表不应保留恢复默认按钮");
+            True(embedded.IndexOf("class=\"qd-tabs-row\"", StringComparison.Ordinal) >= 0, "内嵌默认表保存按钮应与默认表标签同排");
         }
 
         private static void TestSectionDrawingSharedPage()
@@ -402,10 +499,21 @@ namespace CDBox.CoreTests
             True(script.IndexOf("titleLines", StringComparison.Ordinal) >= 0, "多行管段注记应逐行预览");
             True(script.IndexOf("<span>注记样式</span><select data-field='TextStyleName'", StringComparison.Ordinal) >= 0, "注记样式应使用当前图纸样式下拉框");
             True(script.IndexOf("data-layer-field='HatchPatternName'", StringComparison.Ordinal) >= 0, "填充图案应使用选择控件");
+            True(script.IndexOf("list='sd-hatch-patterns'", StringComparison.Ordinal) >= 0, "填充图案应支持搜索和手工输入");
+            True(script.IndexOf("step='0.0001' min='0' data-layer-field='HatchScale'", StringComparison.Ordinal) >= 0, "填充比例应支持精细小数步长");
+            True(script.IndexOf("data-field='DrawingScale'", StringComparison.Ordinal) >= 0, "断面图应提供绘图放大倍数");
+            True(script.IndexOf("translate(450 325) scale(${this.zoom}) translate(-450 -325)", StringComparison.Ordinal) >= 0, "预览缩放应围绕视框中心");
+            True(script.IndexOf("class='sd-drag' draggable='true'", StringComparison.Ordinal) >= 0, "断面表格应使用独立拖拽柄");
+            False(script.IndexOf("sd-layer-row' draggable='true'", StringComparison.Ordinal) >= 0, "断面结构层整行不得触发拖拽");
+            False(script.IndexOf("sd-pipe-row' draggable='true'", StringComparison.Ordinal) >= 0, "断面管道整行不得触发拖拽");
             False(script.IndexOf("data-layer-field='HatchAngle'", StringComparison.Ordinal) >= 0, "结构层表格不应保留填充角度选项");
+            False(script.IndexOf("data-act='reset'>恢复默认", StringComparison.Ordinal) >= 0, "断面图不应保留恢复默认按钮");
+            False(script.IndexOf("data-act='close'>关闭", StringComparison.Ordinal) >= 0, "断面图独立页不应保留关闭按钮");
             True(standalone.IndexOf("Preview 10", StringComparison.Ordinal) >= 0, "独立页应显示 Preview 10 身份");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
+            False(standalone.IndexOf("打开旧版", StringComparison.Ordinal) >= 0, "断面图不应保留旧版入口按钮");
+            False(script.IndexOf(">独立窗口<", StringComparison.Ordinal) >= 0, "内嵌断面图不应保留独立窗口按钮");
         }
 
         private static void TestLegacyUpdateSourceValidation()

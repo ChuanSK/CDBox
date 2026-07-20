@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
@@ -183,7 +183,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             catch (System.Exception ex)
             {
                 Show();
-                MessageBox.Show(ex.Message, "选择对象失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "选择对象失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -297,7 +297,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "填充默认值失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "填充默认值失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -305,7 +305,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (_currentObjectId.IsNull)
             {
-                MessageBox.Show("请先选择对象。", "属性编辑器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("请先选择对象。", "属性编辑器", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -313,11 +313,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 QuantityPipeWriteResult result = QuantityPipeAttributeService.WritePipeAttributes(_doc, _currentObjectId, ReadFromUi());
                 AppendLog(result.Message);
-                MessageBox.Show(result.Message, "属性编辑器", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "属性编辑器", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -333,12 +333,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
                 Show();
                 AppendLog(result.Message);
-                MessageBox.Show(result.Message, "属性编辑器", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "属性编辑器", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
             catch (System.Exception ex)
             {
                 Show();
-                MessageBox.Show(ex.Message, "批量赋值失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "批量赋值失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -349,11 +349,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeAttributes attrs = ReadFromUi();
                 QuantityPipeAttributeService.SaveDefaultProfile(attrs.ObjectKind, attrs);
                 AppendLog("已保存“" + attrs.ObjectKind + "”默认表。对象编号、起终点、手动长度不会作为默认值保存。格式用于后续未设置对象自动填充。");
-                MessageBox.Show("已保存“" + attrs.ObjectKind + "”默认表。", "属性编辑器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("已保存“" + attrs.ObjectKind + "”默认表。", "属性编辑器", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "保存默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -372,7 +372,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(ex.Message, "载入默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "载入默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

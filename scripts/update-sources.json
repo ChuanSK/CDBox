@@ -1,7 +1,7 @@
 [
   {
     "name": "GitHub备用",
-    "urlTemplate": "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview/{fileName}"
+    "urlTemplate": "https://github.com/ChuanSK/CDBox/releases/download/{latestVersion}/{fileName}"
   },
   {
     "name": "Gitee",

@@ -234,6 +234,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (options == null) return;
             if (options.Width <= 0) options.Width = 1.0;
             if (options.TotalHeight <= 0) options.TotalHeight = 0.0;
+            if (options.DrawingScale <= 0) options.DrawingScale = 1.0;
+            options.DrawingScale = Math.Max(0.0001, Math.Min(10000.0, options.DrawingScale));
             if (options.TextHeight <= 0) options.TextHeight = 0.08;
             if (options.LeftLabelWidth <= 0) options.LeftLabelWidth = 0.45;
             if (options.TopDimensionOffset < 0) options.TopDimensionOffset = 0.12;

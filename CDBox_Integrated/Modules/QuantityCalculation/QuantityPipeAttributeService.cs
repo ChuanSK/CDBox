@@ -145,15 +145,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 bool hasSaved = HasPipeAttributes(entity, tr);
                 bool hasSavedDrawLengthWidthHeightFlag = hasSaved && HasPipeAttributeKey(entity, tr, "DrawLengthWidthHeightAnnotation");
-                string inferredKind = InferSupportedObjectKind(db, tr, entity);
+                QuantityPipeAttributes savedAttributes = hasSaved ? ReadPipeAttributes(entity, tr) : null;
+                string inferredKind = savedAttributes != null && savedAttributes.IsSpecialObject
+                    ? savedAttributes.ObjectKind
+                    : InferSupportedObjectKind(db, tr, entity);
                 if (string.IsNullOrWhiteSpace(inferredKind))
                 {
                     tr.Commit();
                     return null;
                 }
 
-                QuantityPipeAttributes attrs = hasSaved ? ReadPipeAttributes(entity, tr) : BuildDefaultAttributesFromEntity(db, tr, entity, inferredKind);
-                attrs.ObjectKind = inferredKind;
+                QuantityPipeAttributes attrs = hasSaved ? savedAttributes : BuildDefaultAttributesFromEntity(db, tr, entity, inferredKind);
+                if (!attrs.IsSpecialObject) attrs.ObjectKind = inferredKind;
                 if (hasSaved && !hasSavedDrawLengthWidthHeightFlag)
                 {
                     attrs.DrawLengthWidthHeightAnnotation = QuantityPipeAttributes.IsMainPipeKind(inferredKind);
@@ -163,7 +166,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Curve curve = entity as Curve;
                 double cadLength = curve == null ? 0.0 : GetCurveLength(curve);
 
-                if (curve != null && QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
+                if (curve != null && QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind) && !attrs.IsSpecialObject)
                 {
                     TryFillConnectedNodeInfo(db, tr, entity, curve, attrs);
                 }
@@ -334,6 +337,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             int success = 0;
             int skip = 0;
+            int unavailableLayerSkip = 0;
             int fail = 0;
             int total = res.Value == null ? 0 : res.Value.Count;
             int processed = 0;
@@ -355,10 +359,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                     try
                     {
-                        Entity entity = tr.GetObject(selected.ObjectId, OpenMode.ForWrite, false) as Entity;
+                        Entity entity = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Entity;
                         if (entity == null)
                         {
                             skip++;
+                            continue;
+                        }
+
+                        if (IsEntityLayerUnavailable(db, tr, entity))
+                        {
+                            skip++;
+                            unavailableLayerSkip++;
                             continue;
                         }
 
@@ -381,9 +392,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             attrs.GroundElevation = old.GroundElevation;
                             attrs.WellDepth = old.WellDepth;
                             attrs.Remark = old.Remark;
+                            attrs.IsSpecialObject = old.IsSpecialObject;
                         }
 
                         attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, old, "BatchWrite");
+                        if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                         WritePipeAttributes(entity, tr, attrs);
                         success++;
                     }
@@ -401,13 +414,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 tr.Commit();
             }
 
+            string message = "批量写入完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
+            if (unavailableLayerSkip > 0) message += "\n其中 " + unavailableLayerSkip + " 个对象因图层锁定、冻结或关闭而跳过。";
             return new QuantityPipeWriteResult
             {
                 Success = success > 0,
                 SuccessCount = success,
                 SkipCount = skip,
                 FailCount = fail,
-                Message = "批量写入完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。"
+                Message = message
             };
         }
 
@@ -463,7 +478,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                                 continue;
                             }
 
-                            if (IsEntityLayerLocked(db, tr, entity))
+                            if (IsEntityLayerUnavailable(db, tr, entity))
                             {
                                 skip++;
                                 lockedSkip++;
@@ -480,6 +495,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                             bool hasSavedAttributes = HasPipeAttributes(entity, tr);
                             QuantityPipeAttributes attrs = hasSavedAttributes ? ReadPipeAttributes(entity, tr) : defaultAttrs.Clone();
+                            if (attrs.IsSpecialObject)
+                            {
+                                skip++;
+                                tr.Commit();
+                                continue;
+                            }
                             QuantityPipeAttributes previous = attrs.Clone();
                             attrs.ObjectKind = kind;
                             ApplyLayerMetadata(db, tr, entity, attrs);
@@ -506,7 +527,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         {
                             skip++;
                             lockedSkip++;
-                            if (errors.Count < 3) errors.Add("对象或图层被锁定，已跳过");
+                            if (errors.Count < 3) errors.Add("对象或所在图层不可写，已跳过");
                         }
                         else
                         {
@@ -529,8 +550,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string message = "默认表补填完成：成功 " + success + " 个";
             if (success > 0) message += "（主管 " + mainCount + "，支管 " + branchCount + "，节点/井 " + nodeCount + "）";
             message += "，跳过 " + skip + " 个，失败 " + fail + " 个。";
-            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因图层/对象锁定跳过。";
-            message += "\n跳过包括：无关对象、锁定对象、以及已无空字段需要补填的对象。";
+            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因对象不可写，或图层锁定、冻结、关闭而跳过。";
+            message += "\n跳过包括：无关对象、特殊对象、不可写对象，以及已无空字段需要补填的对象。";
             message += "\n识别规则：仅父属性为“主管”“支管”“井”的对象参与；父属性为“井”时分类必须为“检查、沉泥井”。";
             if (errors.Count > 0) message += "\n前几项失败原因：" + string.Join("；", errors.ToArray());
 
@@ -584,7 +605,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                                 continue;
                             }
 
-                            if (IsEntityLayerLocked(db, tr, entity))
+                            if (IsEntityLayerUnavailable(db, tr, entity))
                             {
                                 skip++;
                                 lockedSkip++;
@@ -610,7 +631,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         {
                             skip++;
                             lockedSkip++;
-                            if (errors.Count < 3) errors.Add("对象或图层被锁定，已跳过");
+                            if (errors.Count < 3) errors.Add("对象或所在图层不可写，已跳过");
                         }
                         else
                         {
@@ -627,7 +648,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             string message = "属性清除完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
-            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因图层/对象锁定跳过。";
+            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因对象不可写，或图层锁定、冻结、关闭而跳过。";
             if (errors.Count > 0) message += "\n前几项失败原因：" + string.Join("；", errors.ToArray());
 
             return new QuantityPipeWriteResult
@@ -658,7 +679,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
-            if (objectId.IsNull) return ApplySmartDefaults(doc, string.Empty, attributes);
+            if (attributes.IsSpecialObject || objectId.IsNull) return attributes;
 
             Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -679,9 +700,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             attributes = attributes == null ? QuantityPipeAttributes.DefaultMainPipe : attributes.Clone();
+            if (attributes.IsSpecialObject || objectId.IsNull) return attributes;
             attributes.ObjectKind = QuantityPipeAttributes.KindMainPipe;
-
-            if (objectId.IsNull) return attributes;
 
             Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -704,13 +724,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
-            if (objectId.IsNull) return attributes;
+            if (attributes.IsSpecialObject || objectId.IsNull) return attributes;
 
             Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Entity entity = tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
-                string kind = entity == null ? attributes.ObjectKind : InferSupportedObjectKind(db, tr, entity);
+                string kind = attributes.IsSpecialObject ? attributes.ObjectKind : (entity == null ? attributes.ObjectKind : InferSupportedObjectKind(db, tr, entity));
                 if (string.IsNullOrWhiteSpace(kind)) kind = attributes.ObjectKind;
                 if (string.IsNullOrWhiteSpace(kind)) kind = QuantityPipeAttributes.KindMainPipe;
 
@@ -748,8 +768,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Entity entity = objectId.IsNull ? null : tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
-                string kind = entity == null ? attributes.ObjectKind : InferSupportedObjectKind(db, tr, entity);
-                if (!string.IsNullOrWhiteSpace(kind)) attributes.ObjectKind = kind;
+                string kind = attributes.IsSpecialObject ? attributes.ObjectKind : (entity == null ? attributes.ObjectKind : InferSupportedObjectKind(db, tr, entity));
+                if (!attributes.IsSpecialObject && !string.IsNullOrWhiteSpace(kind)) attributes.ObjectKind = kind;
                 if (entity != null) ApplyLayerMetadata(db, tr, entity, attributes);
 
                 QuantityPipeAttributes previous = previousDraft == null ? attributes.Clone() : previousDraft.Clone();
@@ -757,7 +777,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 QuantityPipeAttributes startWell = null;
                 QuantityPipeAttributes endWell = null;
-                if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind))
+                if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind) && !attributes.IsSpecialObject)
                 {
                     ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
                     List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
@@ -801,13 +821,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             if (entity != null)
             {
-                if (string.IsNullOrWhiteSpace(attributes.ObjectKind)) attributes.ObjectKind = InferObjectKind(db, tr, entity);
+                if (!attributes.IsSpecialObject && string.IsNullOrWhiteSpace(attributes.ObjectKind)) attributes.ObjectKind = InferObjectKind(db, tr, entity);
                 ApplyLayerMetadata(db, tr, entity, attributes);
             }
 
             QuantityPipeAttributes startWell = null;
             QuantityPipeAttributes endWell = null;
-            if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind))
+            if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind) && !attributes.IsSpecialObject)
             {
                 ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
                 List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
@@ -1182,7 +1202,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (a == null) return string.Empty;
             return string.Join("|", new string[]
             {
-                a.Enabled.ToString(), a.ObjectKind ?? string.Empty, a.LayerParentGroup ?? string.Empty, a.LayerParentClass ?? string.Empty, a.LayerTags ?? string.Empty,
+                a.Enabled.ToString(), a.ObjectKind ?? string.Empty, a.IsSpecialObject.ToString(), a.LayerParentGroup ?? string.Empty, a.LayerParentClass ?? string.Empty, a.LayerTags ?? string.Empty,
                 a.Material ?? string.Empty, a.Diameter ?? string.Empty, a.UseManualLength.ToString(), Format(a.ManualLength), a.DrawLengthWidthHeightAnnotation.ToString(),
                 a.StartNode ?? string.Empty, a.EndNode ?? string.Empty, Format(a.StartDepth), Format(a.EndDepth), Format(a.AverageDepth),
                 Format(a.TrenchWidth), Format(a.RoadThickness), a.ExcavationType ?? string.Empty, a.BackfillType ?? string.Empty, QuantityPipeAttributes.NormalizeStructureLayerText(a.BackfillStructure),
@@ -1196,6 +1216,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static void ApplySmartDefaults(Database db, Transaction tr, Entity entity, string layerName, QuantityPipeAttributes attrs, bool overwrite)
         {
             if (attrs == null) return;
+            if (attrs.IsSpecialObject) return;
             string sourceText = layerName ?? string.Empty;
             LayerMetadata meta = GetLayerMetadataSafe(db, tr, layerName);
             if (meta != null)
@@ -1396,7 +1417,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return string.Equals(NormalizeLayerMetadataText(left), NormalizeLayerMetadataText(right), StringComparison.CurrentCultureIgnoreCase);
         }
 
-        private static bool IsEntityLayerLocked(Database db, Transaction tr, Entity entity)
+        private static bool IsEntityLayerUnavailable(Database db, Transaction tr, Entity entity)
         {
             if (db == null || tr == null || entity == null) return false;
             try
@@ -1404,7 +1425,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 LayerTable lt = tr.GetObject(db.LayerTableId, OpenMode.ForRead, false) as LayerTable;
                 if (lt == null || !lt.Has(entity.Layer)) return false;
                 LayerTableRecord layer = tr.GetObject(lt[entity.Layer], OpenMode.ForRead, false) as LayerTableRecord;
-                return layer != null && layer.IsLocked;
+                return layer != null && (layer.IsLocked || layer.IsFrozen || layer.IsOff);
             }
             catch
             {
@@ -1553,6 +1574,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Pair("SchemaVersion", QuantityPipeAttributes.SchemaVersion),
                 Pair("Enabled", attrs.Enabled),
                 Pair("ObjectKind", attrs.ObjectKind),
+                Pair("IsSpecialObject", attrs.IsSpecialObject),
                 Pair("LayerParentGroup", attrs.LayerParentGroup),
                 Pair("LayerParentClass", attrs.LayerParentClass),
                 Pair("LayerTags", attrs.LayerTags),
@@ -1683,7 +1705,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static TypedValue Pair(string key, double value)
         {
-            return Pair(key, value.ToString("0.00", CultureInfo.InvariantCulture));
+            return Pair(key, value.ToString("0.########", CultureInfo.InvariantCulture));
         }
 
         private static void ApplyKeyValue(QuantityPipeAttributes attrs, string key, string val)
@@ -1691,6 +1713,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (attrs == null || string.IsNullOrWhiteSpace(key)) return;
             if (string.Equals(key, "Enabled", StringComparison.OrdinalIgnoreCase)) attrs.Enabled = QuantityPipeAttributes.ParseBool(val, attrs.Enabled);
             else if (string.Equals(key, "ObjectKind", StringComparison.OrdinalIgnoreCase)) attrs.ObjectKind = val;
+            else if (string.Equals(key, "IsSpecialObject", StringComparison.OrdinalIgnoreCase)) attrs.IsSpecialObject = QuantityPipeAttributes.ParseBool(val, attrs.IsSpecialObject);
             else if (string.Equals(key, "LayerParentGroup", StringComparison.OrdinalIgnoreCase)) attrs.LayerParentGroup = val;
             else if (string.Equals(key, "LayerParentClass", StringComparison.OrdinalIgnoreCase)) attrs.LayerParentClass = val;
             else if (string.Equals(key, "LayerTags", StringComparison.OrdinalIgnoreCase)) attrs.LayerTags = val;

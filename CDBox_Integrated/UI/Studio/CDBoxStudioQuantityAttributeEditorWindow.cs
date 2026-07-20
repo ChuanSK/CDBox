@@ -23,11 +23,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 _current.TryExecutePageScript("window.CDBoxQuantityAttributeEditorLoad && window.CDBoxQuantityAttributeEditorLoad(" + CDBoxStudioQuantityAttributeEditorApi.Serialize(context) + ");");
                 return;
             }
-            _current = new CDBoxStudioWebPageForm("属性编辑器 · Preview 9", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
+            _current = new CDBoxStudioWebPageForm("属性编辑器 · 3.1.1", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
             _current.Width = 1180; _current.Height = 820; _current.MinimumSize = new Size(900, 650);
             _current.FormClosed += delegate { _current = null; _documentId = string.Empty; _handle = string.Empty; };
             _current.Show(owner ?? new AcadMainWindow());
-            CDBoxStudioLogger.Info("已打开属性编辑器 Preview 9 独立窗口。");
+            CDBoxStudioLogger.Info("已打开属性编辑器 3.1.1 独立窗口。");
         }
 
         private static CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)

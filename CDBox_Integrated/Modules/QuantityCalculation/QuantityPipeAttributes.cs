@@ -12,7 +12,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     /// </summary>
     public sealed class QuantityPipeAttributes
     {
-        public const string SchemaVersion = "2";
+        public const string SchemaVersion = "3";
         public const string KindMainPipe = "主管";
         public const string KindBranchPipe = "支管";
         public const string KindNodeWell = "节点/检查井";
@@ -26,6 +26,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         [DisplayName("对象类型")]
         [Description("由图层管理中的父属性优先识别：井/节点、主管、支管；也可手动修改。")]
         public string ObjectKind { get; set; }
+
+        [Category("00 通用")]
+        [DisplayName("特殊对象")]
+        [Description("启用后不再自动识别和覆盖属性，平均深度允许手动设置。")]
+        public bool IsSpecialObject { get; set; }
 
         [Category("00 通用")]
         [DisplayName("图层父属性")]
@@ -238,6 +243,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 Enabled = Enabled,
                 ObjectKind = ObjectKind ?? string.Empty,
+                IsSpecialObject = IsSpecialObject,
                 LayerParentGroup = LayerParentGroup ?? string.Empty,
                 LayerParentClass = LayerParentClass ?? string.Empty,
                 LayerTags = LayerTags ?? string.Empty,

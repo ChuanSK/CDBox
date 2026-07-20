@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -302,7 +302,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("刷新失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "刷新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "刷新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -731,7 +731,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("拾取失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "拾取失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "拾取失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -746,7 +746,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("选中对象失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "选中对象失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "选中对象失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -761,7 +761,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     return;
                 }
 
-                DialogResult confirm = MessageBox.Show(
+                DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
                     this,
                     "将删除所选图层上的对象，不删除图层本身。\n\n图层数量：" + names.Count + "\n是否继续？",
                     "确认删除对象",
@@ -777,7 +777,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("删除失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -793,7 +793,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("处理失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "处理失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "处理失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -815,7 +815,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("设置当前图层失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "设置当前图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "设置当前图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -831,7 +831,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("仅显示失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "仅显示失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "仅显示失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -846,7 +846,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("显示全部失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "显示全部失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "显示全部失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -865,7 +865,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 catch (Exception ex)
                 {
                     WriteStatus("新建图层失败：" + ex.Message);
-                    MessageBox.Show(this, ex.Message, "新建图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "新建图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -881,7 +881,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("创建默认图层失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "创建默认图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "创建默认图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -914,7 +914,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("设置图层属性失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "设置图层属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "设置图层属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -932,7 +932,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("打开属性识别表失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "属性识别表", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "属性识别表", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -947,7 +947,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     return;
                 }
 
-                DialogResult overwrite = MessageBox.Show(
+                DialogResult overwrite = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
                     this,
                     "是否覆盖已存在的父属性/标签？\n\n选择“是”：根据属性识别表重新识别并覆盖。\n选择“否”：只给空属性图层补全。\n\n可点击“属性识别表”自定义识别规则。",
                     "自动识别图层属性",
@@ -963,7 +963,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             catch (Exception ex)
             {
                 WriteStatus("自动识别属性失败：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "自动识别属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "自动识别属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1242,7 +1242,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         private void RestoreDefaultRules(object sender, EventArgs e)
         {
-            DialogResult confirm = MessageBox.Show(this, "恢复默认属性识别表会覆盖当前编辑内容，是否继续？", "恢复默认表", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, "恢复默认属性识别表会覆盖当前编辑内容，是否继续？", "恢复默认表", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             if (confirm != DialogResult.Yes) return;
             _rules = new BindingList<LayerRecognitionRule>(LayerManagerService.GetDefaultRecognitionRules().Select(r => r.Clone()).ToList());
             _grid.DataSource = _rules;

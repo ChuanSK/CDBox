@@ -346,41 +346,34 @@ namespace TCPipeAutoDraw.UI
 
         private static void BuildMenu(object topMenu)
         {
-            //object common = AddSubMenu(topMenu, "常用功能", "CDBox_Common");
-            //AddEmptyItem(common);
-
-            AddCommandItem(topMenu, "WebView2 实验工作台", "CDSTUDIO");
-            AddCommandItem(topMenu, "图层管理器(TCGL)", "CDLAYER");
+            AddCommandItem(topMenu, "CDBox 工作台", "CDSTUDIO");
+            AddCommandItem(topMenu, "图层管理器", "CDLAYER");
 
             object annotation = AddSubMenu(topMenu, "标注", "CDBox_Annotation");
-            AddCommandItem(annotation, "表面积标注(BMJBZ)", "CDSURF");
-            AddCommandItem(annotation, "管线长度标注(GCBZ)", "CDLEN");
-            AddCommandItem(annotation, "节点标注(JDBZ)", "CDNODE");
-            AddCommandItem(annotation, "标注设置(BZSZ)", "CDBZSET");
+            AddCommandItem(annotation, "表面积标注", "CDSURF");
+            AddCommandItem(annotation, "管线长度标注", "CDLEN");
+            AddCommandItem(annotation, "节点标注", "CDNODE");
+            AddCommandItem(annotation, "标注设置", "CDBZSET");
 
             object section = AddSubMenu(topMenu, "断面", "CDBox_Section");
-            AddCommandItem(section, "断面图生成(DM)", "CDSEC");
-            AddCommandItem(section, "批量断面生成(PLDM)", "PLDM");
+            AddCommandItem(section, "断面图生成", "CDSEC");
+            AddCommandItem(section, "批量断面生成", "PLDM");
 
             object pipeAttribute = AddSubMenu(topMenu, "管线属性", "CDBox_PipeAttribute");
-            AddCommandItem(pipeAttribute, "属性编辑器(SX)", "SX");
-            AddCommandItem(pipeAttribute, "属性清除(SXQC)", "SXQC");
-            AddCommandItem(pipeAttribute, "属性默认表(SXMRB)", "SXMRB");
+            AddCommandItem(pipeAttribute, "属性编辑器", "SX");
+            AddCommandItem(pipeAttribute, "属性清除", "SXQC");
+            AddCommandItem(pipeAttribute, "属性默认表", "SXMRB");
 
             object quantity = AddSubMenu(topMenu, "工程量", "CDBox_Quantity");
-            AddCommandItem(quantity, "工程量表格生成（GCL）", "GCL");
+            AddCommandItem(quantity, "工程量看板", "CDQBOARD");
+            AddCommandItem(quantity, "工程量表格生成", "GCL");
 
             object frame = AddSubMenu(topMenu, "图框工具", "CDBox_Frame");
             AddCommandItem(frame, "添加图框模版", "TCFRAMEADD");
             AddCommandItem(frame, "矩形裁图布框", "TCFRAMECUT");
 
-            //object other = AddSubMenu(topMenu, "其他", "CDBox_Other");
-            //AddEmptyItem(other);
-
-            AddCommandItem(topMenu, "显示侧边栏", "CDCBL");
-            AddCommandItem(topMenu, "工具箱设置", "CDSET");
-            AddCommandItem(topMenu, "更新工具箱", "CDUPDATE");
-            AddCommandItem(topMenu, "卸载工具箱", "CDUNINSTALL");
+            AddCommandItem(topMenu, "CDBox设置", "CDSET");
+            AddCommandItem(topMenu, "关于超重氢工具箱", "CDABOUT");
         }
 
         private static object AddSubMenu(object parent, string label, string tag)

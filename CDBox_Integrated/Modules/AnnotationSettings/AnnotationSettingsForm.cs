@@ -766,7 +766,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
             if (showMessage)
             {
-                MessageBox.Show(new TCPipeAutoDraw.UI.AcadMainWindow(), "标注设置已保存。", "标注设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new TCPipeAutoDraw.UI.AcadMainWindow(), "标注设置已保存。", "标注设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -807,7 +807,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             {
                 restoreForm = true;
                 _doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -845,7 +845,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             catch (Exception ex)
             {
                 _doc.Editor.WriteMessage("\n[管线长度标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -883,7 +883,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             catch (Exception ex)
             {
                 _doc.Editor.WriteMessage("\n[节点标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -1007,8 +1007,8 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             number.Minimum = min;
             number.Maximum = max;
             number.Value = value;
-            number.DecimalPlaces = decimalPlaces;
-            number.Increment = decimalPlaces == 0 ? 1 : 0.5M;
+            number.DecimalPlaces = decimalPlaces == 0 ? 0 : Math.Max(2, decimalPlaces);
+            number.Increment = decimalPlaces == 0 ? 1 : 0.01M;
             number.Width = 120;
             return number;
         }

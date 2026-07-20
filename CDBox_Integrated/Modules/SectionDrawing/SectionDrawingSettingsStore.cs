@@ -30,6 +30,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (TryGetDouble(values, "Width", out number) && number > 0) options.Width = number;
                 if (TryGetDouble(values, "TotalHeight", out number) && number > 0) options.TotalHeight = number;
                 if (TryGetBool(values, "LockTotalHeight", out boolValue)) options.LockTotalHeight = boolValue;
+                if (TryGetDouble(values, "DrawingScale", out number) && number > 0) options.DrawingScale = number;
                 if (TryGetDouble(values, "TextHeight", out number) && number > 0) options.TextHeight = number;
                 if (TryGetString(values, "TextStyleName", out text)) options.TextStyleName = text;
                 if (TryGetString(values, "BorderLayerName", out text) && !string.IsNullOrWhiteSpace(text)) options.BorderLayerName = text;
@@ -125,6 +126,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 Add(lines, "Width", options.Width);
                 Add(lines, "TotalHeight", options.TotalHeight);
                 Add(lines, "LockTotalHeight", options.LockTotalHeight);
+                Add(lines, "DrawingScale", options.DrawingScale);
                 Add(lines, "TextHeight", options.TextHeight);
                 Add(lines, "TextStyleName", options.TextStyleName);
                 Add(lines, "BorderLayerName", options.BorderLayerName);

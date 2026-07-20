@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -876,7 +876,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (_layers.Count <= 1)
             {
-                MessageBox.Show("至少需要保留一层。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("至少需要保留一层。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             int index = _selectedLayerIndex;
@@ -1209,7 +1209,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             catch (Exception ex)
             {
                 _doc.Editor.WriteMessage("\n[断面图生成] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "断面图生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "断面图生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -1502,6 +1502,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 scalePanel.Controls.Add(scaleLabel, 0, 0);
 
                 _numScale = MakeNumber(0M, 100000M, layer == null ? 1.0M : (decimal)Math.Max(0, layer.HatchScale), 3);
+                _numScale.DecimalPlaces = 6;
+                _numScale.Increment = 0.0001M;
                 _numScale.Dock = DockStyle.Fill;
                 scalePanel.Controls.Add(_numScale, 1, 0);
 

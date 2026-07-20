@@ -25,8 +25,6 @@ namespace TCPipeAutoDraw.Core.Startup
                 string text;
 
                 if (TryGetBool(values, "PromptInstallOnLoad", out boolValue)) settings.PromptInstallOnLoad = boolValue;
-                if (TryGetBool(values, "PromptSidebarOnLoad", out boolValue)) settings.PromptSidebarOnLoad = boolValue;
-                if (TryGetBool(values, "AutoShowSidebarOnLoad", out boolValue)) settings.AutoShowSidebarOnLoad = boolValue;
                 if (TryGetString(values, "InstalledPath", out text)) settings.InstalledPath = text ?? string.Empty;
             }
             catch
@@ -49,8 +47,6 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 var lines = new List<string>();
                 Add(lines, "PromptInstallOnLoad", settings.PromptInstallOnLoad);
-                Add(lines, "PromptSidebarOnLoad", settings.PromptSidebarOnLoad);
-                Add(lines, "AutoShowSidebarOnLoad", settings.AutoShowSidebarOnLoad);
                 Add(lines, "InstalledPath", settings.InstalledPath ?? string.Empty);
 
                 File.WriteAllLines(path, lines.ToArray(), new UTF8Encoding(true));

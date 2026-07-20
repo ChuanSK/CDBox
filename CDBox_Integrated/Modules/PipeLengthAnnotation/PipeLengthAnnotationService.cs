@@ -20,7 +20,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
     public static class PipeLengthAnnotationService
     {
         private const double DuplicateTolerance = 0.001;
-        private const string AnnotationSourceXrecordName = "CDBoxAnnotationSource";
 
         public static PipeLengthAnnotationResult SelectCalculateAndAnnotate(Document doc, PipeLengthAnnotationOptions options)
         {
@@ -76,7 +75,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return CalculateAndAnnotate(doc, pipeId, leaderStartPoint, jig.AnnotationPoint, options);
         }
 
-        private static bool TryFindPolylineAtPoint(Document doc, Point3d pickedPoint, out ObjectId pipeId, out Point3d leaderStartPoint, out string errorMessage)
+        internal static bool TryFindPolylineAtPoint(Document doc, Point3d pickedPoint, out ObjectId pipeId, out Point3d leaderStartPoint, out string errorMessage)
         {
             pipeId = ObjectId.Null;
             leaderStartPoint = pickedPoint;
@@ -112,6 +111,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         catch { continue; }
 
                         if (!IsSupportedPolylineCurve(curve)) continue;
+                        string annotationId;
+                        string annotationPart;
+                        if (PipeLengthAnnotationObjectService.TryGetAnnotationPart(
+                            curve, out annotationId, out annotationPart)) continue;
 
                         Point3d closestPoint;
                         try { closestPoint = curve.GetClosestPointTo(pickedPoint, false); }
@@ -137,7 +140,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             if (bestId.IsNull || bestDistance > tolerance)
             {
-                errorMessage = "未在点取位置附近找到管线多段线；需直接点取目标管线。";
+                errorMessage = "点取位置未直接命中管线多段线，请重新点取目标管线。";
                 return false;
             }
 
@@ -228,6 +231,34 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
         }
 
+        internal static bool TryBuildBindingContent(Document doc, ObjectId pipeId,
+            out PipeLengthAnnotationBindingContent content, out string errorMessage)
+        {
+            content = null;
+            errorMessage = string.Empty;
+            PipeLengthAnnotationOptions options = NormalizeOptions(PipeLengthAnnotationSettingsStore.Load());
+            PipeLengthAnnotationResult result;
+            if (!TryBuildPreviewSource(doc, pipeId, options, out result, out errorMessage)) return false;
+
+            string topText = BuildAnnotationText(options, result);
+            string rawLengthText = FormatNumber(result.Length, options.DecimalPlaces);
+            string systemLengthText = topText.IndexOf(rawLengthText + "m", StringComparison.OrdinalIgnoreCase) >= 0
+                ? rawLengthText + "m"
+                : rawLengthText;
+            int systemIndex = topText.LastIndexOf(systemLengthText, StringComparison.OrdinalIgnoreCase);
+            content = new PipeLengthAnnotationBindingContent
+            {
+                TopText = topText,
+                UserText = systemIndex < 0
+                    ? topText
+                    : topText.Remove(systemIndex, systemLengthText.Length).TrimEnd(),
+                SystemLengthText = systemLengthText,
+                BottomText = BuildBottomAnnotationText(options, result),
+                IsQuantityPipe = IsQuantityPipeResult(result)
+            };
+            return true;
+        }
+
         public static PipeLengthAnnotationResult CalculateAndAnnotate(Document doc, ObjectId pipeId, Point3d leaderStartPoint, Point3d annotationPoint, PipeLengthAnnotationOptions options)
         {
             if (doc == null) throw new ArgumentNullException("doc");
@@ -236,6 +267,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             var result = new PipeLengthAnnotationResult();
             result.PipeObjectId = pipeId;
             result.AnnotationPoint = annotationPoint;
+            result.BindingPoint = leaderStartPoint;
 
             QuantityPipeSelectionInfo quantityInfo = TryReadQuantityInfo(doc, pipeId);
 
@@ -269,6 +301,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 EnsureAutoAnnotationLayerMetadata(db, tr, result.AnnotationLayerName, result, options);
 
                 string text = BuildAnnotationText(options, result);
+                string rawLengthText = FormatNumber(result.Length, options.DecimalPlaces);
+                string systemLengthText = text.IndexOf(rawLengthText + "m", StringComparison.OrdinalIgnoreCase) >= 0
+                    ? rawLengthText + "m"
+                    : rawLengthText;
+                int systemIndex = text.LastIndexOf(systemLengthText, StringComparison.OrdinalIgnoreCase);
+                result.SystemLengthText = systemLengthText;
+                result.UserText = systemIndex < 0
+                    ? text
+                    : text.Remove(systemIndex, systemLengthText.Length).TrimEnd();
                 string bottomText = BuildBottomAnnotationText(options, result);
                 AttachmentPoint attachment = GetTextAttachment(annotationPoint, leaderStartPoint);
                 ObjectId finalTextStyleId = GetExistingTextStyleId(db, tr, options.AnnotationFontName);
@@ -277,23 +318,23 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
                 ObjectId textId = DrawAnnotationDbText(db, tr, initialLayout.TopTextPoint, text, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
                 result.AnnotationObjectId = textId;
-                WriteAnnotationSourceData(tr, textId, result);
 
                 ObjectId bottomTextId = ObjectId.Null;
                 if (!string.IsNullOrWhiteSpace(bottomText) && !textId.IsNull)
                 {
                     bottomTextId = DrawAnnotationDbText(db, tr, initialLayout.BottomTextPoint, bottomText, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
                     result.BottomAnnotationObjectId = bottomTextId;
-                    WriteAnnotationSourceData(tr, bottomTextId, result);
                 }
 
                 // 为保证“预览即实际”，正式落图使用与 Jig 预览完全相同的布局计算结果。
                 // 之前落图后再次按 GeometricExtents 重排，会导致部分文字样式下预览和实际成图位置明显不一致。
                 if (options.DrawLeader && !textId.IsNull)
                 {
-                    result.LeaderObjectId = DrawLeaderByUnderline(db, tr, leaderStartPoint, initialLayout.UnderlineStart, initialLayout.UnderlineEnd, result.AnnotationLayerName, attachment);
-                    WriteAnnotationSourceData(tr, result.LeaderObjectId, result);
+                    result.LeaderObjectId = DrawLeaderByUnderline(db, tr, leaderStartPoint, initialLayout.UnderlineStart,
+                        initialLayout.UnderlineEnd, result.AnnotationLayerName, attachment);
                 }
+
+                PipeLengthAnnotationObjectService.BindNewAnnotation(db, tr, pipeId, result);
 
                 tr.Commit();
             }
@@ -301,6 +342,47 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             result.Success = true;
             result.Message = "标注已生成。";
             return result;
+        }
+
+        public static bool RepositionExistingAnnotation(Document doc, ObjectId annotationObjectId)
+        {
+            if (doc == null || annotationObjectId.IsNull) return false;
+            PipeLengthAnnotationEditModel model = PipeLengthAnnotationObjectService.LoadEditModel(doc, annotationObjectId);
+            if (model == null || !model.HasBindingPoint)
+            {
+                doc.Editor.WriteMessage("\n[CDBox 标注调整] 标注缺少有效绑定点。 ");
+                return false;
+            }
+
+            ObjectId textStyleId = ResolveTextStyleId(doc, model.TextStyleName);
+            TextLayoutMetrics metrics = BuildTextLayoutMetrics(doc, model.TopText, model.BottomText,
+                model.TextHeight, textStyleId);
+            var jig = new PipeLengthAnnotationPreviewJig(doc.Database, model.BindingPoint, model.TopText,
+                model.BottomText, model.TextHeight, textStyleId, metrics);
+            PromptResult drag;
+            bool originalsHidden = PipeLengthAnnotationObjectService.SetAnnotationVisibility(
+                doc, model.AnnotationId, false);
+            try
+            {
+                drag = doc.Editor.Drag(jig);
+            }
+            finally
+            {
+                if (originalsHidden)
+                {
+                    PipeLengthAnnotationObjectService.SetAnnotationVisibility(doc, model.AnnotationId, true);
+                }
+            }
+            if (drag.Status != PromptStatus.OK) return false;
+
+            AttachmentPoint attachment = GetTextAttachment(jig.AnnotationPoint, model.BindingPoint);
+            PreviewLayout layout = BuildPreviewLayout(model.TopText, model.BottomText, model.TextHeight,
+                jig.AnnotationPoint, attachment, metrics);
+            Point3d leaderJoin = IsRightAttachment(attachment) ? layout.UnderlineEnd : layout.UnderlineStart;
+            Point3d farEnd = IsRightAttachment(attachment) ? layout.UnderlineStart : layout.UnderlineEnd;
+            PipeLengthAnnotationObjectService.ApplyExistingPlacement(doc, model.AnnotationId,
+                layout.TopTextPoint, layout.BottomTextPoint, leaderJoin, farEnd, annotationObjectId);
+            return true;
         }
 
         private static double GetCurveLength(Curve curve)
@@ -556,45 +638,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
         }
 
-        private static void WriteAnnotationSourceData(Transaction tr, ObjectId objectId, PipeLengthAnnotationResult result)
-        {
-            if (tr == null || objectId.IsNull || result == null) return;
-
-            try
-            {
-                Entity entity = tr.GetObject(objectId, OpenMode.ForWrite, false) as Entity;
-                if (entity == null) return;
-
-                if (entity.ExtensionDictionary.IsNull) entity.CreateExtensionDictionary();
-                DBDictionary dict = (DBDictionary)tr.GetObject(entity.ExtensionDictionary, OpenMode.ForWrite);
-
-                Xrecord record = null;
-                if (dict.Contains(AnnotationSourceXrecordName))
-                {
-                    record = tr.GetObject(dict.GetAt(AnnotationSourceXrecordName), OpenMode.ForWrite, false) as Xrecord;
-                }
-                else
-                {
-                    record = new Xrecord();
-                    dict.SetAt(AnnotationSourceXrecordName, record);
-                    tr.AddNewlyCreatedDBObject(record, true);
-                }
-
-                if (record != null)
-                {
-                    record.Data = new ResultBuffer(
-                        new TypedValue((int)DxfCode.Text, "AnnotationType=管线长度注记"),
-                        new TypedValue((int)DxfCode.Text, "SourceLayer=" + (result.PipeLayerName ?? string.Empty)),
-                        new TypedValue((int)DxfCode.Text, "SourceParent=" + (result.PipeParentGroup ?? string.Empty)),
-                        new TypedValue((int)DxfCode.Text, "SourceClass=" + (result.PipeParentClass ?? string.Empty)),
-                        new TypedValue((int)DxfCode.Text, "SourceTags=" + (result.PipeTagText ?? string.Empty)));
-                }
-            }
-            catch
-            {
-            }
-        }
-
         private static string BuildAnnotationText(PipeLengthAnnotationOptions options, PipeLengthAnnotationResult result)
         {
             string lengthText = FormatNumber(result.Length, options.DecimalPlaces);
@@ -602,6 +645,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             string parentGroup = string.IsNullOrWhiteSpace(result.PipeParentGroup) ? string.Empty : result.PipeParentGroup;
             string parentClass = string.IsNullOrWhiteSpace(result.PipeParentClass) ? string.Empty : result.PipeParentClass;
             string tagText = string.IsNullOrWhiteSpace(result.PipeTagText) ? string.Empty : result.PipeTagText;
+
+            if (!IsQuantityPipeResult(result))
+            {
+                return (string.IsNullOrWhiteSpace(layerName) ? "未指定图层" : layerName)
+                    + "：" + lengthText + "m";
+            }
 
             return options.AnnotationTemplate
                 .Replace("{父属性}", parentGroup)
@@ -621,7 +670,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private static string BuildBottomAnnotationText(PipeLengthAnnotationOptions options, PipeLengthAnnotationResult result)
         {
-            if (options == null || result == null || !ShouldDrawBottomAnnotation(options, result)) return string.Empty;
+            if (options == null || result == null || !IsQuantityPipeResult(result)
+                || !ShouldDrawBottomAnnotation(options, result)) return string.Empty;
 
             string template = string.IsNullOrWhiteSpace(options.BottomAnnotationTemplate)
                 ? PipeLengthAnnotationOptions.Default.BottomAnnotationTemplate
@@ -659,6 +709,13 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 .Replace("{Height}", heightText)
                 .Replace("{深}", depthText)
                 .Replace("{Depth}", depthText);
+        }
+
+        private static bool IsQuantityPipeResult(PipeLengthAnnotationResult result)
+        {
+            if (result == null || !result.HasQuantityAttributes) return false;
+            return QuantityPipeAttributes.IsMainPipeKind(result.QuantityObjectKind)
+                || QuantityPipeAttributes.IsBranchKind(result.QuantityObjectKind);
         }
 
         private static string FormatNumber(double value, int decimalPlaces)
@@ -753,18 +810,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
 
-        private static ObjectId DrawLeaderByUnderline(Database db, Transaction tr, Point3d leaderStartPoint, Point3d underlineStart, Point3d underlineEnd, string layerName, AttachmentPoint attachment)
+        private static ObjectId DrawLeaderByUnderline(Database db, Transaction tr, Point3d leaderStartPoint,
+            Point3d underlineStart, Point3d underlineEnd, string layerName, AttachmentPoint attachment)
         {
             Point3d leaderJoin = IsRightAttachment(attachment) ? underlineEnd : underlineStart;
             Point3d farEnd = IsRightAttachment(attachment) ? underlineStart : underlineEnd;
-
-            var points = new System.Collections.Generic.List<Point3d>();
-            points.Add(leaderStartPoint);
+            var points = new List<Point3d> { leaderStartPoint };
             if (leaderStartPoint.DistanceTo(leaderJoin) > DuplicateTolerance) points.Add(leaderJoin);
             if (leaderJoin.DistanceTo(farEnd) > DuplicateTolerance) points.Add(farEnd);
-            if (points.Count < 2) return ObjectId.Null;
-
-            return CadDrawService.DrawPolyline(db, tr, points, layerName, 7);
+            return points.Count < 2 ? ObjectId.Null : CadDrawService.DrawPolyline(db, tr, points, layerName, 7);
         }
 
         private static bool TryArrangeFinalAnnotation(Transaction tr, ObjectId topTextObjectId, ObjectId bottomTextObjectId, Point3d annotationPoint, double textHeight, AttachmentPoint attachment, out Point3d underlineStart, out Point3d underlineEnd)

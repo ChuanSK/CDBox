@@ -30,8 +30,6 @@ namespace TCPipeAutoDraw.UI.Studio
                 bool animations;
                 if (bool.TryParse((string)root.Element("AnimationsEnabled"), out animations)) settings.AnimationsEnabled = animations;
 
-                bool sidebarCollapsed;
-                if (bool.TryParse((string)root.Element("SidebarCollapsedDefault"), out sidebarCollapsed)) settings.SidebarCollapsedDefault = sidebarCollapsed;
 
                 settings.Normalize();
             }
@@ -57,7 +55,6 @@ namespace TCPipeAutoDraw.UI.Studio
                     new XAttribute("Version", "1"),
                     new XElement("Theme", settings.Theme),
                     new XElement("AnimationsEnabled", settings.AnimationsEnabled),
-                    new XElement("SidebarCollapsedDefault", settings.SidebarCollapsedDefault),
                     new XElement("UpdateChannel", settings.UpdateChannel),
                     new XElement("UpdateSourceUrl", settings.UpdateSourceUrl));
 

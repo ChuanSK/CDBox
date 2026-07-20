@@ -129,7 +129,7 @@ namespace TCPipeAutoDraw.UI
             catch (System.Exception ex)
             {
                 if (_lblStatus != null) _lblStatus.Text = module.Name + " 运行失败：" + ex.Message;
-                MessageBox.Show(ex.Message, module.Name + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, module.Name + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {

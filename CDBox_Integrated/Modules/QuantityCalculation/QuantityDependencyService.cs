@@ -42,14 +42,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             bool nodeMode = QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind);
             bool branchMode = QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind);
 
-            if (branchMode) ApplyBranchRules(attrs, layers, branchDefaults, changed);
-
-            if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
+            if (attrs.IsSpecialObject)
+            {
+                if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind)) DistributeLayers(layers, attrs.AverageDepth, false);
+            }
+            else if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
             {
                 NormalizeMainPipe(attrs, layers, old, startWell, endWell, changed);
             }
             else if (branchMode)
             {
+                ApplyBranchRules(attrs, layers, branchDefaults, changed);
                 NormalizeBranch(attrs, layers);
             }
             else if (nodeMode)
@@ -58,7 +61,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             SyncStructure(attrs, layers, nodeMode);
-            if (!nodeMode && (attrs.PipeOuterDiameter <= 0 || string.Equals(changed, "Diameter", StringComparison.OrdinalIgnoreCase)))
+            if (!attrs.IsSpecialObject && !nodeMode && (attrs.PipeOuterDiameter <= 0 || string.Equals(changed, "Diameter", StringComparison.OrdinalIgnoreCase)))
             {
                 attrs.PipeOuterDiameter = ParseDiameterMetres(attrs.Diameter);
             }
@@ -69,7 +72,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Layers = layers,
                 RealExcavationDepth = nodeMode ? attrs.WellDepth + SumBelowWellLayers(layers) : 0.0
             };
-            Validate(result, nodeMode, branchMode);
+            Validate(result, nodeMode, branchMode, attrs.IsSpecialObject);
             return result;
         }
 
@@ -83,30 +86,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             bool manualDepthEdit = EqualsAny(changed, "StartDepth", "EndDepth");
             bool structureEdit = EqualsAny(changed, "BackfillStructure", "StructureLayers", "AutoStructure");
-            double oldCushion = GetPipeCushion(previous, null);
             double cushion = GetPipeCushion(attrs, layers);
+            bool refreshEndpointDepths = !structureEdit && EqualsAny(changed, "Load", "Refresh", "ApplyDefaults", "BatchWrite", "ConnectedWell", "StartNode", "EndNode", "SwapEndpoints");
 
-            if (!manualDepthEdit)
+            if (!manualDepthEdit && refreshEndpointDepths)
             {
                 if (startWell != null) attrs.StartDepth = CalculateEndpointDepth(startWell, cushion, attrs.StartDepth);
-                else if (structureEdit && attrs.StartDepth > 0) attrs.StartDepth += cushion - oldCushion;
                 if (endWell != null) attrs.EndDepth = CalculateEndpointDepth(endWell, cushion, attrs.EndDepth);
-                else if (structureEdit && attrs.EndDepth > 0) attrs.EndDepth += cushion - oldCushion;
             }
 
             RecalculateAverageDepth(attrs);
             DistributeLayers(layers, attrs.AverageDepth, false);
-
-            double redistributedCushion = GetPipeCushion(attrs, layers);
-            if (!manualDepthEdit && Math.Abs(redistributedCushion - cushion) > 0.0000001)
-            {
-                if (startWell != null) attrs.StartDepth = CalculateEndpointDepth(startWell, redistributedCushion, attrs.StartDepth);
-                else if (structureEdit && attrs.StartDepth > 0) attrs.StartDepth += redistributedCushion - cushion;
-                if (endWell != null) attrs.EndDepth = CalculateEndpointDepth(endWell, redistributedCushion, attrs.EndDepth);
-                else if (structureEdit && attrs.EndDepth > 0) attrs.EndDepth += redistributedCushion - cushion;
-                RecalculateAverageDepth(attrs);
-                DistributeLayers(layers, attrs.AverageDepth, false);
-            }
         }
 
         private static void NormalizeBranch(QuantityPipeAttributes attrs, List<QuantityStructureLayer> layers)
@@ -212,18 +202,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return total;
         }
 
-        private static void Validate(QuantityDependencyResult result, bool nodeMode, bool branchMode)
+        private static void Validate(QuantityDependencyResult result, bool nodeMode, bool branchMode, bool specialObject)
         {
             QuantityPipeAttributes attrs = result.Attributes;
             foreach (QuantityStructureLayer layer in result.Layers)
             {
                 if (layer == null) continue;
                 if (layer.Height < 0) result.Warnings.Add((layer.Name ?? "结构层") + "计算结果为负值，请检查锁定层与总深度。");
-                if (!nodeMode && layer.IsPipeLayer && attrs.PipeOuterDiameter > 0 && layer.Height <= attrs.PipeOuterDiameter)
-                    result.Warnings.Add((layer.Name ?? "管线层") + "高度不大于管道外径。");
+                if (!nodeMode && layer.IsPipeLayer && attrs.PipeOuterDiameter > 0 && layer.Height < attrs.PipeOuterDiameter)
+                    result.Warnings.Add((layer.Name ?? "管线层") + "厚度小于管道外径。");
             }
-            if (nodeMode && attrs.WellDepth <= 0) result.Warnings.Add("井深无效。");
-            if (!nodeMode && !branchMode)
+            if (!specialObject && nodeMode && attrs.WellDepth <= 0) result.Warnings.Add("井深无效。");
+            if (!specialObject && !nodeMode && !branchMode)
             {
                 if (string.IsNullOrWhiteSpace(attrs.StartNode)) result.Warnings.Add("缺少起点井。");
                 if (string.IsNullOrWhiteSpace(attrs.EndNode)) result.Warnings.Add("缺少终点井。");

@@ -18,7 +18,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (options == null) throw new ArgumentNullException("options");
 
             SectionLayoutCalculator.Normalize(options);
-            if (!HasDrawableLayer(options))
+            SectionDrawingOptions drawingOptions = SectionDrawingScaleService.CreateScaledOptions(options);
+            if (!HasDrawableLayer(drawingOptions))
             {
                 return new SectionDrawingResult
                 {
@@ -28,8 +29,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
             Editor ed = doc.Editor;
 
-            ObjectId previewTextStyleId = ResolveTextStyleId(doc, options.TextStyleName);
-            var jig = new SectionPlacementJig(options, previewTextStyleId);
+            ObjectId previewTextStyleId = ResolveTextStyleId(doc, drawingOptions.TextStyleName);
+            var jig = new SectionPlacementJig(drawingOptions, previewTextStyleId);
             PromptResult prompt = ed.Drag(jig);
             if (prompt.Status != PromptStatus.OK)
             {
@@ -40,7 +41,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 };
             }
 
-            return Draw(doc, options, jig.Position);
+            return DrawScaled(doc, drawingOptions, jig.Position, null);
         }
 
         private static bool HasDrawableLayer(SectionDrawingOptions options)
@@ -54,6 +55,19 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         }
 
         public static SectionDrawingResult Draw(Document doc, SectionDrawingOptions options, Point3d insertPoint)
+        {
+            return Draw(doc, options, insertPoint, null);
+        }
+
+        public static SectionDrawingResult Draw(Document doc, SectionDrawingOptions options, Point3d insertPoint, IEnumerable<ObjectId> sourceIds)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            if (options == null) throw new ArgumentNullException("options");
+            SectionLayoutCalculator.Normalize(options);
+            return DrawScaled(doc, SectionDrawingScaleService.CreateScaledOptions(options), insertPoint, sourceIds);
+        }
+
+        private static SectionDrawingResult DrawScaled(Document doc, SectionDrawingOptions options, Point3d insertPoint, IEnumerable<ObjectId> sourceIds)
         {
             if (doc == null) throw new ArgumentNullException("doc");
             if (options == null) throw new ArgumentNullException("options");
@@ -70,6 +84,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
 
             var result = new SectionDrawingResult { Success = true };
+            var createdIds = new List<ObjectId>();
             Database db = doc.Database;
 
             using (DocumentLock docLock = doc.LockDocument())
@@ -84,16 +99,16 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 foreach (SectionLayerLayout layerLayout in layout.Layers)
                 {
                     ObjectId bodyRectId = DrawRectangle(db, tr, layerLayout.BodyRect, insertPoint, options.BorderLayerName, 7);
-                    if (!bodyRectId.IsNull) result.EntityCount++;
+                    TrackCreated(bodyRectId, createdIds, result);
                     bodyRectIds[layerLayout.SourceIndex] = bodyRectId;
 
                     ObjectId labelRectId = DrawRectangle(db, tr, layerLayout.LabelRect, insertPoint, options.BorderLayerName, 7);
-                    if (!labelRectId.IsNull) result.EntityCount++;
+                    TrackCreated(labelRectId, createdIds, result);
 
                     if (!string.IsNullOrWhiteSpace(layerLayout.Layer.LeftLabel))
                     {
                         ObjectId textId = DrawSingleLineTextInRect(db, tr, layerLayout.LabelRect, insertPoint, layerLayout.Layer.LeftLabel, GetLeftLabelTextHeight(options.TextHeight), options.TextLayerName, 7, options.TextStyleName);
-                        if (!textId.IsNull) result.EntityCount++;
+                        TrackCreated(textId, createdIds, result);
                     }
                 }
 
@@ -104,7 +119,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     ObjectId circleId = CadDrawService.DrawCircle(db, tr, center, pipeLayout.Radius, options.BorderLayerName, 7);
                     if (!circleId.IsNull)
                     {
-                        result.EntityCount++;
+                        TrackCreated(circleId, createdIds, result);
                         List<ObjectId> ids;
                         if (!pipeBoundaryIdsByLayer.TryGetValue(pipeLayout.HostLayerIndex, out ids))
                         {
@@ -119,7 +134,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     {
                         double pipeTextHeight = GetAdaptivePipeTextHeight(pipeText, pipeLayout.Radius);
                         ObjectId textId = DrawSingleLineCenteredText(db, tr, center, pipeText.Trim(), pipeTextHeight, options.TextLayerName, 7, options.TextStyleName);
-                        if (!textId.IsNull) result.EntityCount++;
+                        TrackCreated(textId, createdIds, result);
                     }
                 }
 
@@ -130,7 +145,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     List<ObjectId> innerLoops;
                     pipeBoundaryIdsByLayer.TryGetValue(layerLayout.SourceIndex, out innerLoops);
                     ObjectId hatchId = DrawHatch(db, tr, bodyRectId, innerLoops, layerLayout.Layer.HatchPatternName, layerLayout.Layer.HatchScale, layerLayout.Layer.HatchAngle, options.HatchLayerName);
-                    if (!hatchId.IsNull) result.EntityCount++;
+                    if (!hatchId.IsNull) TrackCreated(hatchId, createdIds, result);
                     else if (!IsEmptyHatch(layerLayout.Layer.HatchPatternName)) result.HatchFailureCount++;
                 }
 
@@ -143,8 +158,9 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                         0.0,
                         options.DimensionLayerName,
                         options.DimensionStyleName,
-                        options.TextHeight * DimensionTextHeightFactor);
-                    if (!dimId.IsNull) result.EntityCount++;
+                        options.TextHeight * DimensionTextHeightFactor,
+                        options.DrawingScale);
+                    TrackCreated(dimId, createdIds, result);
                 }
 
                 if (options.DrawBottomDimension)
@@ -156,8 +172,9 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                         0.0,
                         options.DimensionLayerName,
                         options.DimensionStyleName,
-                        options.TextHeight * DimensionTextHeightFactor);
-                    if (!dimId.IsNull) result.EntityCount++;
+                        options.TextHeight * DimensionTextHeightFactor,
+                        options.DrawingScale);
+                    TrackCreated(dimId, createdIds, result);
                 }
 
                 if (options.DrawRightDimensions)
@@ -171,8 +188,9 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                             Math.PI / 2.0,
                             options.DimensionLayerName,
                             options.DimensionStyleName,
-                            options.TextHeight * DimensionTextHeightFactor);
-                        if (!dimId.IsNull) result.EntityCount++;
+                            options.TextHeight * DimensionTextHeightFactor,
+                            options.DrawingScale);
+                        TrackCreated(dimId, createdIds, result);
                     }
                 }
 
@@ -186,17 +204,19 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                         Math.PI / 2.0,
                         options.DimensionLayerName,
                         options.DimensionStyleName,
-                        options.TextHeight * DimensionTextHeightFactor);
-                    if (!dimId.IsNull) result.EntityCount++;
+                        options.TextHeight * DimensionTextHeightFactor,
+                        options.DrawingScale);
+                    TrackCreated(dimId, createdIds, result);
                 }
 
                 if (options.DrawTitle && !string.IsNullOrWhiteSpace(options.SectionTitle))
                 {
                     double baseOffset = options.DrawBottomDimension ? options.BottomDimensionOffset : 0.0;
                     Point3d titleBasePoint = new Point3d(insertPoint.X + options.Width / 2.0, insertPoint.Y - baseOffset - options.TitleOffset, insertPoint.Z);
-                    result.EntityCount += DrawTitleLines(db, tr, titleBasePoint, options);
+                    DrawTitleLines(db, tr, titleBasePoint, options, createdIds, result);
                 }
 
+                SectionDrawingBindingService.Bind(tr, sourceIds, createdIds);
                 tr.Commit();
             }
 
@@ -204,6 +224,13 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 ? "断面图已生成，部分填充失败。"
                 : "断面图已生成。";
             return result;
+        }
+
+        private static void TrackCreated(ObjectId id, IList<ObjectId> createdIds, SectionDrawingResult result)
+        {
+            if (id.IsNull) return;
+            if (createdIds != null) createdIds.Add(id);
+            if (result != null) result.EntityCount++;
         }
 
         private static ObjectId DrawRectangle(Database db, Transaction tr, Rect2d rect, Point3d origin, string layerName, short colorIndex)
@@ -324,13 +351,12 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             return Math.Max(0.01, (baseTextHeight <= 0 ? 0.08 : baseTextHeight) * 1.4375);
         }
 
-        private static int DrawTitleLines(Database db, Transaction tr, Point3d topCenterPoint, SectionDrawingOptions options)
+        private static void DrawTitleLines(Database db, Transaction tr, Point3d topCenterPoint, SectionDrawingOptions options, IList<ObjectId> createdIds, SectionDrawingResult result)
         {
-            if (options == null || string.IsNullOrWhiteSpace(options.SectionTitle)) return 0;
+            if (options == null || string.IsNullOrWhiteSpace(options.SectionTitle)) return;
             string[] lines = options.SectionTitle.Replace("\r\n", "\n").Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.None);
             double height = options.TextHeight * 1.25;
             double lineGap = Math.Max(height * 1.35, 0.04);
-            int count = 0;
             int visibleIndex = 0;
             for (int i = 0; i < lines.Length; i++)
             {
@@ -338,10 +364,9 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 Point3d p = new Point3d(topCenterPoint.X, topCenterPoint.Y - visibleIndex * lineGap, topCenterPoint.Z);
                 ObjectId id = DrawCenteredDbText(db, tr, p, line.Trim(), height, options.TextLayerName, 7, options.TextStyleName);
-                if (!id.IsNull) count++;
+                TrackCreated(id, createdIds, result);
                 visibleIndex++;
             }
-            return count;
         }
 
         private static ObjectId DrawSingleLineTextInRect(Database db, Transaction tr, Rect2d rect, Point3d origin, string text, double preferredHeight, string layerName, short colorIndex, string textStyleName)
@@ -529,7 +554,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
         }
 
-        private static ObjectId DrawRotatedDimension(Database db, Transaction tr, Point3d p1, Point3d p2, Point3d dimLinePoint, double rotation, string layerName, string dimStyleName, double dimTextHeight)
+        private static ObjectId DrawRotatedDimension(Database db, Transaction tr, Point3d p1, Point3d p2, Point3d dimLinePoint, double rotation, string layerName, string dimStyleName, double dimTextHeight, double drawingScale)
         {
             try
             {
@@ -543,6 +568,17 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 dim.Layer = layerName;
                 dim.DimensionStyle = dimStyleId;
                 if (dimTextHeight > 0.0) dim.Dimtxt = dimTextHeight;
+                double safeScale = drawingScale <= 0 ? 1.0 : drawingScale;
+                DimStyleTableRecord style = tr.GetObject(dimStyleId, OpenMode.ForRead, false) as DimStyleTableRecord;
+                double baseMeasurementFactor = style == null || Math.Abs(style.Dimlfac) <= 0.000000001 ? 1.0 : style.Dimlfac;
+                dim.Dimlfac = baseMeasurementFactor / safeScale;
+                if (style != null && Math.Abs(safeScale - 1.0) > 0.000000001)
+                {
+                    dim.Dimasz = style.Dimasz * safeScale;
+                    dim.Dimexe = style.Dimexe * safeScale;
+                    dim.Dimexo = style.Dimexo * safeScale;
+                    dim.Dimgap = style.Dimgap * safeScale;
+                }
 
                 ObjectId id = btr.AppendEntity(dim);
                 tr.AddNewlyCreatedDBObject(dim, true);

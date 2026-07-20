@@ -569,7 +569,7 @@ namespace TCPipeAutoDraw.Core.Startup
             string upgradeCode = "{E8BB42A0-7694-4C58-98D6-13C2D2814A1E}";
             if (string.IsNullOrWhiteSpace(assemblyFileName)) assemblyFileName = GetMainAssemblyFileName();
 
-            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDCBL", "CDBOXHIDE", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "SX", "SXQC", "SXMRB", "GCL" };
+            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD" };
             var xml = new StringBuilder();
             xml.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
             xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"1.0.0\" Name=\"CDBox\" Description=\"CDBox 管线测绘辅助插件\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");

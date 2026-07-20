@@ -51,6 +51,7 @@ namespace TCPipeAutoDraw.UI.Studio
             if (result.ActionToRun != null)
             {
                 CDBoxStudioAction inner = result.ActionToRun;
+                bool restoreAfterRun = inner.RestoreStudioAfterRun;
                 result.ActionToRun = new CDBoxStudioAction(
                     inner.Id,
                     inner.Title,
@@ -60,15 +61,29 @@ namespace TCPipeAutoDraw.UI.Studio
                     inner.BadgeText,
                     inner.Kind,
                     inner.Enabled,
-                    true,
+                    restoreAfterRun,
                     delegate
                     {
                         CDBoxStudioWebPageForm window = _current;
                         if (window != null && !window.IsDisposed) window.Hide();
-                        try { inner.Run(); }
+                        try
+                        {
+                            inner.Run();
+                            if (!restoreAfterRun && window != null && !window.IsDisposed) window.Close();
+                        }
+                        catch
+                        {
+                            if (!restoreAfterRun && window != null && !window.IsDisposed)
+                            {
+                                window.Show();
+                                window.WindowState = FormWindowState.Normal;
+                                window.Activate();
+                            }
+                            throw;
+                        }
                         finally
                         {
-                            if (window != null && !window.IsDisposed)
+                            if (restoreAfterRun && window != null && !window.IsDisposed)
                             {
                                 window.Show();
                                 window.WindowState = FormWindowState.Normal;

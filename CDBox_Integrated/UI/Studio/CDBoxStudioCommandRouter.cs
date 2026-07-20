@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
+using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.UI.Studio
@@ -12,21 +13,19 @@ namespace TCPipeAutoDraw.UI.Studio
     internal sealed class CDBoxStudioCommandRouter : IDisposable
     {
         private readonly Dictionary<string, CDBoxStudioAction> _actionsById;
-        private readonly CDBoxStudioState _state;
         private readonly CDBoxStudioSettings _settings;
         private readonly Action<string> _scriptSink;
         private readonly CDBoxStudioUpdateRoutes _updateRoutes;
 
-        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioState state, CDBoxStudioSettings settings)
-            : this(actionsById, state, settings, null)
+        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioSettings settings)
+            : this(actionsById, settings, null)
         {
         }
 
-        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioState state, CDBoxStudioSettings settings, Action<string> scriptSink)
+        public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioSettings settings, Action<string> scriptSink)
         {
             if (actionsById == null) throw new ArgumentNullException("actionsById");
             _actionsById = actionsById;
-            _state = state ?? new CDBoxStudioState();
             _settings = settings ?? new CDBoxStudioSettings();
             _scriptSink = scriptSink;
             CDBoxStudioQuantityDashboardRoutes.Configure(_scriptSink);
@@ -72,17 +71,17 @@ namespace TCPipeAutoDraw.UI.Studio
                 case "run":
                     return RouteRun(request.Argument);
 
-                case "favorite":
-                    return RouteFavorite(request.Argument);
-
-                case "removefavorite":
-                    return RouteRemoveFavorite(request.Argument);
-
-                case "clearrecent":
-                    return RouteClearRecent();
-
                 case "settings":
                     return RouteSettings(request.Argument);
+
+                case "installplugin":
+                    return RouteInstallPlugin();
+
+                case "localupdateplugin":
+                    return RouteLocalUpdatePlugin();
+
+                case "uninstallplugin":
+                    return RouteUninstallPlugin();
 
                 case "saverecognitionrules":
                     return RouteSaveRecognitionRules(request.Argument);
@@ -119,6 +118,12 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "openannotationsettingswindow":
                     return RouteOpenAnnotationSettingsWindow(request.Argument);
+
+                case "opensettingswindow":
+                    CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+                    result.ToastMessage = "已打开 CDBox设置";
+                    result.ToastKind = "success";
+                    return result;
 
                 case "annotationsettingsopened":
                     return RouteAnnotationSettingsOpened(request.Argument);
@@ -157,64 +162,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 return result;
             }
 
-            _state.MarkRecent(action.Id);
-            SaveState();
             CDBoxStudioLogger.Info("运行入口：" + action.Title + " [" + action.Id + "]");
             result.ActionToRun = action;
             result.RefreshPage = true;
             return result;
-        }
-
-        private CDBoxStudioRouteResult RouteFavorite(string id)
-        {
-            var result = new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = "success" };
-
-            CDBoxStudioAction action;
-            if (string.IsNullOrWhiteSpace(id) || !_actionsById.TryGetValue(id.Trim(), out action) || action == null)
-            {
-                result.ToastMessage = "未找到该功能入口";
-                result.ToastKind = "warning";
-                return result;
-            }
-
-            bool added = _state.ToggleFavorite(action.Id);
-            SaveState();
-            CDBoxStudioLogger.Info((added ? "收藏入口：" : "取消收藏入口：") + action.Title + " [" + action.Id + "]");
-            result.ToastMessage = added ? "已收藏：" + action.Title : "已取消收藏：" + action.Title;
-            return result;
-        }
-
-        private CDBoxStudioRouteResult RouteRemoveFavorite(string id)
-        {
-            var result = new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = "success" };
-
-            CDBoxStudioAction action;
-            if (string.IsNullOrWhiteSpace(id) || !_actionsById.TryGetValue(id.Trim(), out action) || action == null)
-            {
-                result.ToastMessage = "未找到该收藏入口";
-                result.ToastKind = "warning";
-                return result;
-            }
-
-            bool removed = _state.RemoveFavorite(action.Id);
-            SaveState();
-            CDBoxStudioLogger.Info("收藏管理移除：" + action.Title + " [" + action.Id + "]");
-            result.ToastMessage = removed ? "已从收藏移除：" + action.Title : "该功能不在收藏中";
-            return result;
-        }
-
-        private CDBoxStudioRouteResult RouteClearRecent()
-        {
-            _state.ClearRecent();
-            SaveState();
-            CDBoxStudioLogger.Info("已清空 Studio 最近使用记录。 ");
-            return new CDBoxStudioRouteResult
-            {
-                Handled = true,
-                RefreshPage = true,
-                ToastKind = "success",
-                ToastMessage = "最近使用记录已清空"
-            };
         }
 
         private CDBoxStudioRouteResult RouteSettings(string argument)
@@ -231,9 +182,11 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 ApplySettingsArgument(argument);
                 CDBoxStudioSettingsStore.Save(_settings);
+                CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
+                appSettings.PromptInstallOnLoad = ReadBooleanArgument(argument, "promptinstall", appSettings.PromptInstallOnLoad);
+                CDBoxAppSettingsStore.Save(appSettings);
                 CDBoxStudioLogger.Info("保存 Studio 设置：Theme=" + _settings.Theme
                     + ", AnimationsEnabled=" + _settings.AnimationsEnabled
-                    + ", SidebarCollapsedDefault=" + _settings.SidebarCollapsedDefault
                     + ", UpdateChannel=" + _settings.UpdateChannel
                     + ", UpdateSourceUrl=" + _settings.UpdateSourceUrl);
             }
@@ -266,9 +219,6 @@ namespace TCPipeAutoDraw.UI.Studio
                     case "animations":
                         _settings.AnimationsEnabled = IsTrue(value);
                         break;
-                    case "sidebarcollapsed":
-                        _settings.SidebarCollapsedDefault = IsTrue(value);
-                        break;
                     case "updatechannel":
                         _settings.UpdateChannel = value;
                         break;
@@ -300,6 +250,57 @@ namespace TCPipeAutoDraw.UI.Studio
                 || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ReadBooleanArgument(string argument, string targetKey, bool fallback)
+        {
+            if (string.IsNullOrWhiteSpace(argument)) return fallback;
+            foreach (string part in argument.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] kv = part.Split(new[] { '=' }, 2);
+                if (kv.Length == 0 || !string.Equals(kv[0].Trim(), targetKey, StringComparison.OrdinalIgnoreCase)) continue;
+                return kv.Length > 1 && IsTrue(DecodeArgumentValue(kv[1].Trim()));
+            }
+            return fallback;
+        }
+
+        private CDBoxStudioRouteResult RouteInstallPlugin()
+        {
+            CDBoxInstallResult install = CDBoxInstaller.InstallToCadDirectory();
+            CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
+            if (install.Success) app.InstalledPath = install.InstallRoot;
+            CDBoxAppSettingsStore.Save(app);
+            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = install.Success ? "success" : "error", ToastMessage = install.Message };
+        }
+
+        private CDBoxStudioRouteResult RouteLocalUpdatePlugin()
+        {
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
+                dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
+                dialog.CheckFileExists = true;
+                if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK)
+                    return new CDBoxStudioRouteResult { Handled = true };
+
+                CDBoxInstallResult update = CDBoxInstaller.ScheduleUpdateFromDll(dialog.FileName);
+                CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
+                if (update.Success) app.InstalledPath = update.InstallRoot;
+                CDBoxAppSettingsStore.Save(app);
+                return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = update.Success ? "success" : "error", ToastMessage = update.Message };
+            }
+        }
+
+        private CDBoxStudioRouteResult RouteUninstallPlugin()
+        {
+            DialogResult confirm = CDBoxPromptDialog.ShowYesNo(new AcadMainWindow(), "卸载 CDBox", "确定卸载 CDBox 自动加载并删除安装目录吗？", "卸载", "取消", out _);
+            if (confirm != DialogResult.Yes) return new CDBoxStudioRouteResult { Handled = true };
+
+            CDBoxInstallResult uninstall = CDBoxInstaller.Uninstall();
+            CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
+            app.InstalledPath = string.Empty;
+            CDBoxAppSettingsStore.Save(app);
+            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = uninstall.Success ? "success" : "warning", ToastMessage = uninstall.Message };
         }
 
 
@@ -517,7 +518,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 Preview 9 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 3.1.1 独立窗口失败。", ex);
             }
             return result;
         }
@@ -558,8 +559,6 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioAction action;
             if (_actionsById.TryGetValue(actionId, out action) && action != null)
             {
-                _state.MarkRecent(actionId);
-                SaveState();
             }
 
             CDBoxStudioLogger.Info("打开图层管理器 WebView2 页面。");
@@ -589,8 +588,6 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioAction action;
             if (_actionsById.TryGetValue(actionId, out action) && action != null)
             {
-                _state.MarkRecent(actionId);
-                SaveState();
             }
 
             CDBoxStudioLogger.Info("打开标注设置 WebView2 页面，模块：" + (section ?? "surface"));
@@ -617,10 +614,5 @@ namespace TCPipeAutoDraw.UI.Studio
             return result;
         }
 
-        private void SaveState()
-        {
-            _state.RemoveMissingActions(_actionsById.Keys.ToList());
-            CDBoxStudioStateStore.Save(_state);
-        }
     }
 }

@@ -14,7 +14,7 @@ namespace TCPipeAutoDraw.UI.Studio
     internal sealed class CDBoxStudioWebPageForm : Form
     {
         private const int NativeResizeGrip = 6;
-        private const int RoundRadius = 12;
+        private const int RoundRadius = 8;
         private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int HTCAPTION = 2;
         private const int HTLEFT = 10;
@@ -553,7 +553,7 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             return "<!doctype html><html><head><meta charset=\"utf-8\"><style>"
                 + "html,body{height:100%;margin:0;font-family:'Microsoft YaHei UI','Segoe UI',sans-serif;background:#f7f9fe;color:#162033;overflow:hidden}"
-                + ".wrap{height:100%;display:grid;place-items:center;padding:28px;box-sizing:border-box}.card{max-width:760px;background:#fff;border:1px solid #dce8f6;border-radius:18px;box-shadow:0 12px 28px rgba(30,41,59,.08);padding:22px}.k{color:#64748b;line-height:1.7}.detail{white-space:pre-wrap;word-break:break-word;background:#f8fbff;border:1px solid #e8eef8;border-radius:12px;padding:12px;color:#64748b}.danger{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:12px;padding:9px 13px;cursor:pointer;font-weight:700}"
+                + ".wrap{height:100%;display:grid;place-items:center;padding:28px;box-sizing:border-box}.card{max-width:760px;background:#fff;border:1px solid #dce8f6;border-radius:12px;box-shadow:0 12px 28px rgba(30,41,59,.08);padding:22px}.k{color:#64748b;line-height:1.7}.detail{white-space:pre-wrap;word-break:break-word;background:#f8fbff;border:1px solid #e8eef8;border-radius:9px;padding:12px;color:#64748b}.danger{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:9px;padding:9px 13px;cursor:pointer;font-weight:700}"
                 + "</style></head><body><div class=\"wrap\"><div class=\"card\"><h2>" + Html(title) + "</h2><p class=\"k\">" + Html(message) + "</p><pre class=\"detail\">" + Html(detail) + "</pre><button class=\"danger\" onclick=\"chrome&&chrome.webview&&chrome.webview.postMessage('studio|close|')\">关闭</button></div></div></body></html>";
         }
 

@@ -17,6 +17,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         public double Width { get; set; }
         public double TotalHeight { get; set; }
         public bool LockTotalHeight { get; set; }
+        public double DrawingScale { get; set; }
         public double TextHeight { get; set; }
         public string TextStyleName { get; set; }
         public string BorderLayerName { get; set; }
@@ -51,6 +52,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     Width = 1.00,
                     TotalHeight = 1.68,
                     LockTotalHeight = false,
+                    DrawingScale = 1.0,
                     TextHeight = 0.08,
                     TextStyleName = "宋体",
                     BorderLayerName = "0",

@@ -162,13 +162,14 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
                 SectionDrawingOptions options = group.BuildOptions(baseOptions);
                 SectionLayoutCalculator.Normalize(options);
-                SectionLayout layout = SectionLayoutCalculator.Calculate(options);
+                SectionDrawingOptions drawingOptions = SectionDrawingScaleService.CreateScaledOptions(options);
+                SectionLayout layout = SectionLayoutCalculator.Calculate(drawingOptions);
 
                 double tileWidth = Math.Max(0.20, layout.ExtentMaxX - layout.ExtentMinX);
                 double tileHeight = Math.Max(0.20, layout.ExtentMaxY - layout.ExtentMinY);
 
-                Point3d bodyOrigin = new Point3d(currentX + options.LeftLabelWidth, currentY, startPoint.Z);
-                SectionDrawingResult drawResult = SectionDrawingService.Draw(doc, options, bodyOrigin);
+                Point3d bodyOrigin = new Point3d(currentX + drawingOptions.LeftLabelWidth, currentY, startPoint.Z);
+                SectionDrawingResult drawResult = SectionDrawingService.Draw(doc, options, bodyOrigin, group.GetSourceIds());
                 if (drawResult != null && drawResult.Success)
                 {
                     successCount++;
@@ -486,7 +487,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 {
                     SectionLayerOptions layer = layers[i];
                     if (layer == null || !layer.DrawLayer) continue;
-                    parts.Add("L=" + NormalizeKeyText(layer.LeftLabel) + ":" + layer.Height.ToString("0.###", CultureInfo.InvariantCulture) + ":" + NormalizeKeyText(layer.HatchPatternName) + ":" + layer.HatchScale.ToString("0.###", CultureInfo.InvariantCulture));
+                    parts.Add("L=" + NormalizeKeyText(layer.LeftLabel) + ":" + layer.Height.ToString("0.########", CultureInfo.InvariantCulture) + ":" + NormalizeKeyText(layer.HatchPatternName) + ":" + layer.HatchScale.ToString("0.########", CultureInfo.InvariantCulture));
                     if (layer.Pipes != null)
                     {
                         for (int p = 0; p < layer.Pipes.Count; p++)
@@ -571,6 +572,15 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             public string Key;
             public BatchPipeSectionSource Template;
             public List<BatchPipeSectionSource> Sources = new List<BatchPipeSectionSource>();
+
+            public IEnumerable<ObjectId> GetSourceIds()
+            {
+                for (int i = 0; i < Sources.Count; i++)
+                {
+                    BatchPipeSectionSource source = Sources[i];
+                    if (source != null && source.Info != null && !source.Info.ObjectId.IsNull) yield return source.Info.ObjectId;
+                }
+            }
 
             public SectionDrawingOptions BuildOptions(SectionDrawingOptions baseOptions)
             {

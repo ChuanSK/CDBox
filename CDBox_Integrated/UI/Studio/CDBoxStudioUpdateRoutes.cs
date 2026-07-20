@@ -169,7 +169,6 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 settings.Theme = source.Theme;
                 settings.AnimationsEnabled = source.AnimationsEnabled;
-                settings.SidebarCollapsedDefault = source.SidebarCollapsedDefault;
                 settings.UpdateChannel = source.UpdateChannel;
                 settings.UpdateSourceUrl = source.UpdateSourceUrl;
             }

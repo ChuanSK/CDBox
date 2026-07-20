@@ -12,14 +12,12 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             Theme = ThemeLight;
             AnimationsEnabled = true;
-            SidebarCollapsedDefault = false;
             UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
             UpdateSourceUrl = CDBoxStudioUpdateService.DefaultUpdateSourceUrl;
         }
 
         public string Theme { get; set; }
         public bool AnimationsEnabled { get; set; }
-        public bool SidebarCollapsedDefault { get; set; }
         public string UpdateChannel { get; set; }
         public string UpdateSourceUrl { get; set; }
 

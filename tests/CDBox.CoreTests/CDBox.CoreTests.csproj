@@ -15,9 +15,10 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityCalculationReportModels.cs" Link="Source\QuantityCalculationReportModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDependencyService.cs" Link="Source\QuantityDependencyService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardClassification.cs" Link="Source\QuantityDashboardClassification.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioState.cs" Link="Source\CDBoxStudioState.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioAnnotationSettingsPage.cs" Link="Source\CDBoxStudioAnnotationSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLayerManagerPage.cs" Link="Source\CDBoxStudioLayerManagerPage.cs" />

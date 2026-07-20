@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -58,11 +58,13 @@ namespace TCPipeAutoDraw.Commands
                 return;
             }
 
+            PipeLengthAnnotationInteractionService.Initialize();
             QueueStartupWorkflow();
         }
 
         public void Terminate()
         {
+            PipeLengthAnnotationInteractionService.Terminate();
             if (IsHeadlessSelfTest()) return;
             CDBoxMenuService.RemoveMenu();
         }
@@ -85,7 +87,7 @@ namespace TCPipeAutoDraw.Commands
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
             check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-9", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 20901, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 30101, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -159,7 +161,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 if (doc != null) doc.Editor.WriteMessage("\n[CDBox 菜单] 重置失败：" + ex.Message);
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 菜单重置失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 菜单重置失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -182,7 +184,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 if (doc != null) doc.Editor.WriteMessage("\n[CDBox 菜单] 创建失败：" + ex.Message);
-                if (showResultMessage) MessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 菜单创建失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (showResultMessage) TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 菜单创建失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -198,20 +200,11 @@ namespace TCPipeAutoDraw.Commands
 
             if (doc == null)
             {
-                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            using (var form = new MainToolboxForm(CreateDefaultModules()))
-            {
-                form.ShowDialog(new AcadMainWindow());
-            }
-        }
-
-        [CommandMethod("CDCBL", CommandFlags.Modal)]
-        public void OpenSidebar()
-        {
-            ShowSidebar();
+            ShowStudio();
         }
 
         [CommandMethod("CDSTUDIO", CommandFlags.Modal)]
@@ -226,19 +219,16 @@ namespace TCPipeAutoDraw.Commands
             ShowStudio();
         }
 
-        [CommandMethod("CDBOXHIDE", CommandFlags.Modal)]
-        public void HideToolbox()
-        {
-            CDBoxPalette.Hide();
-        }
-
         [CommandMethod("CDSET", CommandFlags.Modal)]
         public void OpenSettings()
         {
-            using (var form = new CDBoxSettingsForm())
-            {
-                form.ShowDialog(new AcadMainWindow());
-            }
+            CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+        }
+
+        [CommandMethod("CDABOUT", CommandFlags.Modal)]
+        public void OpenAboutChaozhongqing()
+        {
+            TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "超重氢工具箱发布页入口将在后续版本接入。", "关于超重氢工具箱", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         [CommandMethod("CDINSTALL", CommandFlags.Modal)]
@@ -249,7 +239,7 @@ namespace TCPipeAutoDraw.Commands
             if (result.Success) settings.InstalledPath = result.InstallRoot;
             CDBoxAppSettingsStore.Save(settings);
 
-            MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+            TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
         }
 
         [CommandMethod("CDUPDATE", CommandFlags.Modal)]
@@ -269,14 +259,14 @@ namespace TCPipeAutoDraw.Commands
                 if (result.Success) settings.InstalledPath = result.InstallRoot;
                 CDBoxAppSettingsStore.Save(settings);
 
-                MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 更新" : "CDBox 更新失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 更新" : "CDBox 更新失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
             }
         }
 
         [CommandMethod("CDUNINSTALL", CommandFlags.Modal)]
         public void UninstallAutoLoad()
         {
-            DialogResult confirm = MessageBox.Show(new AcadMainWindow(), "确定卸载 CDBox 自动加载并删除安装目录吗？\r\n\r\n当前已加载的插件本次 CAD 会话仍可继续使用，重启 CAD 后不再自动加载。", "卸载 CDBox", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "确定卸载 CDBox 自动加载并删除安装目录吗？\r\n\r\n当前已加载的插件本次 CAD 会话仍可继续使用，重启 CAD 后不再自动加载。", "卸载 CDBox", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes) return;
 
             CDBoxMenuService.RemoveMenu(true);
@@ -286,7 +276,7 @@ namespace TCPipeAutoDraw.Commands
             settings.InstalledPath = string.Empty;
             CDBoxAppSettingsStore.Save(settings);
 
-            MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 卸载" : "CDBox 卸载提示", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 卸载" : "CDBox 卸载提示", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
         private void QueueStartupWorkflow()
@@ -338,7 +328,7 @@ namespace TCPipeAutoDraw.Commands
                             settingsChanged = true;
                         }
 
-                        MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                        TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                     }
 
                     if (doNotAsk)
@@ -346,44 +336,6 @@ namespace TCPipeAutoDraw.Commands
                         settings.PromptInstallOnLoad = false;
                         settingsChanged = true;
                     }
-                }
-
-                // 自动加载安装后，启动 CAD 时不再弹出“是否显示侧边栏”的窗口，
-                // 避免先出现 CDBox 对话框、关闭后才显示侧边栏。
-                // 侧边栏提示仅保留给手动 NETLOAD / 未从安装目录运行的调试场景。
-                bool runningFromInstallFolder = CDBoxInstaller.IsRunningFromInstallFolder();
-                if (settings.PromptSidebarOnLoad && !runningFromInstallFolder)
-                {
-                    bool doNotAsk;
-                    DialogResult sidebarResult = CDBoxPromptDialog.ShowYesNo(
-                        new AcadMainWindow(),
-                        "CDBox 侧边栏",
-                        "CDBox 已加载完成。是否显示侧边栏？\r\n\r\n侧边栏可停靠在 CAD 左侧或右侧，也可输入 CDCBL 随时显示。",
-                        "显示",
-                        "暂不显示",
-                        out doNotAsk);
-
-                    if (sidebarResult == DialogResult.Yes)
-                    {
-                        settings.AutoShowSidebarOnLoad = true;
-                        settingsChanged = true;
-                        ShowSidebar();
-                    }
-                    else
-                    {
-                        settings.AutoShowSidebarOnLoad = false;
-                        settingsChanged = true;
-                    }
-
-                    if (doNotAsk)
-                    {
-                        settings.PromptSidebarOnLoad = false;
-                        settingsChanged = true;
-                    }
-                }
-                else if (settings.AutoShowSidebarOnLoad)
-                {
-                    ShowSidebar();
                 }
 
                 if (settingsChanged) CDBoxAppSettingsStore.Save(settings);
@@ -412,32 +364,12 @@ namespace TCPipeAutoDraw.Commands
             return false;
         }
 
-        private void ShowSidebar()
-        {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
-            if (doc == null)
-            {
-                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            try
-            {
-                CDBoxPalette.Show(CreateDefaultModules());
-            }
-            catch (System.Exception ex)
-            {
-                doc.Editor.WriteMessage("\n[CDBox 侧边栏] 打开失败：" + ex.Message);
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "侧边栏打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void ShowStudio()
         {
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox Studio", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox Studio", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -448,13 +380,13 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[CDBox Studio] 打开失败：" + ex.Message);
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox Studio 打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox Studio 打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private IList<ITCModule> CreateDefaultModules()
         {
-            return TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, RunNodeAnnotationDirect, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport);
+            return TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, ShowNodeAnnotationSettings, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport);
         }
 
         [CommandMethod("TCP_LAYERS", CommandFlags.Modal)]
@@ -531,7 +463,6 @@ namespace TCPipeAutoDraw.Commands
         {
             RunPipeLengthAnnotationDirect();
         }
-
 
         [CommandMethod("CDNODE", CommandFlags.Modal)]
         public void ShowNodeAnnotationByEnglishName()
@@ -638,7 +569,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "展点绘制管线", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "展点绘制管线", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -660,7 +591,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 ed.WriteMessage("\n[展点绘制管线] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "展点绘制管线失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "展点绘制管线失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -675,22 +606,18 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "图层管理", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "图层管理", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                using (var form = new LayerManagerForm(doc))
-                {
-                    // 使用 WinForms ShowDialog + AutoCAD 主窗口句柄，避免触发 WPF Window 重载。
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioLayerManagerWindow.ShowWindow(new AcadMainWindow());
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[图层管理] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "图层管理打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "图层管理打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -700,21 +627,18 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "标注设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "标注设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                using (var form = new AnnotationSettingsForm(doc))
-                {
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), "surface");
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[标注设置] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "标注设置打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "标注设置打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -724,21 +648,18 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "表面积标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "表面积标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                using (var form = new SurfaceAreaAnnotationForm(doc))
-                {
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), "surface");
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[表面积标注] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "表面积标注打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -748,21 +669,18 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "管线长度标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "管线长度标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                using (var form = new PipeLengthAnnotationForm(doc))
-                {
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), "pipeLength");
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[管线长度标注] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "管线长度标注打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -773,7 +691,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "表面积标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "表面积标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -786,7 +704,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -795,7 +713,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "管线长度标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "管线长度标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -812,7 +730,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[管线长度标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -823,7 +741,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "节点标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "节点标注", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -840,7 +758,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[节点标注] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -851,7 +769,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -862,28 +780,18 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[断面图生成] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "断面图生成打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "断面图生成打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ShowNodeAnnotationSettings()
+        {
+            CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), "node");
         }
 
         private void ShowSectionDrawingLegacy()
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
-            if (doc == null)
-            {
-                MessageBox.Show("未找到当前图纸。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            try
-            {
-                using (var form = new SectionDrawingForm(doc)) form.ShowDialog(new AcadMainWindow());
-            }
-            catch (System.Exception ex)
-            {
-                doc.Editor.WriteMessage("\n[断面图生成] 旧版界面打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "断面图生成旧版界面打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ShowSectionDrawing();
         }
 
 
@@ -892,7 +800,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -906,17 +814,17 @@ namespace TCPipeAutoDraw.Commands
                 doc.Editor.WriteMessage(result.ToEditorMessage());
                 if (result.Success)
                 {
-                    MessageBox.Show("批量断面图生成完成：生成 " + result.SuccessSectionCount + " 张断面图。", "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show("批量断面图生成完成：生成 " + result.SuccessSectionCount + " 张断面图。", "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else if (!string.IsNullOrWhiteSpace(result.Message))
                 {
-                    MessageBox.Show(result.Message, "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "批量断面图", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[批量断面图] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "批量断面图失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "批量断面图失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -925,7 +833,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "添加图框模板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "添加图框模板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -936,7 +844,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[添加图框模板] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "添加图框模板失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "添加图框模板失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -945,7 +853,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "矩形裁图布框", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "矩形裁图布框", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -956,7 +864,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[矩形裁图布框] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "矩形裁图布框失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "矩形裁图布框失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -970,7 +878,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -984,20 +892,11 @@ namespace TCPipeAutoDraw.Commands
                     QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, ids[0]);
                     if (info == null)
                     {
-                        MessageBox.Show("所选对象无法识别为主管、支管或节点/检查井，未填入属性。\n请先在图层管理中设置父属性/标签，或选择正确对象。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        TCPipeAutoDraw.UI.CDBoxMessageBox.Show("所选对象无法识别为主管、支管或节点/检查井，未填入属性。\n请先在图层管理中设置父属性/标签，或选择正确对象。", "管线属性", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
 
-                    if (!legacy)
-                    {
-                        CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, QuantityDashboardService.GetDocumentId(doc));
-                        return;
-                    }
-
-                    using (var form = QuantityAttributeEditorFormFactory.Create(doc, info))
-                    {
-                        form.ShowDialog(new AcadMainWindow());
-                    }
+                    CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, QuantityDashboardService.GetDocumentId(doc));
                     return;
                 }
 
@@ -1007,12 +906,12 @@ namespace TCPipeAutoDraw.Commands
                     result = QuantityPipeAttributeService.ApplyDefaultProfilesToObjects(doc, ids, progress.Report);
                 }
                 doc.Editor.WriteMessage("\n[管线属性] " + result.Message);
-                MessageBox.Show(result.Message, "管线属性", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "管线属性", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[管线属性] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "管线属性打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线属性打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1021,7 +920,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "属性清除", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "属性清除", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1030,17 +929,17 @@ namespace TCPipeAutoDraw.Commands
                 ObjectId[] ids = QuantityPipeAttributeService.ReadImpliedOrPromptObjectIds(doc);
                 if (ids == null || ids.Length == 0) return;
 
-                DialogResult confirm = MessageBox.Show("将清除所选对象上的工程量属性记录，是否继续？", "属性清除", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+                DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show("将清除所选对象上的工程量属性记录，是否继续？", "属性清除", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
                 if (confirm != DialogResult.OK) return;
 
                 QuantityPipeWriteResult result = QuantityPipeAttributeService.ClearAttributesFromObjects(doc, ids);
                 doc.Editor.WriteMessage("\n[属性清除] " + result.Message);
-                MessageBox.Show(result.Message, "属性清除", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "属性清除", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[属性清除] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "属性清除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "属性清除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1049,21 +948,18 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "属性默认表", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "属性默认表", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                using (var form = new QuantityDefaultProfileForm())
-                {
-                    form.ShowDialog(new AcadMainWindow());
-                }
+                CDBoxStudioDefaultProfilesWindow.ShowWindow(new AcadMainWindow());
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[属性默认表] 打开失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "属性默认表打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "属性默认表打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1072,7 +968,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show("未找到当前图纸。", "工程量表格生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "工程量表格生成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1104,13 +1000,13 @@ namespace TCPipeAutoDraw.Commands
                     string message = "工程量表格已生成：主管 " + report.MainPipes.Count + " 条，节点/检查井 " + report.Wells.Count + " 个。";
                     if (report.Warnings.Count > 0) message += " 提示 " + report.Warnings.Count + " 条，请查看命令行信息。";
                     doc.Editor.WriteMessage("\n[GCL] " + message + "\n" + dialog.FileName);
-                    MessageBox.Show(message, "工程量表格生成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(message, "工程量表格生成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[工程量表格生成] 失败：" + ex.Message);
-                MessageBox.Show(ex.Message, "工程量表格生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "工程量表格生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1119,7 +1015,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "工程量动态看板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "工程量动态看板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1130,7 +1026,7 @@ namespace TCPipeAutoDraw.Commands
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\n[工程量动态看板] 打开失败：" + ex.Message);
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "工程量动态看板打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, "工程量动态看板打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

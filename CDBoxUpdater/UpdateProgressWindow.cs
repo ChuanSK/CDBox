@@ -202,7 +202,10 @@ namespace CDBoxUpdater
             if (_canClose) return;
             e.Cancel = true;
             SystemSounds.Exclamation.Play();
-            MessageBox.Show(this, "更新尚未完成，请勿关闭更新器或打开 AutoCAD。", "CDBox 更新器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _noticeLabel.Text = "更新尚未完成，请勿关闭更新器或打开 AutoCAD。";
+            _noticeLabel.ForeColor = Color.FromArgb(183, 45, 45);
+            Activate();
+            BringToFront();
         }
     }
 }

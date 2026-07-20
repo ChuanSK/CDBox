@@ -60,7 +60,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     {
                         Handled = true,
                         RefreshPage = false,
-                        ActionToRun = NewAction("section-drawing:draw", "断面图生成", delegate
+                        ActionToRun = NewAction("section-drawing:draw", "断面图生成", false, delegate
                         {
                             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
                             if (doc == null) throw new InvalidOperationException("未找到当前图纸。");
@@ -260,7 +260,12 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static CDBoxStudioAction NewAction(string id, string title, Action action)
         {
-            return new CDBoxStudioAction(id, title, "断面", string.Empty, "DM", "Preview 10", CDBoxStudioActionKind.Module, true, true, action);
+            return NewAction(id, title, true, action);
+        }
+
+        private static CDBoxStudioAction NewAction(string id, string title, bool restoreStudioAfterRun, Action action)
+        {
+            return new CDBoxStudioAction(id, title, "断面", string.Empty, "DM", "Preview 10", CDBoxStudioActionKind.Module, true, restoreStudioAfterRun, action);
         }
 
         private static CDBoxStudioRouteResult Error(string message)

@@ -26,7 +26,7 @@ namespace TCPipeAutoDraw.UI.Studio
                         GetCategory(module.Id),
                         module.Description,
                         module.CommandName,
-                        module.Enabled ? BuildBadge(module.CommandName, "原有窗口") : "暂未启用",
+                        module.Enabled ? BuildBadge(module.CommandName, string.Empty) : "暂未启用",
                         CDBoxStudioActionKind.Module,
                         module.Enabled,
                         true,
@@ -34,12 +34,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
             }
 
-            AddCommand(actions, "cmd:PLDM", "批量生成断面", "断面", "调用原有 PLDM 命令，按已写入属性批量绘制断面图。", "PLDM", "原有命令");
-            AddCommand(actions, "cmd:SXMRB", "属性默认表", "管线属性", "打开原有属性默认表编辑器，维护主管、支管、井等默认识别与填充参数。", "SXMRB", "原有窗口");
-            AddCommand(actions, "cmd:SXQC", "属性清除", "管线属性", "调用原有属性清除命令，清理所选对象上的工程量属性记录。", "SXQC", "原有命令");
-            AddCommand(actions, "cmd:CDBOX", "经典合集窗口", "系统", "保留并打开原有 CDBOX 经典合集窗口，不替换旧界面。", "CDBOX", "旧窗口");
-            AddCommand(actions, "cmd:CDCBL", "显示侧边栏", "系统", "调用原有 CDCBL 侧边栏入口，可停靠在 CAD 左侧或右侧。", "CDCBL", "旧入口");
-            AddCommand(actions, "cmd:CDSET", "工具箱设置", "系统", "打开原有 CDBox 设置窗口。", "CDSET", "原有窗口");
+            AddCommand(actions, "cmd:PLDM", "批量生成断面", "断面", string.Empty, "PLDM", string.Empty);
+            AddCommand(actions, "cmd:SXMRB", "属性默认表", "管线属性", string.Empty, "SXMRB", string.Empty);
+            AddCommand(actions, "cmd:SXQC", "属性清除", "管线属性", string.Empty, "SXQC", string.Empty);
+            AddCommand(actions, "cmd:CDQBOARD", "工程量看板", "工程量", string.Empty, "CDQBOARD", string.Empty);
+            AddCommand(actions, "cmd:CDSET", "CDBox设置", "系统", string.Empty, "CDSET", string.Empty);
 
             return actions;
         }
@@ -66,7 +65,7 @@ namespace TCPipeAutoDraw.UI.Studio
             switch (moduleId.ToLowerInvariant())
             {
                 case "layer-manager":
-                    return "常用";
+                    return "图层管理器";
                 case "annotation-settings":
                 case "surface-area-annotation":
                 case "pipe-length-annotation":
@@ -98,7 +97,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                System.Windows.Forms.MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox Studio", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox Studio", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
                 return;
             }
 

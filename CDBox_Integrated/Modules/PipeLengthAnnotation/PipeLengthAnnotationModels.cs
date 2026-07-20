@@ -120,7 +120,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public ObjectId AnnotationObjectId { get; set; }
         public ObjectId BottomAnnotationObjectId { get; set; }
         public ObjectId LeaderObjectId { get; set; }
+        public string AnnotationId { get; set; }
+        public string SourceCDBoxObjectId { get; set; }
+        public string AnnotationGroupName { get; set; }
+        public ObjectId AnnotationGroupObjectId { get; set; }
         public Point3d AnnotationPoint { get; set; }
+        public Point3d BindingPoint { get; set; }
+        public string UserText { get; set; }
+        public string SystemLengthText { get; set; }
 
         public PipeLengthAnnotationResult()
         {
@@ -142,7 +149,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             AnnotationObjectId = ObjectId.Null;
             BottomAnnotationObjectId = ObjectId.Null;
             LeaderObjectId = ObjectId.Null;
+            AnnotationId = string.Empty;
+            SourceCDBoxObjectId = string.Empty;
+            AnnotationGroupName = string.Empty;
+            AnnotationGroupObjectId = ObjectId.Null;
             AnnotationPoint = Point3d.Origin;
+            BindingPoint = Point3d.Origin;
+            UserText = string.Empty;
+            SystemLengthText = string.Empty;
         }
 
         public string ToEditorMessage()

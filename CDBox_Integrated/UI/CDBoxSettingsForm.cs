@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 using TCPipeAutoDraw.Core.Startup;
@@ -8,8 +8,6 @@ namespace TCPipeAutoDraw.UI
     internal sealed class CDBoxSettingsForm : Form
     {
         private CheckBox _chkPromptInstall;
-        private CheckBox _chkPromptSidebar;
-        private CheckBox _chkAutoShowSidebar;
         private Label _lblInstallInfo;
 
         public CDBoxSettingsForm()
@@ -61,18 +59,6 @@ namespace TCPipeAutoDraw.UI
             _chkPromptInstall.Margin = new Padding(0, 2, 0, 6);
             checkPanel.Controls.Add(_chkPromptInstall);
 
-            _chkPromptSidebar = new CheckBox();
-            _chkPromptSidebar.Text = "插件加载后，提示显示 CDBox 侧边栏";
-            _chkPromptSidebar.AutoSize = true;
-            _chkPromptSidebar.Margin = new Padding(0, 2, 0, 6);
-            checkPanel.Controls.Add(_chkPromptSidebar);
-
-            _chkAutoShowSidebar = new CheckBox();
-            _chkAutoShowSidebar.Text = "插件加载后自动显示 CDBox 侧边栏（不弹提示时生效）";
-            _chkAutoShowSidebar.AutoSize = true;
-            _chkAutoShowSidebar.Margin = new Padding(0, 2, 0, 6);
-            checkPanel.Controls.Add(_chkAutoShowSidebar);
-
             var group = new GroupBox();
             group.Text = "安装状态";
             group.Dock = DockStyle.Fill;
@@ -106,7 +92,7 @@ namespace TCPipeAutoDraw.UI
             installButtons.Controls.Add(btnUninstall);
 
             var btnUpdate = new Button();
-            btnUpdate.Text = "更新插件";
+            btnUpdate.Text = "本地更新";
             btnUpdate.Width = 100;
             btnUpdate.Height = 30;
             btnUpdate.Click += UpdatePlugin;
@@ -140,8 +126,6 @@ namespace TCPipeAutoDraw.UI
         {
             CDBoxAppSettings settings = CDBoxAppSettingsStore.Load();
             _chkPromptInstall.Checked = settings.PromptInstallOnLoad;
-            _chkPromptSidebar.Checked = settings.PromptSidebarOnLoad;
-            _chkAutoShowSidebar.Checked = settings.AutoShowSidebarOnLoad;
             RefreshInstallInfo();
         }
 
@@ -156,8 +140,6 @@ namespace TCPipeAutoDraw.UI
         {
             CDBoxAppSettings settings = CDBoxAppSettingsStore.Load();
             settings.PromptInstallOnLoad = _chkPromptInstall.Checked;
-            settings.PromptSidebarOnLoad = _chkPromptSidebar.Checked;
-            settings.AutoShowSidebarOnLoad = _chkAutoShowSidebar.Checked;
             CDBoxAppSettingsStore.Save(settings);
         }
 
@@ -169,7 +151,7 @@ namespace TCPipeAutoDraw.UI
             if (result.Success) settings.InstalledPath = result.InstallRoot;
             CDBoxAppSettingsStore.Save(settings);
             RefreshInstallInfo();
-            MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+            TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
         }
 
 
@@ -192,13 +174,13 @@ namespace TCPipeAutoDraw.UI
                 CDBoxAppSettingsStore.Save(settings);
                 RefreshInstallInfo();
 
-                MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 更新" : "CDBox 更新失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 更新" : "CDBox 更新失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
             }
         }
 
         private void Uninstall(object sender, EventArgs e)
         {
-            DialogResult confirm = MessageBox.Show(new AcadMainWindow(), "确定卸载 CDBox 自动加载并删除安装目录吗？\r\n\r\n当前已加载的插件本次 CAD 会话仍可继续使用，重启 CAD 后不再自动加载。", "卸载 CDBox", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "确定卸载 CDBox 自动加载并删除安装目录吗？\r\n\r\n当前已加载的插件本次 CAD 会话仍可继续使用，重启 CAD 后不再自动加载。", "卸载 CDBox", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes) return;
 
             CDBoxInstallResult result = CDBoxInstaller.Uninstall();
@@ -206,7 +188,7 @@ namespace TCPipeAutoDraw.UI
             settings.InstalledPath = string.Empty;
             CDBoxAppSettingsStore.Save(settings);
             RefreshInstallInfo();
-            MessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 卸载" : "CDBox 卸载提示", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 卸载" : "CDBox 卸载提示", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
         private void RefreshInstallInfo()
@@ -222,7 +204,7 @@ namespace TCPipeAutoDraw.UI
                 "安装目录：" + installRoot + "\r\n" +
                 "注册加载：" + (string.IsNullOrWhiteSpace(registered) ? "未注册" : registered) + "\r\n" +
                 "当前是否从安装目录运行：" + running + "\r\n\r\n" +
-                "更新方式：点击“更新插件”选择完整构建输出中的 CDBox.dll；依赖校验通过后，关闭 CAD 并按进度窗口完成安装。" + "\r\n" +
+                "更新方式：点击“本地更新”选择完整构建输出中的 CDBox.dll；依赖校验通过后，关闭 CAD 并按进度窗口完成安装。" + "\r\n" +
                 "设置文件：" + CDBoxAppSettingsStore.GetSettingsPath();
         }
     }
