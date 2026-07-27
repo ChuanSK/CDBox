@@ -36,11 +36,13 @@ namespace TCPipeAutoDraw.UI.Studio
                 "out+=branch('other','其他',count(function(r){var p=trim(r._treeParent);return p&&!core.some(function(x){return eq(x,p);});}),otherChildren,false);",
                 "out+=otherChildren;");
             script = script.Replace("<p>树状分类筛选、行内属性编辑和批量图层操作。</p>", string.Empty);
-            script = script.Replace(
-                @"    +'<header class=""lm-head""><div><h2>图层管理器</h2></div><div class=""lm-head-actions"">'
+            string legacyHeader = @"    +'<header class=""lm-head""><div><h2>图层管理器</h2></div><div class=""lm-head-actions"">'
     +(standalone?'<button class=""lm-btn"" data-action=""open-legacy"">打开旧版</button><button class=""lm-btn danger-secondary"" data-action=""close"">关闭</button>':'<button class=""lm-btn"" data-action=""open-standalone"">独立窗口</button>')
-    +'</div></header>'",
-                @"    +(standalone?'':'<header class=""lm-head""><div><h2>图层管理器</h2></div></header>')");
+    +'</div></header>'";
+            string embeddedHeader = @"    +(standalone?'':'<header class=""lm-head""><div><h2>图层管理器</h2></div></header>')";
+            script = script.Replace(
+                legacyHeader.Replace("\r\n", "\n"),
+                embeddedHeader.Replace("\r\n", "\n"));
             script = script.Replace(
                 @"+'<div><input type=""checkbox"" data-row-check ",
                 @"+'<div><span class=""lm-drag-handle"" draggable=""true"" title=""拖拽排序"">⋮⋮</span><input type=""checkbox"" data-row-check ");
