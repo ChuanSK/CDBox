@@ -54,15 +54,7 @@ namespace TCPipeAutoDraw.Core.Startup
             try
             {
                 string loader = GetRegisteredLoaderPath();
-                if (!string.IsNullOrWhiteSpace(loader) && File.Exists(loader)) return true;
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                return File.Exists(GetInstalledDllPath());
+                return !string.IsNullOrWhiteSpace(loader) && File.Exists(loader);
             }
             catch
             {
@@ -568,11 +560,13 @@ namespace TCPipeAutoDraw.Core.Startup
             string productCode = "{2A1EBD9E-B00B-4C2E-8EE7-3A1C7151BEE1}";
             string upgradeCode = "{E8BB42A0-7694-4C58-98D6-13C2D2814A1E}";
             if (string.IsNullOrWhiteSpace(assemblyFileName)) assemblyFileName = GetMainAssemblyFileName();
+            string appVersion = string.IsNullOrWhiteSpace(CDBoxStudioUpdateService.CurrentVersion)
+                ? "3.2.0" : CDBoxStudioUpdateService.CurrentVersion;
 
             string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD" };
             var xml = new StringBuilder();
             xml.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
-            xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"1.0.0\" Name=\"CDBox\" Description=\"CDBox 管线测绘辅助插件\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");
+            xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"" + EscapeXml(appVersion) + "\" Name=\"CDBox\" Description=\"CDBox 管线测绘辅助插件\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");
             xml.AppendLine("  <CompanyDetails Name=\"CDBox\" />");
             xml.AppendLine("  <Components>");
             xml.AppendLine("    <ComponentEntry AppName=\"CDBox\" AppDescription=\"CDBox AutoCAD Plugin\" ModuleName=\"./Contents/" + EscapeXml(assemblyFileName) + "\" AppType=\".Net\" LoadOnAutoCADStartup=\"True\" LoadOnCommandInvocation=\"False\">");

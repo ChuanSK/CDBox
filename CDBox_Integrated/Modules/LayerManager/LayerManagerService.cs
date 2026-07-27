@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -8,6 +9,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using TCPipeAutoDraw.Core.Colors;
 
 namespace TCPipeAutoDraw.Modules.LayerManager
 {
@@ -19,6 +21,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         public const string MatchModeContains = "包含";
         public const string MatchModeWildcard = "通配符";
         public const string MatchModeRegex = "正则";
+        public const string MatchModeKeywords = LayerRecognitionEngine.MatchModeKeywords;
+        public const string MatchModeTemplate = LayerRecognitionEngine.MatchModeTemplate;
 
 
         public static readonly string[] DefaultPipeLayers = new[]
@@ -46,6 +50,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             var result = new List<LayerInfo>();
             Database db = doc.Database;
+            List<LayerRecognitionRule> recognitionRules = LoadRecognitionRules();
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -64,6 +69,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     counts.TryGetValue(layer.Name, out count);
 
                     LayerMetadata metadata = ReadLayerMetadata(layer, tr);
+                    LayerRecognitionResult recognition = LayerRecognitionEngine.Recognize(
+                        layer.Name, recognitionRules, metadata);
                     var item = new LayerInfo
                     {
                         Selected = false,
@@ -75,11 +82,29 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                         IsDependent = layer.IsDependent,
                         IsPlottable = layer.IsPlottable,
                         ColorIndex = layer.Color == null ? (short)7 : layer.Color.ColorIndex,
+                        Color = CDBoxColorService.FromCadColor(layer.Color),
                         Linetype = lineTypeName,
                         ObjectCount = count,
                         ParentGroup = metadata.ParentGroup,
                         ParentClass = metadata.ParentClass,
-                        TagText = metadata.TagText
+                        TagText = metadata.TagText,
+                        NormalizedName = recognition.NormalizedName,
+                        SuggestedName = recognition.SuggestedName,
+                        RecognitionStatus = recognition.Status,
+                        RecognitionConfidence = recognition.Confidence,
+                        RecognitionSource = recognition.Source,
+                        RecognitionExplanation = recognition.Explanation,
+                        RecognitionConflicts = string.Join("；", recognition.Conflicts.ToArray()),
+                        RecognitionMissingFields = string.Join("、", recognition.MissingFields.ToArray()),
+                        RecognitionParentGroup = recognition.Metadata.ParentGroup,
+                        RecognitionParentClass = recognition.Metadata.ParentClass,
+                        ObjectType = recognition.Attributes.ObjectType,
+                        Specification = recognition.Attributes.Specification,
+                        Material = recognition.Attributes.Material,
+                        ConstructionType = recognition.Attributes.ConstructionType,
+                        NodeType = recognition.Attributes.NodeType,
+                        StructureType = recognition.Attributes.StructureType,
+                        Purpose = recognition.Attributes.Purpose
                     };
                     item.StatusText = BuildStatusText(item);
                     result.Add(item);
@@ -475,6 +500,40 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             return output;
         }
 
+        public static CDBoxColor GetLayerColor(Document doc, string layerName)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            if (string.IsNullOrWhiteSpace(layerName)) throw new InvalidOperationException("未指定图层名。");
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                LayerTable table = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
+                if (!table.Has(layerName)) throw new InvalidOperationException("图层不存在：" + layerName);
+                LayerTableRecord layer = (LayerTableRecord)tr.GetObject(table[layerName], OpenMode.ForRead);
+                return CDBoxColorService.FromCadColor(layer.Color);
+            }
+        }
+
+        public static LayerOperationResult SetLayerColor(Document doc, string layerName, CDBoxColor color)
+        {
+            var output = new LayerOperationResult();
+            if (doc == null) throw new ArgumentNullException("doc");
+            if (string.IsNullOrWhiteSpace(layerName)) throw new InvalidOperationException("未指定图层名。");
+            using (doc.LockDocument())
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                LayerTable table = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
+                if (!table.Has(layerName)) throw new InvalidOperationException("图层不存在：" + layerName);
+                LayerTableRecord layer = (LayerTableRecord)tr.GetObject(table[layerName], OpenMode.ForWrite);
+                if (layer.IsDependent) throw new InvalidOperationException("外部参照依赖图层不可修改颜色。");
+                CDBoxColor original = CDBoxColorService.FromCadColor(layer.Color);
+                layer.Color = CDBoxColorService.ToCadColor(CDBoxColorService.PrepareForWrite(color, original));
+                tr.Commit();
+            }
+            output.SuccessCount = 1;
+            output.Message = "已更新图层颜色：" + layerName;
+            return output;
+        }
+
         public static LayerOperationResult CreateDefaultPipeLayers(Document doc)
         {
             LayerOperationResult result = CreateLayers(doc, DefaultPipeLayers, 7);
@@ -581,7 +640,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                             continue;
                         }
 
-                        LayerMetadata inferred = InferLayerMetadataFromName(layer.Name, rules);
+                        LayerRecognitionResult recognition = LayerRecognitionEngine.Recognize(layer.Name, rules);
+                        LayerMetadata inferred = recognition.Metadata;
                         if (inferred == null || inferred.IsEmpty)
                         {
                             output.SkipCount++;
@@ -656,36 +716,30 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             return InferLayerMetadataFromName(layerName, LoadRecognitionRules());
         }
 
-        public static LayerMetadata InferLayerMetadataFromName(string layerName, IEnumerable<LayerRecognitionRule> rules)
+        public static LayerRecognitionResult RecognizeLayerName(string layerName)
         {
-            var metadata = new LayerMetadata();
-            if (string.IsNullOrWhiteSpace(layerName)) return metadata;
+            return LayerRecognitionEngine.Recognize(layerName, LoadRecognitionRules());
+        }
 
+        public static LayerRecognitionResult RecognizeLayerName(
+            string layerName,
+            IEnumerable<LayerRecognitionRule> rules,
+            LayerMetadata existingMetadata)
+        {
             List<LayerRecognitionRule> usableRules = rules == null
                 ? GetDefaultRecognitionRules()
                 : rules.Where(r => r != null && r.Enabled).ToList();
             if (usableRules.Count == 0) usableRules = GetDefaultRecognitionRules();
+            return LayerRecognitionEngine.Recognize(layerName, usableRules, existingMetadata);
+        }
 
-            var tags = new List<string>();
-            foreach (LayerRecognitionRule rule in usableRules)
-            {
-                Match match;
-                if (!IsRuleMatch(rule, layerName, out match)) continue;
-
-                Dictionary<string, string> tokens = BuildRecognitionTokens(layerName, match);
-                string parentGroup = ExpandRecognitionTemplate(rule.ParentGroup, tokens).Trim();
-                string parentClass = ExpandRecognitionTemplate(rule.ParentClass, tokens).Trim();
-                string tagText = ExpandRecognitionTemplate(rule.TagText, tokens).Trim();
-
-                if (!string.IsNullOrWhiteSpace(parentGroup)) metadata.ParentGroup = parentGroup;
-                if (!string.IsNullOrWhiteSpace(parentClass)) metadata.ParentClass = parentClass;
-                tags.AddRange(LayerMetadata.ParseTags(tagText));
-
-                if (rule.StopAfterMatch) break;
-            }
-
-            metadata.Tags = NormalizeTags(tags);
-            return metadata;
+        public static LayerMetadata InferLayerMetadataFromName(string layerName, IEnumerable<LayerRecognitionRule> rules)
+        {
+            List<LayerRecognitionRule> usableRules = rules == null
+                ? GetDefaultRecognitionRules()
+                : rules.Where(r => r != null && r.Enabled).ToList();
+            if (usableRules.Count == 0) usableRules = GetDefaultRecognitionRules();
+            return LayerRecognitionEngine.Recognize(layerName, usableRules).Metadata;
         }
 
         public static string GetRecognitionRulesFilePath()
@@ -750,7 +804,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             // 默认属性识别表保持为用户可直接理解和调整的项目规则。
             // 注意：如果 %APPDATA%\CDBox\LayerAttributeRecognitionRules.xml 已存在，
             // 将优先读取用户表；点击“恢复默认表”时会恢复为这里的规则。
-            return new List<LayerRecognitionRule>
+            var rules = new List<LayerRecognitionRule>
             {
                 new LayerRecognitionRule
                 {
@@ -873,6 +927,17 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     StopAfterMatch = true
                 }
             };
+            for (int i = 0; i < rules.Count; i++)
+            {
+                LayerRecognitionRule rule = rules[i];
+                if (string.IsNullOrWhiteSpace(rule.Name))
+                    rule.Name = "内置兼容规则 " + (i + 1);
+                rule.Priority = 1000 - i;
+                rule.Scope = "图层名";
+                rule.Source = "CDBox 内置兼容规则";
+                if (rule.ConfidenceBase <= 0) rule.ConfidenceBase = 0.82;
+            }
+            return rules;
         }
 
         private static bool IsRuleMatch(LayerRecognitionRule rule, string layerName, out Match match)
@@ -988,6 +1053,23 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     if (string.Equals(key, "ParentGroup", StringComparison.OrdinalIgnoreCase)) metadata.ParentGroup = val;
                     else if (string.Equals(key, "ParentClass", StringComparison.OrdinalIgnoreCase)) metadata.ParentClass = val;
                     else if (string.Equals(key, "Tags", StringComparison.OrdinalIgnoreCase)) metadata.Tags = LayerMetadata.ParseTags(val);
+                    else if (string.Equals(key, "NormalizedName", StringComparison.OrdinalIgnoreCase)) metadata.NormalizedName = val;
+                    else if (string.Equals(key, "SuggestedName", StringComparison.OrdinalIgnoreCase)) metadata.SuggestedName = val;
+                    else if (string.Equals(key, "ObjectType", StringComparison.OrdinalIgnoreCase)) metadata.ObjectType = val;
+                    else if (string.Equals(key, "Specification", StringComparison.OrdinalIgnoreCase)) metadata.Specification = val;
+                    else if (string.Equals(key, "Material", StringComparison.OrdinalIgnoreCase)) metadata.Material = val;
+                    else if (string.Equals(key, "ConstructionType", StringComparison.OrdinalIgnoreCase)) metadata.ConstructionType = val;
+                    else if (string.Equals(key, "NodeType", StringComparison.OrdinalIgnoreCase)) metadata.NodeType = val;
+                    else if (string.Equals(key, "StructureType", StringComparison.OrdinalIgnoreCase)) metadata.StructureType = val;
+                    else if (string.Equals(key, "Purpose", StringComparison.OrdinalIgnoreCase)) metadata.Purpose = val;
+                    else if (string.Equals(key, "RecognitionStatus", StringComparison.OrdinalIgnoreCase)) metadata.RecognitionStatus = val;
+                    else if (string.Equals(key, "RecognitionSource", StringComparison.OrdinalIgnoreCase)) metadata.RecognitionSource = val;
+                    else if (string.Equals(key, "RecognitionConfidence", StringComparison.OrdinalIgnoreCase))
+                    {
+                        double confidence;
+                        if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out confidence))
+                            metadata.RecognitionConfidence = confidence;
+                    }
                 }
             }
             catch
@@ -1030,7 +1112,19 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 record.Data = new ResultBuffer(
                     new TypedValue((int)DxfCode.Text, "ParentGroup=" + metadata.ParentGroup),
                     new TypedValue((int)DxfCode.Text, "ParentClass=" + metadata.ParentClass),
-                    new TypedValue((int)DxfCode.Text, "Tags=" + metadata.TagText));
+                    new TypedValue((int)DxfCode.Text, "Tags=" + metadata.TagText),
+                    new TypedValue((int)DxfCode.Text, "NormalizedName=" + (metadata.NormalizedName ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "SuggestedName=" + (metadata.SuggestedName ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "ObjectType=" + (metadata.ObjectType ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "Specification=" + (metadata.Specification ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "Material=" + (metadata.Material ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "ConstructionType=" + (metadata.ConstructionType ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "NodeType=" + (metadata.NodeType ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "StructureType=" + (metadata.StructureType ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "Purpose=" + (metadata.Purpose ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "RecognitionStatus=" + (metadata.RecognitionStatus ?? string.Empty)),
+                    new TypedValue((int)DxfCode.Text, "RecognitionConfidence=" + metadata.RecognitionConfidence.ToString("0.####", CultureInfo.InvariantCulture)),
+                    new TypedValue((int)DxfCode.Text, "RecognitionSource=" + (metadata.RecognitionSource ?? string.Empty)));
                 WriteLayerMetadataBackup(layer, tr, record.Data);
             }
         }

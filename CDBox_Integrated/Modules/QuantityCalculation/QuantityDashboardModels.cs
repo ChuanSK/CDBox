@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
@@ -93,6 +94,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public List<QuantityDashboardDetailRow> details { get; set; }
         public QuantityDashboardCharts charts { get; set; }
         public List<string> warnings { get; set; }
+        [ScriptIgnore]
+        public QuantityCalculationAuditData calculationAudit { get; set; }
 
         public QuantityDashboardSnapshot()
         {
@@ -111,6 +114,21 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             details = new List<QuantityDashboardDetailRow>();
             charts = new QuantityDashboardCharts();
             warnings = new List<string>();
+            calculationAudit = new QuantityCalculationAuditData();
+        }
+    }
+
+    public sealed class QuantityCalculationAuditData
+    {
+        public List<QuantityMainPipeCalculationRow> mainPipes { get; set; }
+        public List<QuantityMainPipeCalculationRow> branchPipes { get; set; }
+        public List<QuantityWellCalculationRow> wells { get; set; }
+
+        public QuantityCalculationAuditData()
+        {
+            mainPipes = new List<QuantityMainPipeCalculationRow>();
+            branchPipes = new List<QuantityMainPipeCalculationRow>();
+            wells = new List<QuantityWellCalculationRow>();
         }
     }
 

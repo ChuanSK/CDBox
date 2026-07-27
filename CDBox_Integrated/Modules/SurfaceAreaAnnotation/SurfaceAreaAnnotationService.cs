@@ -12,6 +12,7 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Core.Cad;
+using TCPipeAutoDraw.Modules.AnnotationHud;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
@@ -675,6 +676,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
 
+                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                        result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
+
                     tr.Commit();
                 }
             }
@@ -803,6 +807,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     {
                         result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
+
+                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                        result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
 
                     tr.Commit();
                 }
@@ -1127,6 +1134,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     {
                         result.LeaderObjectId = DrawLeader(db, tr, leaderStartPoint, result.AnnotationObjectId, options.TextHeight, annotationLayer, attachment);
                     }
+
+                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                        result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
 
                     tr.Commit();
                 }

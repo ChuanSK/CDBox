@@ -1042,6 +1042,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
     internal sealed class QuantityStructureLayerEditor : UserControl
     {
+        private const string LayerTypeGeneral = "一般层";
+        private const string LayerTypePipe = "管线层";
+        private const string LayerTypeCushion = "垫层";
         public delegate double DoubleProvider();
 
         public event DoubleProvider RequestTotalHeight;
@@ -1071,7 +1074,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             buttons.AutoSize = true;
             root.Controls.Add(buttons, 0, 0);
 
-            AddSmallButton(buttons, "添加层", 70, delegate { AddLayer("回填层", 0.0, false, false); RecalculateAutoLayers(false); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "添加层", 70, delegate { AddLayer("回填层", 0.0, false, LayerTypeGeneral); RecalculateAutoLayers(false); RaiseStructureChanged(); });
             AddSmallButton(buttons, "删除层", 70, delegate { DeleteCurrentLayer(); RecalculateAutoLayers(false); RaiseStructureChanged(); });
             AddSmallButton(buttons, "上移", 55, delegate { MoveCurrentLayer(-1); RaiseStructureChanged(); });
             AddSmallButton(buttons, "下移", 55, delegate { MoveCurrentLayer(1); RaiseStructureChanged(); });
@@ -1092,7 +1095,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _grid.Columns.Add(CreateTextColumn("LayerName", "层级名称", 180));
             _grid.Columns.Add(CreateTextColumn("LayerHeight", "高度 m", 70));
             _grid.Columns.Add(CreateCheckColumn("Locked", "锁定", 55));
-            _grid.Columns.Add(CreateCheckColumn("PipeLayer", _nodeWellMode ? "井下层" : "管线层", 65));
+            _grid.Columns.Add(CreateLayerTypeColumn());
             _grid.CurrentCellDirtyStateChanged += delegate
             {
                 if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
@@ -1102,7 +1105,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (_updating || e.RowIndex < 0) return;
                 if (e.ColumnIndex == 2 || e.ColumnIndex == 3)
                 {
-                    if (e.ColumnIndex == 3 && GetBool(e.RowIndex, 3)) EnsureSinglePipeLayer(e.RowIndex);
+                    if (e.ColumnIndex == 3 && IsPipeLayerRow(e.RowIndex)) EnsureSinglePipeLayer(e.RowIndex);
                     RecalculateAutoLayers(false);
                     RaiseStructureChanged();
                 }
@@ -1114,7 +1117,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _statusLabel = new Label();
             _statusLabel.AutoSize = true;
             _statusLabel.Padding = new Padding(0, 3, 0, 0);
-            _statusLabel.Text = _nodeWellMode ? "非锁定层按井深自动分配；井下层位于井深之下，不参与扣减。" : "非锁定层会按总高自动分配；管线层高度应大于管径。";
+            _statusLabel.Text = _nodeWellMode ? "非锁定层按井深自动分配；垫层位于井深之下，不参与扣减。" : "非锁定层会按总高自动分配；管线层高度应大于管径，垫层计入管线开挖深度。";
             root.Controls.Add(_statusLabel, 0, 2);
         }
 
@@ -1149,6 +1152,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return col;
         }
 
+        private static DataGridViewComboBoxColumn CreateLayerTypeColumn()
+        {
+            var col = new DataGridViewComboBoxColumn();
+            col.Name = "LayerType";
+            col.HeaderText = "层类型";
+            col.Width = 78;
+            col.FlatStyle = FlatStyle.Flat;
+            col.Items.AddRange(LayerTypeGeneral, LayerTypePipe, LayerTypeCushion);
+            return col;
+        }
+
         private static void AddSmallButton(Control parent, string text, int width, EventHandler handler)
         {
             var btn = new Button();
@@ -1160,10 +1174,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             parent.Controls.Add(btn);
         }
 
-        private void AddLayer(string name, double height, bool locked, bool pipeLayer)
+        private void AddLayer(string name, double height, bool locked, string layerType)
         {
-            _grid.Rows.Add(name ?? string.Empty, Format(height), locked, pipeLayer);
-            if (pipeLayer) EnsureSinglePipeLayer(_grid.Rows.Count - 1);
+            string normalizedType = NormalizeLayerType(layerType);
+            _grid.Rows.Add(name ?? string.Empty, Format(height), locked, normalizedType);
+            if (string.Equals(normalizedType, LayerTypePipe, StringComparison.Ordinal)) EnsureSinglePipeLayer(_grid.Rows.Count - 1);
             if (_grid.Rows.Count > 0) _grid.Rows[_grid.Rows.Count - 1].Selected = true;
         }
 
@@ -1171,9 +1186,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             int index = CurrentRowIndex();
             if (index < 0 || index >= _grid.Rows.Count) return;
-            bool wasPipeLayer = GetBool(index, 3);
+            bool wasPipeLayer = IsPipeLayerRow(index);
             _grid.Rows.RemoveAt(index);
-            if (wasPipeLayer && _grid.Rows.Count > 0) SetCell(0, 3, true);
+            if (wasPipeLayer && !_nodeWellMode && _grid.Rows.Count > 0) SetCell(0, 3, LayerTypePipe);
         }
 
         private void MoveCurrentLayer(int offset)
@@ -1204,7 +1219,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 GetString(index, 0),
                 GetString(index, 1),
                 GetBool(index, 2),
-                GetBool(index, 3)
+                GetString(index, 3)
             };
         }
 
@@ -1219,7 +1234,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 foreach (string raw in lines)
                 {
                     ParsedStructureLayer parsed = ParseLayerLine(raw);
-                    AddLayer(parsed.Name, parsed.Height, parsed.Locked, parsed.PipeLayer);
+                    AddLayer(parsed.Name, parsed.Height, parsed.Locked, parsed.LayerType);
                 }
 
                 if (_grid.Rows.Count == 0)
@@ -1227,10 +1242,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     return;
                 }
 
-                if (!HasPipeLayer() && _grid.Rows.Count > 0)
+                if (!_nodeWellMode && !HasPipeLayer() && _grid.Rows.Count > 0)
                 {
                     int index = GuessPipeLayerIndex();
-                    SetCell(index, 3, true);
+                    SetCell(index, 3, LayerTypePipe);
                 }
             }
             finally
@@ -1249,11 +1264,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (name.Length == 0) name = "结构层";
                 double height = ParseDouble(GetString(i, 1), 0.0);
                 bool locked = GetBool(i, 2);
-                bool pipeLayer = GetBool(i, 3);
+                string layerType = NormalizeLayerType(GetString(i, 3));
 
                 string line = name + " " + Format(height);
                 if (locked) line += " 锁定";
-                if (pipeLayer) line += _nodeWellMode ? " 井下层" : " 管线层";
+                if (string.Equals(layerType, LayerTypePipe, StringComparison.Ordinal)) line += " 管线层";
+                else if (string.Equals(layerType, LayerTypeCushion, StringComparison.Ordinal)) line += " 垫层";
                 lines.Add(line);
             }
             return string.Join(Environment.NewLine, lines.ToArray());
@@ -1278,11 +1294,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             var unlocked = new List<int>();
             for (int i = 0; i < _grid.Rows.Count; i++)
             {
-                bool isBelowWellLayer = _nodeWellMode && IsPipeLayerRow(i);
+                bool isBelowWellLayer = _nodeWellMode && IsCushionLayerRow(i);
                 if (isBelowWellLayer)
                 {
-                    // 井下层位于用户填写的井深之下。
-                    // 用户填写的井深只到井下垫层上方，所以自动计算井内结构层时不能再扣减井下层。
+                        // 井的垫层位于用户填写的井深之下。
+                        // 用户填写的井深只到垫层上方，所以自动计算井内结构层时不能再扣减垫层。
                     ignoredBelowLayerSum += ParseDouble(GetString(i, 1), 0.0);
                     continue;
                 }
@@ -1306,7 +1322,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
                 else
                 {
-                    SetStatus(_nodeWellMode && ignoredBelowLayerSum > 0 ? "结构层高度与井深一致；井下层位于井深之下，未参与扣减。" : "结构层高度与总高一致。", false, false);
+                    SetStatus(_nodeWellMode && ignoredBelowLayerSum > 0 ? "结构层高度与井深一致；垫层位于井深之下，未参与扣减。" : "结构层高度与总高一致。", false, false);
                 }
                 return;
             }
@@ -1347,7 +1363,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (!hasError)
             {
                 string msg = unlocked.Count == 1 ? "已按总高自动计算非锁定层。" : "已按总高平均分配多个非锁定层。";
-                if (_nodeWellMode && ignoredBelowLayerSum > 0) msg += "井下层位于井深之下，未参与扣减。";
+                if (_nodeWellMode && ignoredBelowLayerSum > 0) msg += "垫层位于井深之下，未参与扣减。";
                 SetStatus(msg, false, false);
             }
         }
@@ -1378,7 +1394,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 for (int i = 0; i < _grid.Rows.Count; i++)
                 {
-                    if (i != keepIndex) SetCell(i, 3, false);
+                    if (i != keepIndex && IsPipeLayerRow(i)) SetCell(i, 3, LayerTypeGeneral);
                 }
             }
             finally
@@ -1404,7 +1420,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private bool IsPipeLayerRow(int row)
         {
             if (row < 0 || row >= _grid.Rows.Count) return false;
-            return GetBool(row, 3);
+            return string.Equals(NormalizeLayerType(GetString(row, 3)), LayerTypePipe, StringComparison.Ordinal);
+        }
+
+        private bool IsCushionLayerRow(int row)
+        {
+            if (row < 0 || row >= _grid.Rows.Count) return false;
+            return string.Equals(NormalizeLayerType(GetString(row, 3)), LayerTypeCushion, StringComparison.Ordinal);
         }
 
         private int GuessPipeLayerIndex()
@@ -1428,17 +1450,22 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private ParsedStructureLayer ParseLayerLine(string raw)
         {
             string line = raw == null ? string.Empty : raw.Trim();
-            bool pipeLayer = ContainsAny(line, "管线层", "管道层", "管线所在层", "管道所在层", "井下层", "井下方垫层");
             bool locked = ContainsAny(line, "锁定", "已锁") && !ContainsAny(line, "未锁", "不锁");
             double height = 0.0;
+            string suffix = string.Empty;
             MatchCollection matches = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?");
             if (matches.Count > 0)
             {
-                string valueText = matches[matches.Count - 1].Value;
+                Match heightMatch = matches[matches.Count - 1];
+                string valueText = heightMatch.Value;
                 height = ParseDouble(valueText, 0.0);
-                int start = matches[matches.Count - 1].Index;
-                line = line.Remove(start, matches[matches.Count - 1].Length);
+                suffix = line.Substring(heightMatch.Index + heightMatch.Length).Trim();
+                line = line.Substring(0, heightMatch.Index).Trim();
             }
+
+            string layerType = ContainsAny(suffix, "井下层", "井下方垫层", "垫层")
+                ? LayerTypeCushion
+                : (ContainsAny(suffix, "管线层", "管道层", "管线所在层", "管道所在层") ? LayerTypePipe : LayerTypeGeneral);
 
             string name = line;
             name = name.Replace("管线所在层", string.Empty).Replace("管道所在层", string.Empty)
@@ -1451,7 +1478,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                        .Replace("(", string.Empty).Replace(")", string.Empty)
                        .Trim();
             if (name.Length == 0) name = "结构层";
-            return new ParsedStructureLayer(name, height, locked, pipeLayer);
+            return new ParsedStructureLayer(name, height, locked, layerType);
+        }
+
+        private static string NormalizeLayerType(string value)
+        {
+            if (string.Equals(value, LayerTypePipe, StringComparison.CurrentCultureIgnoreCase)) return LayerTypePipe;
+            if (string.Equals(value, LayerTypeCushion, StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(value, "井下层", StringComparison.CurrentCultureIgnoreCase)) return LayerTypeCushion;
+            return LayerTypeGeneral;
         }
 
         private static bool ContainsAny(string text, params string[] values)
@@ -1469,9 +1504,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             try
             {
-                // CheckBox 单元格在点击后可能还停留在编辑态。
-                // 必须先提交 Dirty 值，再结束编辑，否则“井下层”勾选可能没有进入 Cell.Value，
-                // 自动计算时会把井下垫层误算进井深内，导致回填层被算成负值。
+                // CheckBox / ComboBox 单元格在点击后可能还停留在编辑态。
+                // 必须先提交 Dirty 值，再结束编辑，避免自动计算读取到上一状态。
                 if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
                 if (_grid.IsCurrentCellInEditMode) _grid.EndEdit();
             }
@@ -1553,14 +1587,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             public readonly string Name;
             public readonly double Height;
             public readonly bool Locked;
-            public readonly bool PipeLayer;
+            public readonly string LayerType;
 
-            public ParsedStructureLayer(string name, double height, bool locked, bool pipeLayer)
+            public ParsedStructureLayer(string name, double height, bool locked, string layerType)
             {
                 Name = name;
                 Height = height;
                 Locked = locked;
-                PipeLayer = pipeLayer;
+                LayerType = NormalizeLayerType(layerType);
             }
         }
     }

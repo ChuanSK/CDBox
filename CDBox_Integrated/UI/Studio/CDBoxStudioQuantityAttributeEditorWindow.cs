@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.UI;
+using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
@@ -16,18 +17,58 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             _documentId = documentId ?? string.Empty;
             _handle = info == null ? string.Empty : info.HandleText;
-            if (_current != null && !_current.IsDisposed)
+            if (IsReusable(_current))
             {
-                _current.WindowState = FormWindowState.Normal; _current.Activate();
+                _current.WindowState = FormWindowState.Normal;
+                _current.Show();
+                _current.Activate();
                 CDBoxStudioQuantityAttributeEditorContext context = info == null ? CDBoxStudioQuantityAttributeEditorApi.GetContext(CDBoxStudioQuantityAttributeEditorApi.Serialize(new { documentId = _documentId, handle = _handle })) : CDBoxStudioQuantityAttributeEditorApi.FromInfo(QuantityDashboardService.ResolveDocument(_documentId), info);
                 _current.TryExecutePageScript("window.CDBoxQuantityAttributeEditorLoad && window.CDBoxQuantityAttributeEditorLoad(" + CDBoxStudioQuantityAttributeEditorApi.Serialize(context) + ");");
                 return;
             }
-            _current = new CDBoxStudioWebPageForm("属性编辑器 · 3.1.1", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
-            _current.Width = 1180; _current.Height = 820; _current.MinimumSize = new Size(900, 650);
-            _current.FormClosed += delegate { _current = null; _documentId = string.Empty; _handle = string.Empty; };
-            _current.Show(owner ?? new AcadMainWindow());
-            CDBoxStudioLogger.Info("已打开属性编辑器 3.1.1 独立窗口。");
+            ReleaseStaleWindow();
+            var window = new CDBoxStudioWebPageForm("属性编辑器 · 3.2.0", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
+            _current = window;
+            window.Width = 1180;
+            window.Height = 820;
+            window.MinimumSize = new Size(900, 650);
+            window.FormClosed += delegate
+            {
+                if (ReferenceEquals(_current, window))
+                {
+                    _current = null;
+                    _documentId = string.Empty;
+                    _handle = string.Empty;
+                }
+                RestoreCadFocus();
+            };
+            window.Show(owner ?? new AcadMainWindow());
+            CDBoxStudioLogger.Info("已打开属性编辑器 3.2.0 独立窗口。");
+        }
+
+        private static bool IsReusable(CDBoxStudioWebPageForm window)
+        {
+            return window != null && !window.IsDisposed && !window.Disposing
+                && window.IsHandleCreated && window.Visible;
+        }
+
+        private static void ReleaseStaleWindow()
+        {
+            CDBoxStudioWebPageForm stale = _current;
+            _current = null;
+            if (stale == null || stale.IsDisposed) return;
+            try { stale.Dispose(); }
+            catch { }
+        }
+
+        private static void RestoreCadFocus()
+        {
+            try
+            {
+                if (AcadApp.MainWindow != null && !AcadApp.MainWindow.IsDisposed)
+                    AcadApp.MainWindow.Focus();
+            }
+            catch { }
         }
 
         private static CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)

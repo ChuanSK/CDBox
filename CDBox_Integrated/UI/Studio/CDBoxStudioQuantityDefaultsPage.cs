@@ -704,6 +704,16 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static string NormalizeTableExperience(string script)
         {
+            script = script.Replace("{name:'中粗砂垫层',height:'0.15',locked:true,mark:'管线层'}", "{name:'中粗砂垫层',height:'0.15',locked:true,mark:'垫层'}");
+            script = script.Replace("{name:'砂垫层',height:'0.10',locked:true,mark:'井下层'}", "{name:'砂垫层',height:'0.10',locked:true,mark:'垫层'}");
+            script = script.Replace("<th class=\"mark-col\">标记</th>", "<th class=\"mark-col\">层类型</th>");
+            script = script.Replace(
+                "<option value=\"\" '+(!layer.mark?'selected':'')+'>无标记</option><option value=\"管线层\" '+(layer.mark==='管线层'?'selected':'')+'>管线层</option><option value=\"井下层\" '+(layer.mark==='井下层'?'selected':'')+'>井下层</option>",
+                "<option value=\"\" '+(!layer.mark?'selected':'')+'>一般层</option><option value=\"管线层\" '+(layer.mark==='管线层'?'selected':'')+'>管线层</option><option value=\"垫层\" '+((layer.mark==='垫层'||layer.mark==='井下层')?'selected':'')+'>垫层</option>");
+            script = script.Replace(
+                "var mark=/井下层|井下方垫层/i.test(line)?'井下层':(/管线层|管道层|管层/i.test(line)?'管线层':'');",
+                "var mark=/井下层|井下方垫层/i.test(line)?'垫层':(/[-+]?\\d+(?:\\.\\d+)?\\s+(?:锁定\\s+)?垫层\\s*$/i.test(line)?'垫层':(/管线层|管道层|管层/i.test(line)?'管线层':''));");
+            script = script.Replace("if(isNode&&item.mark==='管线层'&&item.name.indexOf('垫层')>=0)item.mark='井下层';", "if(item.mark==='井下层')item.mark='垫层';");
             script = script.Replace("+(f.help?'<p>'+esc(f.help)+'</p>':'')", string.Empty);
             script = script.Replace("<span>每层填写层名、厚度、锁定和管线层/井下层标记；保存时自动拼回旧版多行结构层文本。</span>", string.Empty);
             script = script.Replace("<button type=\"button\" class=\"small-btn\" data-layer-action=\"up\" data-idx=\"'+idx+'\">上移</button>", string.Empty);

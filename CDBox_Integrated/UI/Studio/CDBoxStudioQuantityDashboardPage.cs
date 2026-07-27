@@ -60,6 +60,12 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
                 .Replace("砂回填与原土回填合计", "仅新增材料回填（原土回填不计材料量）")
                 .Replace("包含砼恢复、原土回填、明管和并埋支管。", "按施工类型拆分；并埋仅统计管线长度，不重复计算开挖与结构层。")
                 .Replace(
+                    "<button class=\"qd-btn primary\" data-action=\"export-reference\">导出参考表</button>",
+                    "<button class=\"qd-btn primary\" data-action=\"export-reference\">导出参考表</button><button class=\"qd-btn\" data-action=\"export-calculation-process\">导出计算过程</button>")
+                .Replace(
+                    "case'export-reference':this.post('exportQuantityReference',JSON.stringify(this.request));break;case'formal-report':",
+                    "case'export-reference':this.post('exportQuantityReference',JSON.stringify(this.request));break;case'export-calculation-process':this.post('exportQuantityCalculationProcess',JSON.stringify(this.request));break;case'formal-report':")
+                .Replace(
                     "this.summaryCard('excavation','土方开挖量',sum.excavationVolume,'m³','主管、支管、井类及其他设施合计')",
                     "this.summaryCard('road','道路拆除',sum.roadBreakingArea,'㎡','切缝 '+fmt(sum.roadCuttingLength)+' m · 道渣 '+fmt(sum.roadWasteVolume)+' m³')+this.summaryCard('excavation','土方开挖量',sum.excavationVolume,'m³','机械 '+fmt(sum.mechanicalExcavationVolume)+' · 人工 '+fmt(sum.manualExcavationVolume))")
                 .Replace(

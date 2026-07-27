@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
+using System.Runtime.InteropServices;
 
 namespace CDBoxUpdater
 {
@@ -45,13 +46,12 @@ namespace CDBoxUpdater
                 result.Message = "正在等待 AutoCAD 退出。";
                 WriteResult(pending.LastResultPath, result);
 
-                // 等待阶段保持完全后台运行。网络更新和本地更新入口已经提示用户关闭 AutoCAD，
-                // 因此只有确认所有相关 AutoCAD 进程退出后才创建安装窗口。
-                WaitForAutoCadExit(pending);
+                // AutoCAD 主窗口关闭后立即显示更新器；进程仍在释放资源时显示等待状态，
+                // 直到确认所有相关 AutoCAD 进程完全退出才开始替换文件。
+                progressWindow = WaitForAutoCadExit(pending, progressWindow);
                 autoCadExitConfirmed = true;
-                progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
+                if (progressWindow == null) progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
                 progressWindow.Report(15, "已确认 AutoCAD 退出，正在准备安装…");
-                Thread.Sleep(1500);
 
                 progressWindow.Report(20, "正在检查安装目录权限…");
                 ValidatePendingRuntimePaths(pending);
@@ -219,7 +219,9 @@ namespace CDBoxUpdater
             }
         }
 
-        private static void WaitForAutoCadExit(PendingUpdateManifest pending)
+        private static UpdateProgressWindowHost WaitForAutoCadExit(
+            PendingUpdateManifest pending,
+            UpdateProgressWindowHost progressWindow)
         {
             string processName = NormalizeProcessName(pending.AutoCadProcessName);
             DateTime lastLog = DateTime.MinValue;
@@ -230,7 +232,24 @@ namespace CDBoxUpdater
                 if (running.Count == 0)
                 {
                     UpdaterLogger.Info("已确认 AutoCAD 进程退出，开始安装更新。");
-                    return;
+                    return progressWindow;
+                }
+
+                if (AllMainWindowsClosed(running))
+                {
+                    if (progressWindow == null)
+                    {
+                        try
+                        {
+                            progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
+                            UpdaterLogger.Info("检测到 AutoCAD 主窗口已关闭，已显示更新等待窗口。");
+                        }
+                        catch (Exception ex)
+                        {
+                            UpdaterLogger.Error("AutoCAD 窗口关闭后显示更新器失败，将继续后台等待。", ex);
+                        }
+                    }
+                    if (progressWindow != null) progressWindow.ReportWaitingForAutoCadExit();
                 }
 
                 if ((DateTime.UtcNow - lastLog).TotalSeconds >= WaitLogIntervalSeconds)
@@ -253,6 +272,31 @@ namespace CDBoxUpdater
                 Thread.Sleep(1000);
             }
         }
+
+        private static bool AllMainWindowsClosed(IList<Process> processes)
+        {
+            if (processes == null || processes.Count == 0) return false;
+            foreach (Process process in processes)
+            {
+                if (process == null) continue;
+                try
+                {
+                    process.Refresh();
+                    IntPtr handle = process.MainWindowHandle;
+                    if (handle != IntPtr.Zero && IsWindowVisible(handle)) return false;
+                }
+                catch
+                {
+                    // 无法确认窗口状态时继续保持后台等待，避免过早显示更新器。
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
 
         private static List<Process> FindBlockingProcesses(string processName, int expectedPid, string expectedStartTimeUtc)
         {

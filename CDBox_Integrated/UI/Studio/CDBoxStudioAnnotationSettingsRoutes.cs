@@ -1,9 +1,14 @@
 using System;
+using System.Web.Script.Serialization;
+using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.UI.Controls;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
     internal static class CDBoxStudioAnnotationSettingsRoutes
     {
+        private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer();
+
         public static bool TryRoute(CDBoxStudioRouteRequest request, bool standalone, out CDBoxStudioRouteResult result)
         {
             result = null;
@@ -22,6 +27,10 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "resetannotationsettings":
                     result = ResetSettingsResult(request.Argument);
+                    return true;
+
+                case "openannotationcolorpicker":
+                    result = OpenColorPickerResult(request.Argument);
                     return true;
 
                 case "openlegacyannotationsettings":
@@ -105,6 +114,42 @@ namespace TCPipeAutoDraw.UI.Studio
                 result.ToastKind = "error";
                 result.ToastMessage = "恢复默认失败：" + ex.Message;
                 CDBoxStudioLogger.Error("恢复标注设置默认值失败。", ex);
+            }
+            return result;
+        }
+
+        private static CDBoxStudioRouteResult OpenColorPickerResult(string payload)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true };
+            try
+            {
+                CDBoxStudioAnnotationColorPickerRequest request = string.IsNullOrWhiteSpace(payload)
+                    ? new CDBoxStudioAnnotationColorPickerRequest()
+                    : Serializer.Deserialize<CDBoxStudioAnnotationColorPickerRequest>(payload);
+                request = request ?? new CDBoxStudioAnnotationColorPickerRequest();
+                short current = request.index >= 1 && request.index <= 255 ? request.index : (short)7;
+                CDBoxColor selected;
+                if (!ColorPickerWindow.TryPick(CDBoxColor.FromIndex(current), out selected,
+                    false, false, false, false, false)) return result;
+
+                short index = CDBoxColorService.ToCompatibleColorIndex(selected, current);
+                CDBoxColor normalized = CDBoxColor.FromIndex(index);
+                var response = new CDBoxStudioAnnotationColorSelection
+                {
+                    path = request.path ?? string.Empty,
+                    index = index,
+                    name = normalized.DisplayName,
+                    cssColor = normalized.Hex,
+                    rgb = normalized.RgbText
+                };
+                result.ExecuteScript = "window.CDBoxAnnotationColorSelected && window.CDBoxAnnotationColorSelected("
+                    + Serializer.Serialize(response) + ");";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "颜色选择器打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开标注颜色选择器失败。", ex);
             }
             return result;
         }

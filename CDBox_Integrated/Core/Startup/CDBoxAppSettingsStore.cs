@@ -26,6 +26,7 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 if (TryGetBool(values, "PromptInstallOnLoad", out boolValue)) settings.PromptInstallOnLoad = boolValue;
                 if (TryGetString(values, "InstalledPath", out text)) settings.InstalledPath = text ?? string.Empty;
+                if (TryGetString(values, "LastInstallPromptIdentity", out text)) settings.LastInstallPromptIdentity = text ?? string.Empty;
             }
             catch
             {
@@ -48,6 +49,7 @@ namespace TCPipeAutoDraw.Core.Startup
                 var lines = new List<string>();
                 Add(lines, "PromptInstallOnLoad", settings.PromptInstallOnLoad);
                 Add(lines, "InstalledPath", settings.InstalledPath ?? string.Empty);
+                Add(lines, "LastInstallPromptIdentity", settings.LastInstallPromptIdentity ?? string.Empty);
 
                 File.WriteAllLines(path, lines.ToArray(), new UTF8Encoding(true));
             }

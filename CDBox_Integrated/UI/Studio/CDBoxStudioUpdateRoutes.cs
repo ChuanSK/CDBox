@@ -169,8 +169,12 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 settings.Theme = source.Theme;
                 settings.AnimationsEnabled = source.AnimationsEnabled;
+                settings.AnnotationHudNormalOpacity = source.AnnotationHudNormalOpacity;
+                settings.AnnotationHudHoverOpacity = source.AnnotationHudHoverOpacity;
+                settings.AnnotationHudGlowEnabled = source.AnnotationHudGlowEnabled;
+                settings.AnnotationHudGlowIntensity = source.AnnotationHudGlowIntensity;
+                settings.ColorOutputMode = source.ColorOutputMode;
                 settings.UpdateChannel = source.UpdateChannel;
-                settings.UpdateSourceUrl = source.UpdateSourceUrl;
             }
             settings.Normalize();
             return settings;
@@ -186,7 +190,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 CurrentVersionCode = CDBoxStudioUpdateService.CurrentVersionCode,
                 LatestVersion = string.Empty,
                 Channel = settings == null ? CDBoxStudioUpdateService.DefaultChannel : settings.UpdateChannel,
-                SourceUrl = settings == null ? string.Empty : settings.UpdateSourceUrl
+                SourceName = CDBoxStudioUpdateService.DefaultUpdateSourceName,
+                SourceUrl = CDBoxStudioUpdateService.DefaultUpdateSourceUrl
             };
         }
 

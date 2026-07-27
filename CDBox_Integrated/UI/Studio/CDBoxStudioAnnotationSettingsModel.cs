@@ -70,6 +70,36 @@ namespace TCPipeAutoDraw.UI.Studio
         public short index { get; set; }
         public string name { get; set; }
         public string cssColor { get; set; }
+        public string rgb { get; set; }
+    }
+
+    internal sealed class CDBoxStudioAnnotationColorPickerRequest
+    {
+        public string path { get; set; }
+        public short index { get; set; }
+
+        public CDBoxStudioAnnotationColorPickerRequest()
+        {
+            path = string.Empty;
+            index = 7;
+        }
+    }
+
+    internal sealed class CDBoxStudioAnnotationColorSelection
+    {
+        public string path { get; set; }
+        public short index { get; set; }
+        public string name { get; set; }
+        public string cssColor { get; set; }
+        public string rgb { get; set; }
+
+        public CDBoxStudioAnnotationColorSelection()
+        {
+            path = string.Empty;
+            name = string.Empty;
+            cssColor = string.Empty;
+            rgb = string.Empty;
+        }
     }
 
     internal sealed class CDBoxStudioAnnotationDefaultResult

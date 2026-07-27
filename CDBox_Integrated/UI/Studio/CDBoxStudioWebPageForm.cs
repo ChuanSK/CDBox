@@ -465,7 +465,25 @@ namespace TCPipeAutoDraw.UI.Studio
 
         internal bool TryExecutePageScript(string script)
         {
-            if (string.IsNullOrWhiteSpace(script) || !_webViewReady || _webView == null || _webView.IsDisposed || _webView.CoreWebView2 == null) return false;
+            if (string.IsNullOrWhiteSpace(script) || IsDisposed || Disposing) return false;
+
+            if (InvokeRequired)
+            {
+                try
+                {
+                    if (!IsHandleCreated) return false;
+                    BeginInvoke(new Action(delegate { TryExecutePageScript(script); }));
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    CDBoxStudioLogger.Error("独立页面调度脚本失败：" + _baseTitle, ex);
+                    return false;
+                }
+            }
+
+            if (!_webViewReady || _webView == null || _webView.IsDisposed
+                || _webView.CoreWebView2 == null) return false;
 
             try
             {

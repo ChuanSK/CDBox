@@ -10,6 +10,17 @@ namespace TCPipeAutoDraw.Core.Startup
     {
         public bool PromptInstallOnLoad { get; set; }
         public string InstalledPath { get; set; }
+        public string LastInstallPromptIdentity { get; set; }
+
+        public bool ShouldPromptForInstall(bool installed, string currentIdentity)
+        {
+            if (installed) return false;
+            if (PromptInstallOnLoad) return true;
+            return !string.Equals(
+                LastInstallPromptIdentity ?? string.Empty,
+                currentIdentity ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+        }
 
         public static CDBoxAppSettings Default
         {
@@ -18,7 +29,8 @@ namespace TCPipeAutoDraw.Core.Startup
                 return new CDBoxAppSettings
                 {
                     PromptInstallOnLoad = true,
-                    InstalledPath = string.Empty
+                    InstalledPath = string.Empty,
+                    LastInstallPromptIdentity = string.Empty
                 };
             }
         }

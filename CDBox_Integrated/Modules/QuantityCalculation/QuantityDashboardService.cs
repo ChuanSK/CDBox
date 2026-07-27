@@ -79,9 +79,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             foreach (string warning in report.Warnings) snapshot.warnings.Add(warning);
 
             Report(progress, 2, 6, "正在汇总井类、主管和支管……");
-            AddWellRows(snapshot, report.Wells.Where(x => scopedHandles.Contains(x.HandleText)), infoByHandle);
-            AddPipeRows(snapshot, report.MainPipes.Where(x => scopedHandles.Contains(x.HandleText)), infoByHandle, false);
-            AddPipeRows(snapshot, report.BranchPipes.Where(x => scopedHandles.Contains(x.HandleText)), infoByHandle, true);
+            List<QuantityWellCalculationRow> wellRows = report.Wells.Where(x => scopedHandles.Contains(x.HandleText)).ToList();
+            List<QuantityMainPipeCalculationRow> mainPipeRows = report.MainPipes.Where(x => scopedHandles.Contains(x.HandleText)).ToList();
+            List<QuantityMainPipeCalculationRow> branchPipeRows = report.BranchPipes.Where(x => scopedHandles.Contains(x.HandleText)).ToList();
+            snapshot.calculationAudit.wells.AddRange(wellRows);
+            snapshot.calculationAudit.mainPipes.AddRange(mainPipeRows);
+            snapshot.calculationAudit.branchPipes.AddRange(branchPipeRows);
+            AddWellRows(snapshot, wellRows, infoByHandle);
+            AddPipeRows(snapshot, mainPipeRows, infoByHandle, false);
+            AddPipeRows(snapshot, branchPipeRows, infoByHandle, true);
 
             Report(progress, 3, 6, "正在统计 315井、化粪池和其他设施……");
             AddOtherObjects(snapshot, doc, regionId, scopedHandles);
@@ -92,6 +98,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             BuildReferenceItems(snapshot);
             BuildCharts(snapshot);
             BuildSourceSummary(snapshot);
+            // 所有汇总和图表均先使用逐对象实际值计算，最后仅对界面分类卡片统一显示舍入。
+            RoundCategory(snapshot.wells);
+            RoundCategory(snapshot.mainPipes);
+            RoundCategory(snapshot.branchPipes);
+            RoundCategory(snapshot.others);
 
             Report(progress, 5, 6, "正在保存统计快照……");
             snapshot.status.isCalculating = false;
@@ -277,7 +288,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 });
             }
             snapshot.wells.averageDepth = count == 0 ? 0.0 : snapshot.wells.cumulativeDepth / count;
-            RoundCategory(snapshot.wells);
         }
 
         private static void AddPipeRows(QuantityDashboardSnapshot snapshot, IEnumerable<QuantityMainPipeCalculationRow> rows, IDictionary<string, QuantityPipeSelectionInfo> infos, bool branch)
@@ -342,7 +352,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 });
             }
             category.averageDepth = category.count == 0 ? 0.0 : depthSum / category.count;
-            RoundCategory(category);
         }
 
         private static void AddOtherObjects(QuantityDashboardSnapshot snapshot, Document doc, ObjectId regionId, HashSet<string> attributedHandles)
@@ -374,7 +383,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
                 tr.Commit();
             }
-            RoundCategory(snapshot.others);
         }
 
         private static void BuildQualityIssues(QuantityDashboardSnapshot snapshot, IDictionary<string, QuantityPipeSelectionInfo> infos)

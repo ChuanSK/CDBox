@@ -2681,10 +2681,19 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     table.Controls.Add(_diameter, 1, 0);
 
                     table.Controls.Add(MakeSimpleLabel("注记"), 2, 0);
-                    _text = new TextBox();
-                    _text.Dock = DockStyle.Fill;
-                    _text.Text = string.IsNullOrWhiteSpace(pipe.PipeText) ? SectionPipeOptions.BuildPipeText(pipe.Diameter) : pipe.PipeText;
-                    table.Controls.Add(_text, 3, 0);
+                      _text = new TextBox();
+                      _text.Dock = DockStyle.Fill;
+                      _text.Text = string.IsNullOrWhiteSpace(pipe.PipeText) ? SectionPipeOptions.BuildPipeText(pipe.Diameter) : pipe.PipeText;
+                      _text.Validated += delegate
+                      {
+                          double diameter;
+                          if (!SectionPipeOptions.TryParsePipeDiameter(_text.Text, out diameter)) return;
+                          decimal value = (decimal)diameter;
+                          if (value < _diameter.Minimum) value = _diameter.Minimum;
+                          if (value > _diameter.Maximum) value = _diameter.Maximum;
+                          _diameter.Value = value;
+                      };
+                      table.Controls.Add(_text, 3, 0);
 
                     var auto = new Button();
                     auto.Text = "自动";

@@ -87,79 +87,97 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 return false;
             }
 
-            double tolerance = GetPointPickTolerance(doc.Editor);
-            double bestDistance = double.MaxValue;
-            Point3d bestPoint = pickedPoint;
-            ObjectId bestId = ObjectId.Null;
+            List<PipeSelectionCandidate> candidates;
 
             try
             {
                 Database db = doc.Database;
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
-                    BlockTableRecord btr = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
-                    if (btr == null)
-                    {
-                        errorMessage = "无法读取当前空间。";
-                        return false;
-                    }
-
-                    foreach (ObjectId id in btr)
-                    {
-                        Curve curve = null;
-                        try { curve = tr.GetObject(id, OpenMode.ForRead, false) as Curve; }
-                        catch { continue; }
-
-                        if (!IsSupportedPolylineCurve(curve)) continue;
-                        string annotationId;
-                        string annotationPart;
-                        if (PipeLengthAnnotationObjectService.TryGetAnnotationPart(
-                            curve, out annotationId, out annotationPart)) continue;
-
-                        Point3d closestPoint;
-                        try { closestPoint = curve.GetClosestPointTo(pickedPoint, false); }
-                        catch { continue; }
-
-                        double distance = closestPoint.DistanceTo(pickedPoint);
-                        if (distance < bestDistance)
-                        {
-                            bestDistance = distance;
-                            bestPoint = closestPoint;
-                            bestId = id;
-                        }
-                    }
-
+                    candidates = FindCandidatesAtPoint(db, tr, doc.Editor, pickedPoint);
                     tr.Commit();
                 }
             }
             catch (System.Exception ex)
             {
-                errorMessage = "查找管线多段线失败：" + ex.Message;
+                errorMessage = "查找可计算长度对象失败：" + ex.Message;
                 return false;
             }
 
-            if (bestId.IsNull || bestDistance > tolerance)
+            if (candidates == null || candidates.Count == 0)
             {
-                errorMessage = "点取位置未直接命中管线多段线，请重新点取目标管线。";
+                errorMessage = "点取位置未直接命中具有长度的对象，请重新点取目标对象。";
                 return false;
             }
 
-            pipeId = bestId;
-            leaderStartPoint = bestPoint;
+            OverlappingPipeSelectionService.EnrichDisplay(doc, candidates);
+            PipeSelectionCandidate selected = OverlappingPipeSelectionService.Select(doc, candidates, null);
+            if (selected == null)
+            {
+                errorMessage = "已取消重叠对象选择。";
+                return false;
+            }
+            pipeId = selected.ObjectId;
+            leaderStartPoint = selected.AnchorPoint;
             return true;
         }
 
-        private static bool IsSupportedPolylineCurve(Curve curve)
+        internal static List<PipeSelectionCandidate> FindCandidatesAtPoint(Database db,
+            Transaction tr, Editor editor, Point3d pickedPoint)
         {
-            return curve is Autodesk.AutoCAD.DatabaseServices.Polyline
-                || curve is Polyline2d
-                || curve is Polyline3d;
+            var result = new List<PipeSelectionCandidate>();
+            if (db == null || tr == null || editor == null) return result;
+            double tolerance = GetPointPickTolerance(editor);
+            Vector3d viewDirection = GetViewDirection(editor);
+            BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
+            if (space == null) return result;
+            foreach (ObjectId id in space)
+            {
+                Curve curve;
+                try { curve = tr.GetObject(id, OpenMode.ForRead, false) as Curve; }
+                catch { continue; }
+                if (!IsSupportedLengthCurve(curve)) continue;
+                string annotationId;
+                string annotationPart;
+                if (PipeLengthAnnotationObjectService.TryGetAnnotationPart(
+                    curve, out annotationId, out annotationPart)) continue;
+                Point3d closestPoint;
+                double distance;
+                if (!TryGetDisplayClosestPoint(curve, pickedPoint, viewDirection,
+                    out closestPoint, out distance)) continue;
+                if (distance > tolerance) continue;
+                result.Add(new PipeSelectionCandidate
+                {
+                    ObjectId = id,
+                    AnchorPoint = closestPoint,
+                    Distance = distance,
+                    Length = GetCurveLength(curve),
+                    LayerName = curve.Layer ?? string.Empty,
+                    Title = "长度对象",
+                    Detail = (curve.Layer ?? string.Empty) + " · 长度 "
+                        + GetCurveLength(curve).ToString("0.##", CultureInfo.InvariantCulture) + "m"
+                });
+            }
+            result.Sort(delegate(PipeSelectionCandidate left, PipeSelectionCandidate right)
+            {
+                int compare = left.Distance.CompareTo(right.Distance);
+                if (compare != 0) return compare;
+                return string.Compare(left.LayerName, right.LayerName,
+                    StringComparison.CurrentCultureIgnoreCase);
+            });
+            return result;
+        }
+
+        private static bool IsSupportedLengthCurve(Curve curve)
+        {
+            if (curve == null) return false;
+            double length = GetCurveLength(curve);
+            return !double.IsNaN(length) && !double.IsInfinity(length) && length > 0.0000001;
         }
 
         private static double GetPointPickTolerance(Editor ed)
         {
-            const double minTolerance = 0.001;
-            const double maxTolerance = 0.50;
+            const double fallbackTolerance = 0.05;
 
             try
             {
@@ -172,17 +190,70 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         if (screenSize.Y > 1.0 && view.Height > 0.0)
                         {
                             double pixelSize = view.Height / screenSize.Y;
-                            double tolerance = pixelSize * 2.0;
-                            if (tolerance < minTolerance) return minTolerance;
-                            if (tolerance > maxTolerance) return maxTolerance;
-                            return tolerance;
+                            int pickBoxPixels = 3;
+                            try
+                            {
+                                object pickBox = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("PICKBOX");
+                                if (pickBox != null) pickBoxPixels = Convert.ToInt32(pickBox, CultureInfo.InvariantCulture);
+                            }
+                            catch { }
+                            // PICKBOX is measured in screen pixels. Do not clamp the converted
+                            // value to a fixed drawing-unit range: that made overlap detection
+                            // fail in millimetre drawings and at wide zoom levels.
+                            double pickRadiusPixels = Math.Max(4, Math.Min(30, pickBoxPixels + 2));
+                            double tolerance = pixelSize * pickRadiusPixels;
+                            double minimum = Math.Max(view.Height * 0.000000001, 0.0000001);
+                            double maximum = Math.Max(view.Height * 0.05, minimum);
+                            return Math.Max(minimum, Math.Min(maximum, tolerance));
                         }
                     }
                 }
             }
             catch { }
 
-            return 0.05;
+            return fallbackTolerance;
+        }
+
+        private static Vector3d GetViewDirection(Editor editor)
+        {
+            if (editor == null) return Vector3d.ZAxis;
+            try
+            {
+                using (ViewTableRecord view = editor.GetCurrentView())
+                {
+                    Vector3d direction = view.ViewDirection;
+                    return direction.Length > 0.0000001 ? direction.GetNormal() : Vector3d.ZAxis;
+                }
+            }
+            catch
+            {
+                return Vector3d.ZAxis;
+            }
+        }
+
+        private static bool TryGetDisplayClosestPoint(Curve curve, Point3d pickedPoint,
+            Vector3d viewDirection, out Point3d closestPoint, out double displayDistance)
+        {
+            closestPoint = Point3d.Origin;
+            displayDistance = double.MaxValue;
+            if (curve == null) return false;
+
+            Vector3d direction = viewDirection.Length > 0.0000001
+                ? viewDirection.GetNormal()
+                : Vector3d.ZAxis;
+            try
+            {
+                closestPoint = curve.GetClosestPointTo(pickedPoint, direction, false);
+            }
+            catch
+            {
+                try { closestPoint = curve.GetClosestPointTo(pickedPoint, false); }
+                catch { return false; }
+            }
+
+            Vector3d offset = closestPoint - pickedPoint;
+            displayDistance = offset.CrossProduct(direction).Length;
+            return !double.IsNaN(displayDistance) && !double.IsInfinity(displayDistance);
         }
 
         private static bool TryBuildPreviewSource(Document doc, ObjectId pipeId, PipeLengthAnnotationOptions options, out PipeLengthAnnotationResult result, out string errorMessage)
@@ -202,9 +273,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         return false;
                     }
 
-                    if (!IsSupportedPolylineCurve(curve))
+                    if (!IsSupportedLengthCurve(curve))
                     {
-                        errorMessage = "仅支持多段线、二维多段线、三维多段线。";
+                        errorMessage = "所选对象没有可用的长度属性。";
                         return false;
                     }
 
@@ -283,10 +354,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     return result;
                 }
 
-                if (!IsSupportedPolylineCurve(curve))
+                if (!IsSupportedLengthCurve(curve))
                 {
                     result.Success = false;
-                    result.Message = "仅支持多段线、二维多段线、三维多段线。";
+                    result.Message = "所选对象没有可用的长度属性。";
                     return result;
                 }
 
@@ -681,9 +752,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             double width = result.HasQuantityAttributes ? result.ExcavationWidth : options.ExcavationWidth;
             double height = result.HasQuantityAttributes ? result.ExcavationHeight : options.ExcavationHeight;
             double depth = result.HasQuantityAttributes ? result.ExcavationDepth : options.ExcavationDepth;
-            string widthText = FormatOptionalNumber(width);
-            string heightText = FormatOptionalNumber(height);
-            string depthText = FormatOptionalNumber(depth);
+            string widthText = FormatNumber(width, options.DecimalPlaces);
+            string heightText = FormatNumber(height, options.DecimalPlaces);
+            string depthText = FormatNumber(depth, options.DecimalPlaces);
             string layerName = string.IsNullOrWhiteSpace(result.PipeLayerName) ? string.Empty : result.PipeLayerName;
             string parentGroup = string.IsNullOrWhiteSpace(result.PipeParentGroup) ? string.Empty : result.PipeParentGroup;
             string parentClass = string.IsNullOrWhiteSpace(result.PipeParentClass) ? string.Empty : result.PipeParentClass;
@@ -723,11 +794,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             string format = "0";
             if (decimalPlaces > 0) format += "." + new string('0', decimalPlaces);
             return value.ToString(format, CultureInfo.InvariantCulture);
-        }
-
-        private static string FormatOptionalNumber(double value)
-        {
-            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         private static AttachmentPoint GetTextAttachment(Point3d annotationPoint, Point3d leaderStartPoint)

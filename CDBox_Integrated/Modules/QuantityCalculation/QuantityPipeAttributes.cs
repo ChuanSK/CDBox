@@ -110,7 +110,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         [Category("02 主管属性")]
         [DisplayName("回填结构层")]
-        [Description("按一行一层保存结构层，支持：层级名称 高度 锁定 管线层。非锁定层可由属性编辑器按总高自动计算。")]
+        [Description("按一行一层保存结构层，层类型支持一般层、管线层和垫层。非锁定层可由属性编辑器按总高自动计算。")]
         public string BackfillStructure { get; set; }
 
         [Category("03 支管属性")]
@@ -322,7 +322,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     RoadThickness = 0.2,
                     ExcavationType = "机械开挖",
                     BackfillType = "中粗砂回填",
-                    BackfillStructure = "C25砼恢复 0.25 锁定" + Environment.NewLine + "碎石垫层 0.10 锁定" + Environment.NewLine + "中粗砂回填 0.80 管线层" + Environment.NewLine + "中粗砂垫层 0.15 锁定",
+                    BackfillStructure = "C25砼恢复 0.25 锁定" + Environment.NewLine + "碎石垫层 0.10 锁定" + Environment.NewLine + "中粗砂回填 0.80 管线层" + Environment.NewLine + "中粗砂垫层 0.15 锁定 垫层",
                     SandCushionThickness = 0.15,
                     GravelCushionThickness = 0.10,
                     C25RestoreThickness = 0.25,
@@ -347,7 +347,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     RoadThickness = 0.12,
                     ExcavationType = "人工开挖",
                     BackfillType = "中粗砂回填",
-                    BackfillStructure = "C25砼恢复 0.25 锁定" + Environment.NewLine + "中粗砂回填 0.25 管线层" + Environment.NewLine + "中粗砂垫层 0.10 锁定",
+                    BackfillStructure = "C25砼恢复 0.25 锁定" + Environment.NewLine + "中粗砂回填 0.25 管线层" + Environment.NewLine + "中粗砂垫层 0.10 锁定 垫层",
                     BranchType = "砼恢复",
                     BranchIncludeInCalculation = true,
                     BranchDepth = 0.6,
@@ -378,7 +378,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     RoadThickness = 0.2,
                     ExcavationType = "机械开挖",
                     BackfillType = "中粗砂回填",
-                    BackfillStructure = "承压盖板C25基础 0.30 锁定" + Environment.NewLine + "承压盖板碎石垫层 0.10 锁定" + Environment.NewLine + "中粗砂回填 0.80" + Environment.NewLine + "中粗砂垫层 0.15 锁定 井下层",
+                    BackfillStructure = "承压盖板C25基础 0.30 锁定" + Environment.NewLine + "承压盖板碎石垫层 0.10 锁定" + Environment.NewLine + "中粗砂回填 0.80" + Environment.NewLine + "中粗砂垫层 0.15 锁定 垫层",
                     ExcavationLength = 1.3,
                     ExcavationWidth = 1.3,
                     CoverPlate = "1200承压盖板",
@@ -449,7 +449,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             foreach (QuantityStructureLayer layer in layers)
             {
                 if (layer == null) continue;
-                if (layer.IsPipeLayer) height += layer.Height;
+                if (layer.IsBelowWellLayer || layer.IsCushionLayer) height += layer.Height;
             }
 
             if (layers.Count == 0)

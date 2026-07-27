@@ -62,13 +62,21 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             string token = previousToken ?? string.Empty;
             Match number = Regex.Match(token, @"[-+]?[0-9]+(?:[\.,][0-9]+)?");
             int decimals = 2;
-            string suffix = "m";
             if (number.Success)
             {
                 int separator = Math.Max(number.Value.IndexOf('.'), number.Value.IndexOf(','));
                 decimals = separator < 0 ? 0 : number.Value.Length - separator - 1;
-                suffix = token.Substring(number.Index + number.Length).Trim();
             }
+            return FormatWithDecimals(length, decimals, token);
+        }
+
+        public static string FormatWithDecimals(double length, int decimals, string previousToken)
+        {
+            string token = previousToken ?? string.Empty;
+            Match number = Regex.Match(token, @"[-+]?[0-9]+(?:[\.,][0-9]+)?");
+            string suffix = number.Success
+                ? token.Substring(number.Index + number.Length).Trim()
+                : "m";
             decimals = Math.Max(0, Math.Min(decimals, 8));
             string format = decimals == 0 ? "0" : "0." + new string('0', decimals);
             return length.ToString(format, CultureInfo.InvariantCulture) + suffix;

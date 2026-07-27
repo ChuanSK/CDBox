@@ -14,17 +14,25 @@ namespace TCPipeAutoDraw.UI.Studio
 {
     internal static class CDBoxStudioUpdateService
     {
-        public static readonly string CurrentVersion = ReadInformationalVersion("3.1.1");
-        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30101);
-        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.1.1");
-        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.1.1");
+        public static readonly string CurrentVersion = ReadInformationalVersion("3.2.0");
+        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30200);
+        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.2.0");
+        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.2.0");
         public static readonly string DefaultChannel = ReadAssemblyMetadata("CDBoxUpdateChannel", "studio-preview");
-        public const string DefaultUpdateSourceName = "国内更新源";
-        public const string DefaultUpdateSourceUrl = "https://gitee.com/cdbox/cdbox-updates/raw/master/studio-preview/update.json";
+        public const string DefaultUpdateSourceName = "Gitee";
+        public const string GiteeUpdateSourceUrl = CDBoxStudioUpdateSourceCatalog.GiteeManifestUrl;
+        public const string GitCodeUpdateSourceUrl = CDBoxStudioUpdateSourceCatalog.GitCodeManifestUrl;
+        public const string GitHubUpdateSourceUrl = CDBoxStudioUpdateSourceCatalog.GitHubManifestUrl;
+        public const string DefaultUpdateSourceUrl = GiteeUpdateSourceUrl;
 
         private const int RequestTimeoutMilliseconds = 15000;
         private const int DownloadTimeoutMilliseconds = 30000;
         private const int BufferSize = 128 * 1024;
+
+        public static IList<CDBoxStudioUpdateSource> GetBuiltInManifestSources()
+        {
+            return CDBoxStudioUpdateSourceCatalog.CreateManifestSources();
+        }
 
         private static string ReadInformationalVersion(string fallback)
         {
@@ -67,53 +75,68 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             settings = settings ?? new CDBoxStudioSettings();
             settings.Normalize();
+            IList<CDBoxStudioUpdateSource> sources = GetBuiltInManifestSources();
+            var failures = new List<string>();
+            CDBoxStudioUpdateResult lastResult = CreateBaseCheckResult();
 
-            string sourceUrl = string.IsNullOrWhiteSpace(settings.UpdateSourceUrl)
-                ? DefaultUpdateSourceUrl
-                : settings.UpdateSourceUrl.Trim();
+            foreach (CDBoxStudioUpdateSource source in sources)
+            {
+                if (source == null || !source.Enabled || string.IsNullOrWhiteSpace(source.Url)) continue;
+                CDBoxStudioUpdateResult result = CreateBaseCheckResult();
+                result.SourceName = source.DisplayName;
+                result.SourceUrl = source.Url.Trim();
+                lastResult = result;
+                try
+                {
+                    CDBoxStudioLogger.Info("开始检查 Studio 更新。固定通道=" + DefaultChannel
+                        + ", ManifestSource=" + result.SourceName + ", Url=" + result.SourceUrl);
+                    string json = DownloadString(result.SourceUrl);
+                    if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("更新源返回内容为空。");
 
-            var result = new CDBoxStudioUpdateResult
+                    Dictionary<string, object> root = Deserialize(json);
+                    FillResultFromFixedManifest(result, root, result.SourceUrl);
+                    result.Success = true;
+                    result.UpdateAvailable = IsUpdateAvailable(result.VersionCode, result.LatestVersion,
+                        result.CurrentVersionCode, result.CurrentVersion);
+
+                    CDBoxStudioLogger.Info("更新检查完成。ManifestSource=" + result.SourceName
+                        + ", Current=" + result.CurrentVersion + "(" + result.CurrentVersionCode + ")"
+                        + ", Latest=" + result.LatestVersion + "(" + result.VersionCode + ")"
+                        + ", UpdateAvailable=" + result.UpdateAvailable
+                        + ", PackageSourceCount=" + result.Sources.Count);
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    result.Success = false;
+                    result.UpdateAvailable = false;
+                    result.ErrorMessage = ex.Message;
+                    failures.Add(result.SourceName + "：" + ex.Message);
+                    CDBoxStudioLogger.Error("update.json 更新源失败，准备自动尝试下一个。Source="
+                        + result.SourceName + ", Url=" + result.SourceUrl, ex);
+                }
+            }
+
+            lastResult.Success = false;
+            lastResult.UpdateAvailable = false;
+            lastResult.SourceName = "内置更新源";
+            lastResult.SourceUrl = string.Empty;
+            lastResult.ErrorMessage = failures.Count == 0
+                ? "没有可用的内置 update.json 更新源。"
+                : "所有内置 update.json 更新源均失败：" + string.Join("；", failures.ToArray());
+            CDBoxStudioLogger.Error("检查 Studio 更新失败。" + lastResult.ErrorMessage, null);
+            return lastResult;
+        }
+
+        private static CDBoxStudioUpdateResult CreateBaseCheckResult()
+        {
+            return new CDBoxStudioUpdateResult
             {
                 CurrentVersion = CurrentVersion,
                 CurrentVersionCode = CurrentVersionCode,
                 Channel = DefaultChannel,
-                SourceName = DefaultUpdateSourceName,
-                SourceUrl = sourceUrl,
                 CheckedAt = DateTime.Now
             };
-
-            try
-            {
-                if (string.IsNullOrWhiteSpace(sourceUrl))
-                {
-                    throw new InvalidOperationException("更新源地址为空。请在 Studio 设置页填写 update.json 地址。");
-                }
-
-                CDBoxStudioLogger.Info("开始检查 Studio 更新。固定通道=" + DefaultChannel + ", Source=" + sourceUrl);
-                string json = DownloadString(sourceUrl);
-                if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("更新源返回内容为空。");
-
-                Dictionary<string, object> root = Deserialize(json);
-                FillResultFromFixedManifest(result, root, sourceUrl);
-                result.Success = true;
-                result.UpdateAvailable = IsUpdateAvailable(result.VersionCode, result.LatestVersion, result.CurrentVersionCode, result.CurrentVersion);
-
-                CDBoxStudioLogger.Info("更新检查完成。Current=" + result.CurrentVersion
-                    + "(" + result.CurrentVersionCode + ")"
-                    + ", Latest=" + result.LatestVersion
-                    + "(" + result.VersionCode + ")"
-                    + ", UpdateAvailable=" + result.UpdateAvailable
-                    + ", SourceCount=" + result.Sources.Count);
-            }
-            catch (Exception ex)
-            {
-                result.Success = false;
-                result.UpdateAvailable = false;
-                result.ErrorMessage = ex.Message;
-                CDBoxStudioLogger.Error("检查 Studio 更新失败。", ex);
-            }
-
-            return result;
         }
 
         public static CDBoxStudioUpdateDownloadResult DownloadAndVerify(CDBoxStudioSettings settings)
@@ -202,11 +225,11 @@ namespace TCPipeAutoDraw.UI.Studio
                     try
                     {
                         CDBoxStudioLogger.Info("开始从下载源获取更新包：" + attempt.SourceName + " -> " + attempt.SourceUrl);
-                        ReportProgress(progress, 8, "正在连接下载源：" + attempt.SourceName);
+                        ReportProgress(progress, 8, "正在连接下载服务器");
                         DownloadFile(source.Url.Trim(), tempPath, manifest.PackageSizeBytes, attempt, progress, attempt.SourceName);
                         attempt.PackagePath = tempPath;
 
-                        ReportProgress(progress, 96, "正在校验 SHA256：" + attempt.SourceName);
+                        ReportProgress(progress, 96, "正在校验 SHA256");
                         string hash = ComputeSha256(tempPath);
                         attempt.Sha256Actual = hash;
                         if (!SameHash(hash, manifest.Sha256))
@@ -378,7 +401,7 @@ namespace TCPipeAutoDraw.UI.Studio
                             if (percent >= lastLoggedPercent + 10 || percent == 100)
                             {
                                 lastLoggedPercent = percent;
-                                ReportProgress(progress, Math.Max(10, Math.Min(95, percent)), "正在下载 " + sourceName + "：" + percent + "%");
+                                ReportProgress(progress, Math.Max(10, Math.Min(95, percent)), "正在下载更新包：" + percent + "%");
                                 CDBoxStudioLogger.Info("更新包下载进度：" + percent + "% (" + received + "/" + total + ")");
                             }
                         }
@@ -414,7 +437,6 @@ namespace TCPipeAutoDraw.UI.Studio
             result.ReleaseDate = RequiredString(root, "releaseDate");
             result.Mandatory = OptionalBool(root, "mandatory");
             result.Notes = ReadFixedNotes(root);
-            result.SourceName = DefaultUpdateSourceName;
             result.SourceUrl = sourceUrl;
 
             if (!string.Equals(result.Channel, DefaultChannel, StringComparison.OrdinalIgnoreCase))

@@ -65,6 +65,10 @@ artifacts/
 
 # Local CDBox release archives
 /CDBox_Studio_Preview_*.zip
+/CDBox发布/*.zip
+
+# Local Codex workspace configuration
+/.codex/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

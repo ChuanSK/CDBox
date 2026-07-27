@@ -146,7 +146,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 bool hasSaved = HasPipeAttributes(entity, tr);
                 bool hasSavedDrawLengthWidthHeightFlag = hasSaved && HasPipeAttributeKey(entity, tr, "DrawLengthWidthHeightAnnotation");
                 QuantityPipeAttributes savedAttributes = hasSaved ? ReadPipeAttributes(entity, tr) : null;
-                string inferredKind = savedAttributes != null && savedAttributes.IsSpecialObject
+                string inferredKind = savedAttributes != null
+                    && (savedAttributes.IsSpecialObject || IsSupportedAttributeKind(savedAttributes.ObjectKind))
                     ? savedAttributes.ObjectKind
                     : InferSupportedObjectKind(db, tr, entity);
                 if (string.IsNullOrWhiteSpace(inferredKind))
@@ -1353,6 +1354,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return InferSupportedObjectKind(meta, entity);
         }
 
+        private static bool IsSupportedAttributeKind(string kind)
+        {
+            return QuantityPipeAttributes.IsMainPipeKind(kind)
+                || QuantityPipeAttributes.IsBranchKind(kind)
+                || QuantityPipeAttributes.IsNodeKind(kind);
+        }
+
         private static string InferSupportedObjectKind(string sourceText, Entity entity)
         {
             // 保留旧签名，避免其他代码调用时编译失败；属性识别不再根据图层名/标签猜测。
@@ -2276,8 +2284,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (attrs == null) return 0.0;
             List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(attrs.BackfillStructure);
-            double height = QuantityStructureLayer.SumHeight(layers, QuantityStructureLayer.IsSandCushion);
-            if (height <= 0) height = attrs.SandCushionThickness;
+            double height = QuantityStructureLayer.ResolvePipeCushionHeight(layers, attrs.SandCushionThickness);
             return height < 0 ? 0.0 : height;
         }
 
@@ -2293,10 +2300,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double startExcavationDepth = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
             double endExcavationDepth = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
 
-            if (startExcavationDepth > 0 && endExcavationDepth > 0) attrs.AverageDepth = (startExcavationDepth + endExcavationDepth) / 2.0;
-            else if (startExcavationDepth > 0) attrs.AverageDepth = startExcavationDepth;
-            else if (endExcavationDepth > 0) attrs.AverageDepth = endExcavationDepth;
+            if (startExcavationDepth > 0 && endExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor((startExcavationDepth + endExcavationDepth) / 2.0);
+            else if (startExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor(startExcavationDepth);
+            else if (endExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor(endExcavationDepth);
             else attrs.AverageDepth = 0.0;
+        }
+
+        private static double RoundForAttributeEditor(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
+            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
         }
 
         private static double CalculatePipeEndpointDepthFromNode(QuantityPipeAttributes pipeAttrs, QuantityPipeAttributes nodeAttrs)
@@ -2682,7 +2695,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 return "承压盖板C25基础 " + Format(attrs.C25RestoreThickness) + " 锁定"
                     + Environment.NewLine + "承压盖板碎石垫层 " + Format(attrs.GravelCushionThickness) + " 锁定"
                     + Environment.NewLine + "中粗砂回填 0.80"
-                    + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定 井下层";
+                    + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定 垫层";
             }
             if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
             {
@@ -2698,12 +2711,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 double sand = attrs.SandCushionThickness > 0 ? attrs.SandCushionThickness : 0.10;
                 return "C25砼恢复 " + Format(c25) + " 锁定"
                     + Environment.NewLine + "中粗砂回填 0.25 管线层"
-                    + Environment.NewLine + "中粗砂垫层 " + Format(sand) + " 锁定";
+                    + Environment.NewLine + "中粗砂垫层 " + Format(sand) + " 锁定 垫层";
             }
             return "C25砼恢复 " + Format(attrs.C25RestoreThickness) + " 锁定"
                 + Environment.NewLine + "碎石垫层 " + Format(attrs.GravelCushionThickness) + " 锁定"
                 + Environment.NewLine + "中粗砂回填 0.80 管线层"
-                + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定";
+                + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定 垫层";
         }
 
         private static bool IsLockViolation(Autodesk.AutoCAD.Runtime.Exception ex)

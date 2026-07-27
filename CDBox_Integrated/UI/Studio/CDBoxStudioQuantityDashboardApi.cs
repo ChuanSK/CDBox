@@ -153,6 +153,24 @@ namespace TCPipeAutoDraw.UI.Studio
             }
         }
 
+        public static string ExportCalculationProcess(string payload)
+        {
+            QuantityDashboardRequest request = Deserialize<QuantityDashboardRequest>(payload) ?? new QuantityDashboardRequest();
+            QuantityDashboardSnapshot snapshot = QuantityDashboardService.BuildSnapshot(request, null);
+            string drawing = snapshot.document == null ? "图纸" : Path.GetFileNameWithoutExtension(snapshot.document.name);
+            string defaultName = SanitizeFileName(drawing + "_工程量计算过程_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx");
+            using (SaveFileDialog dialog = new SaveFileDialog())
+            {
+                dialog.Title = "导出工程量计算过程";
+                dialog.Filter = "Excel 工作簿 (*.xlsx)|*.xlsx";
+                dialog.FileName = defaultName;
+                dialog.AddExtension = true;
+                if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK) return string.Empty;
+                QuantityDashboardExportService.ExportCalculationProcess(dialog.FileName, snapshot);
+                return dialog.FileName;
+            }
+        }
+
         public static string SaveSnapshot(string payload)
         {
             QuantityDashboardSnapshot snapshot = ResolveSnapshot(payload);

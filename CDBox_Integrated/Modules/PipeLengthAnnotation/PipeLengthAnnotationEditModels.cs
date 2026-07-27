@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using TCPipeAutoDraw.Core.Colors;
 
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 {
@@ -35,6 +36,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public string LayerName { get; set; }
         public short TextColorIndex { get; set; }
         public short LeaderColorIndex { get; set; }
+        public CDBoxColor TextColor { get; set; }
+        public CDBoxColor LeaderColor { get; set; }
         public string LinetypeName { get; set; }
         public LineWeight LineWeight { get; set; }
         public string SourceObjectId { get; set; }
@@ -71,6 +74,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             LinetypeNames = new List<string>();
             TextColorIndex = 7;
             LeaderColorIndex = 7;
+            TextColor = CDBoxColor.FromIndex(7);
+            LeaderColor = CDBoxColor.FromIndex(7);
             TextHeight = 1.0;
             LineWeight = LineWeight.ByLayer;
             IsBound = true;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using TCPipeAutoDraw.Core.Colors;
 
 namespace TCPipeAutoDraw.Modules.LayerManager
 {
@@ -16,6 +17,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         public bool IsDependent { get; set; }
         public bool IsPlottable { get; set; }
         public short ColorIndex { get; set; }
+        public CDBoxColor Color { get; set; }
         public string Linetype { get; set; }
         public int ObjectCount { get; set; }
 
@@ -34,6 +36,27 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         /// </summary>
         public string TagText { get; set; }
 
+        /// <summary>
+        /// 本次扫描得到的结构化识别结果。该结果用于预览，不会直接改名或覆盖图层属性。
+        /// </summary>
+        public string NormalizedName { get; set; }
+        public string SuggestedName { get; set; }
+        public string RecognitionStatus { get; set; }
+        public double RecognitionConfidence { get; set; }
+        public string RecognitionSource { get; set; }
+        public string RecognitionExplanation { get; set; }
+        public string RecognitionConflicts { get; set; }
+        public string RecognitionMissingFields { get; set; }
+        public string RecognitionParentGroup { get; set; }
+        public string RecognitionParentClass { get; set; }
+        public string ObjectType { get; set; }
+        public string Specification { get; set; }
+        public string Material { get; set; }
+        public string ConstructionType { get; set; }
+        public string NodeType { get; set; }
+        public string StructureType { get; set; }
+        public string Purpose { get; set; }
+
         public LayerInfo()
         {
             Name = string.Empty;
@@ -42,6 +65,23 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             ParentGroup = string.Empty;
             ParentClass = string.Empty;
             TagText = string.Empty;
+            NormalizedName = string.Empty;
+            SuggestedName = string.Empty;
+            RecognitionStatus = LayerRecognitionStatuses.Unrecognized;
+            RecognitionSource = string.Empty;
+            RecognitionExplanation = string.Empty;
+            RecognitionConflicts = string.Empty;
+            RecognitionMissingFields = string.Empty;
+            RecognitionParentGroup = string.Empty;
+            RecognitionParentClass = string.Empty;
+            ObjectType = string.Empty;
+            Specification = string.Empty;
+            Material = string.Empty;
+            ConstructionType = string.Empty;
+            NodeType = string.Empty;
+            StructureType = string.Empty;
+            Purpose = string.Empty;
+            Color = CDBoxColor.FromIndex(7);
         }
     }
 
@@ -50,12 +90,35 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         public string ParentGroup { get; set; }
         public string ParentClass { get; set; }
         public List<string> Tags { get; set; }
+        public string NormalizedName { get; set; }
+        public string SuggestedName { get; set; }
+        public string ObjectType { get; set; }
+        public string Specification { get; set; }
+        public string Material { get; set; }
+        public string ConstructionType { get; set; }
+        public string NodeType { get; set; }
+        public string StructureType { get; set; }
+        public string Purpose { get; set; }
+        public string RecognitionStatus { get; set; }
+        public double RecognitionConfidence { get; set; }
+        public string RecognitionSource { get; set; }
 
         public LayerMetadata()
         {
             ParentGroup = string.Empty;
             ParentClass = string.Empty;
             Tags = new List<string>();
+            NormalizedName = string.Empty;
+            SuggestedName = string.Empty;
+            ObjectType = string.Empty;
+            Specification = string.Empty;
+            Material = string.Empty;
+            ConstructionType = string.Empty;
+            NodeType = string.Empty;
+            StructureType = string.Empty;
+            Purpose = string.Empty;
+            RecognitionStatus = string.Empty;
+            RecognitionSource = string.Empty;
         }
 
         public string TagText
@@ -70,7 +133,14 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             {
                 return string.IsNullOrWhiteSpace(ParentGroup)
                     && string.IsNullOrWhiteSpace(ParentClass)
-                    && (Tags == null || Tags.Count == 0);
+                    && (Tags == null || Tags.Count == 0)
+                    && string.IsNullOrWhiteSpace(ObjectType)
+                    && string.IsNullOrWhiteSpace(Specification)
+                    && string.IsNullOrWhiteSpace(Material)
+                    && string.IsNullOrWhiteSpace(ConstructionType)
+                    && string.IsNullOrWhiteSpace(NodeType)
+                    && string.IsNullOrWhiteSpace(StructureType)
+                    && string.IsNullOrWhiteSpace(Purpose);
             }
         }
 
@@ -80,7 +150,19 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             {
                 ParentGroup = ParentGroup ?? string.Empty,
                 ParentClass = ParentClass ?? string.Empty,
-                Tags = Tags == null ? new List<string>() : new List<string>(Tags)
+                Tags = Tags == null ? new List<string>() : new List<string>(Tags),
+                NormalizedName = NormalizedName ?? string.Empty,
+                SuggestedName = SuggestedName ?? string.Empty,
+                ObjectType = ObjectType ?? string.Empty,
+                Specification = Specification ?? string.Empty,
+                Material = Material ?? string.Empty,
+                ConstructionType = ConstructionType ?? string.Empty,
+                NodeType = NodeType ?? string.Empty,
+                StructureType = StructureType ?? string.Empty,
+                Purpose = Purpose ?? string.Empty,
+                RecognitionStatus = RecognitionStatus ?? string.Empty,
+                RecognitionConfidence = RecognitionConfidence,
+                RecognitionSource = RecognitionSource ?? string.Empty
             };
         }
 
@@ -128,22 +210,40 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
     public sealed class LayerRecognitionRule
     {
+        public string Id { get; set; }
+        public string Name { get; set; }
         public bool Enabled { get; set; }
+        public int Priority { get; set; }
+        public string Scope { get; set; }
         public string MatchMode { get; set; }
         public string Pattern { get; set; }
+        public string ExcludePattern { get; set; }
         public string ParentGroup { get; set; }
         public string ParentClass { get; set; }
         public string TagText { get; set; }
+        public string MergeMode { get; set; }
+        public string ApplicableObjectTypes { get; set; }
+        public string Source { get; set; }
+        public double ConfidenceBase { get; set; }
         public bool StopAfterMatch { get; set; }
 
         public LayerRecognitionRule()
         {
+            Id = Guid.NewGuid().ToString("N");
+            Name = string.Empty;
             Enabled = true;
+            Priority = 100;
+            Scope = "图层名";
             MatchMode = "通配符";
             Pattern = string.Empty;
+            ExcludePattern = string.Empty;
             ParentGroup = string.Empty;
             ParentClass = string.Empty;
             TagText = string.Empty;
+            MergeMode = "覆盖空值";
+            ApplicableObjectTypes = string.Empty;
+            Source = "用户规则";
+            ConfidenceBase = 0.78;
             StopAfterMatch = true;
         }
 
@@ -151,14 +251,95 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         {
             return new LayerRecognitionRule
             {
+                Id = string.IsNullOrWhiteSpace(Id) ? Guid.NewGuid().ToString("N") : Id,
+                Name = Name ?? string.Empty,
                 Enabled = Enabled,
+                Priority = Priority,
+                Scope = Scope ?? string.Empty,
                 MatchMode = MatchMode ?? string.Empty,
                 Pattern = Pattern ?? string.Empty,
+                ExcludePattern = ExcludePattern ?? string.Empty,
                 ParentGroup = ParentGroup ?? string.Empty,
                 ParentClass = ParentClass ?? string.Empty,
                 TagText = TagText ?? string.Empty,
+                MergeMode = MergeMode ?? string.Empty,
+                ApplicableObjectTypes = ApplicableObjectTypes ?? string.Empty,
+                Source = Source ?? string.Empty,
+                ConfidenceBase = ConfidenceBase,
                 StopAfterMatch = StopAfterMatch
             };
+        }
+    }
+
+    public static class LayerRecognitionStatuses
+    {
+        public const string Standard = "标准";
+        public const string Compatible = "兼容";
+        public const string Incomplete = "信息不完整";
+        public const string Conflict = "冲突";
+        public const string Mixed = "混合";
+        public const string Unrecognized = "未识别";
+    }
+
+    public sealed class LayerStructuredAttributes
+    {
+        public string ObjectType { get; set; }
+        public string Specification { get; set; }
+        public string Material { get; set; }
+        public string ConstructionType { get; set; }
+        public string NodeType { get; set; }
+        public string StructureType { get; set; }
+        public string Purpose { get; set; }
+        public string StrengthGrade { get; set; }
+        public string Thickness { get; set; }
+        public string Volume { get; set; }
+
+        public LayerStructuredAttributes()
+        {
+            ObjectType = string.Empty;
+            Specification = string.Empty;
+            Material = string.Empty;
+            ConstructionType = string.Empty;
+            NodeType = string.Empty;
+            StructureType = string.Empty;
+            Purpose = string.Empty;
+            StrengthGrade = string.Empty;
+            Thickness = string.Empty;
+            Volume = string.Empty;
+        }
+    }
+
+    public sealed class LayerRecognitionResult
+    {
+        public string RawName { get; set; }
+        public string NormalizedName { get; set; }
+        public string SuggestedName { get; set; }
+        public string Status { get; set; }
+        public double Confidence { get; set; }
+        public string Source { get; set; }
+        public string Explanation { get; set; }
+        public bool NeedsConfirmation { get; set; }
+        public LayerMetadata Metadata { get; set; }
+        public LayerStructuredAttributes Attributes { get; set; }
+        public List<string> Evidence { get; set; }
+        public List<string> Conflicts { get; set; }
+        public List<string> MissingFields { get; set; }
+        public List<string> MatchedRules { get; set; }
+
+        public LayerRecognitionResult()
+        {
+            RawName = string.Empty;
+            NormalizedName = string.Empty;
+            SuggestedName = string.Empty;
+            Status = LayerRecognitionStatuses.Unrecognized;
+            Source = string.Empty;
+            Explanation = string.Empty;
+            Metadata = new LayerMetadata();
+            Attributes = new LayerStructuredAttributes();
+            Evidence = new List<string>();
+            Conflicts = new List<string>();
+            MissingFields = new List<string>();
+            MatchedRules = new List<string>();
         }
     }
 

@@ -334,7 +334,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     // 注记文字直接取属性表原始层名，仅去掉末尾高度/控制词；
                     // 不使用 QuantityStructureLayer.Name，因为其清理逻辑会把 C25 中的 25 一并去掉。
                     LeftLabel = BuildLayerDisplayName(q),
-                    Height = q.Height,
+                    Height = RoundForSection(q.Height),
                     HeightLocked = q.Locked,
                     HatchPatternName = pattern.Name,
                     HatchScale = pattern.Scale,
@@ -356,6 +356,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
 
             // 去掉控制词，但保留材料名称中的数字，例如 C25、C30。
+            text = Regex.Replace(text, @"\s+垫层\s*$", string.Empty);
             text = Regex.Replace(text, "锁定|固定|管线层|管道层|管层|井下层|井下方垫层", " ");
 
             // 只移除与层高相同的最后一个数字，避免把 C25 / C30 中的数字删掉。
@@ -430,7 +431,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 }
 
                 string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-                if (ContainsAny(text, "垫层")) return true;
+                if (layer.IsCushionLayer || layer.IsBelowWellLayer || ContainsAny(text, "垫层")) return true;
                 sectionIndex++;
             }
 
@@ -544,6 +545,12 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             return false;
         }
 
+        private static double RoundForSection(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
+            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        }
+
         private struct PatternChoice
         {
             public string Name;
@@ -599,6 +606,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 options.DrawTitle = !string.IsNullOrWhiteSpace(options.SectionTitle);
                 options.DrawPipeCircle = true;
                 SectionLayoutCalculator.Normalize(options);
+                options.TotalHeight = RoundForSection(options.TotalHeight);
                 return options;
             }
 

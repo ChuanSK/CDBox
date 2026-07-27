@@ -152,7 +152,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 AppendNumberField(json, ref first, "RoadThickness", "原路面结构层 m", attrs.RoadThickness, string.Empty);
                 AppendSelectField(json, ref first, "ExcavationType", "开挖方式", attrs.ExcavationType, new[] { "机械开挖", "人工开挖" }, string.Empty);
                 AppendSelectField(json, ref first, "BackfillType", "回填类型", attrs.BackfillType, new[] { "中粗砂回填", "原土回填", "混合/特殊" }, string.Empty);
-                AppendTextAreaField(json, ref first, "BackfillStructure", "回填结构层", attrs.BackfillStructure, "每行一层：层名 厚度 标记。可用“锁定”“管线层”“井下层”。");
+                AppendTextAreaField(json, ref first, "BackfillStructure", "回填结构层", attrs.BackfillStructure, "每行一层：层名 厚度 层类型。可用“锁定”“一般层”“管线层”“垫层”。");
             }
             else if (QuantityPipeAttributes.IsBranchKind(kind))
             {
@@ -178,7 +178,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 AppendNumberField(json, ref first, "ExcavationWidth", "开挖宽 m", attrs.ExcavationWidth, string.Empty);
                 AppendSelectField(json, ref first, "ExcavationType", "开挖方式", attrs.ExcavationType, new[] { "机械开挖", "人工开挖" }, string.Empty);
                 AppendSelectField(json, ref first, "BackfillType", "回填类型", attrs.BackfillType, new[] { "中粗砂回填", "原土回填", "混合/特殊" }, string.Empty);
-                AppendTextAreaField(json, ref first, "BackfillStructure", "井结构层", attrs.BackfillStructure, "可在层尾追加“井下层”，用于井深总高与开挖深度计算。");
+                AppendTextAreaField(json, ref first, "BackfillStructure", "井结构层", attrs.BackfillStructure, "可将井底结构层设为“垫层”，用于真实井深与开挖深度计算。");
                 AppendTextField(json, ref first, "CoverPlate", "承压盖板", attrs.CoverPlate, string.Empty);
             }
 

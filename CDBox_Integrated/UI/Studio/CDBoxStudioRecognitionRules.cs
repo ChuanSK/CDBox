@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using TCPipeAutoDraw.Modules.LayerManager;
@@ -62,12 +63,21 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (!first) sb.Append(",");
                 first = false;
                 sb.Append("{")
+                    .Append("\"id\":\"").Append(EscapeJson(item.Id)).Append("\",")
+                    .Append("\"name\":\"").Append(EscapeJson(item.Name)).Append("\",")
                     .Append("\"enabled\":").Append(item.Enabled ? "true" : "false").Append(",")
+                    .Append("\"priority\":").Append(item.Priority.ToString(CultureInfo.InvariantCulture)).Append(",")
+                    .Append("\"scope\":\"").Append(EscapeJson(item.Scope)).Append("\",")
                     .Append("\"matchMode\":\"").Append(EscapeJson(NormalizeMatchMode(item.MatchMode))).Append("\",")
                     .Append("\"pattern\":\"").Append(EscapeJson(item.Pattern)).Append("\",")
+                    .Append("\"excludePattern\":\"").Append(EscapeJson(item.ExcludePattern)).Append("\",")
                     .Append("\"parentGroup\":\"").Append(EscapeJson(item.ParentGroup)).Append("\",")
                     .Append("\"parentClass\":\"").Append(EscapeJson(item.ParentClass)).Append("\",")
                     .Append("\"tagText\":\"").Append(EscapeJson(item.TagText)).Append("\",")
+                    .Append("\"mergeMode\":\"").Append(EscapeJson(item.MergeMode)).Append("\",")
+                    .Append("\"applicableObjectTypes\":\"").Append(EscapeJson(item.ApplicableObjectTypes)).Append("\",")
+                    .Append("\"source\":\"").Append(EscapeJson(item.Source)).Append("\",")
+                    .Append("\"confidenceBase\":").Append(item.ConfidenceBase.ToString("0.####", CultureInfo.InvariantCulture)).Append(",")
                     .Append("\"stopAfterMatch\":").Append(item.StopAfterMatch ? "true" : "false")
                     .Append("}");
             }
@@ -86,16 +96,45 @@ namespace TCPipeAutoDraw.UI.Studio
                 string[] fields = line.Split('\t');
                 if (fields.Length < 7) continue;
 
-                rules.Add(new LayerRecognitionRule
+                if (fields.Length >= 15)
                 {
-                    Enabled = IsTrue(DecodeField(fields[0])),
-                    MatchMode = NormalizeMatchMode(DecodeField(fields[1])),
-                    Pattern = DecodeField(fields[2]).Trim(),
-                    ParentGroup = DecodeField(fields[3]).Trim(),
-                    ParentClass = DecodeField(fields[4]).Trim(),
-                    TagText = DecodeField(fields[5]).Trim(),
-                    StopAfterMatch = IsTrue(DecodeField(fields[6]))
-                });
+                    int priority;
+                    double confidence;
+                    int.TryParse(DecodeField(fields[1]), NumberStyles.Integer, CultureInfo.InvariantCulture, out priority);
+                    if (!double.TryParse(DecodeField(fields[13]), NumberStyles.Float, CultureInfo.InvariantCulture, out confidence))
+                        confidence = 0.78;
+                    rules.Add(new LayerRecognitionRule
+                    {
+                        Enabled = IsTrue(DecodeField(fields[0])),
+                        Priority = priority <= 0 ? 100 : priority,
+                        Name = DecodeField(fields[2]).Trim(),
+                        Scope = DecodeField(fields[3]).Trim(),
+                        MatchMode = NormalizeMatchMode(DecodeField(fields[4])),
+                        Pattern = DecodeField(fields[5]).Trim(),
+                        ExcludePattern = DecodeField(fields[6]).Trim(),
+                        ParentGroup = DecodeField(fields[7]).Trim(),
+                        ParentClass = DecodeField(fields[8]).Trim(),
+                        TagText = DecodeField(fields[9]).Trim(),
+                        MergeMode = DecodeField(fields[10]).Trim(),
+                        ApplicableObjectTypes = DecodeField(fields[11]).Trim(),
+                        Source = DecodeField(fields[12]).Trim(),
+                        ConfidenceBase = Math.Max(0d, Math.Min(1d, confidence)),
+                        StopAfterMatch = IsTrue(DecodeField(fields[14]))
+                    });
+                }
+                else
+                {
+                    rules.Add(new LayerRecognitionRule
+                    {
+                        Enabled = IsTrue(DecodeField(fields[0])),
+                        MatchMode = NormalizeMatchMode(DecodeField(fields[1])),
+                        Pattern = DecodeField(fields[2]).Trim(),
+                        ParentGroup = DecodeField(fields[3]).Trim(),
+                        ParentClass = DecodeField(fields[4]).Trim(),
+                        TagText = DecodeField(fields[5]).Trim(),
+                        StopAfterMatch = IsTrue(DecodeField(fields[6]))
+                    });
+                }
             }
 
             return rules;
@@ -130,6 +169,8 @@ namespace TCPipeAutoDraw.UI.Studio
             if (string.Equals(mode, LayerManagerService.MatchModeExact, StringComparison.CurrentCultureIgnoreCase)) return LayerManagerService.MatchModeExact;
             if (string.Equals(mode, LayerManagerService.MatchModeContains, StringComparison.CurrentCultureIgnoreCase)) return LayerManagerService.MatchModeContains;
             if (string.Equals(mode, LayerManagerService.MatchModeRegex, StringComparison.CurrentCultureIgnoreCase)) return LayerManagerService.MatchModeRegex;
+            if (string.Equals(mode, LayerManagerService.MatchModeKeywords, StringComparison.CurrentCultureIgnoreCase)) return LayerManagerService.MatchModeKeywords;
+            if (string.Equals(mode, LayerManagerService.MatchModeTemplate, StringComparison.CurrentCultureIgnoreCase)) return LayerManagerService.MatchModeTemplate;
             return LayerManagerService.MatchModeWildcard;
         }
 

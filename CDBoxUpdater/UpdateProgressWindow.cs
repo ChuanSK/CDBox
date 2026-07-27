@@ -51,6 +51,18 @@ namespace CDBoxUpdater
             if (_form != null) _form.SetProgress(percent, message, "更新期间请勿打开 AutoCAD。", false, false);
         }
 
+        public void ReportWaitingForAutoCadExit()
+        {
+            if (_form != null)
+            {
+                _form.SetProgress(-1,
+                    "AutoCAD 窗口已关闭，正在等待程序完全退出…",
+                    "AutoCAD 正在释放图纸和插件资源，完全退出后将自动开始更新。",
+                    false,
+                    false);
+            }
+        }
+
         public void Complete(bool success, string message)
         {
             if (_form != null)

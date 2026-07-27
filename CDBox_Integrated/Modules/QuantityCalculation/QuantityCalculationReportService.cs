@@ -171,9 +171,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static QuantityMainPipeCalculationRow BuildPipeRow(QuantityPipeSelectionInfo info, QuantityPipeAttributes attrs, int index, IDictionary<string, QuantityPipeAttributes> wellLookup, bool isBranch)
         {
             List<QuantityStructureLayer> layers = QuantityStructureLayer.Parse(attrs.BackfillStructure);
-            double length = Round(attrs.EffectiveLength(info == null ? 0.0 : info.CadLength));
+            // 表格最终显示时再统一舍入；工程量公式始终使用 CAD/手动长度的实际值。
+            double length = attrs.EffectiveLength(info == null ? 0.0 : info.CadLength);
             double width = attrs.TrenchWidth;
-            double pipeCushionHeightForDepth = SumLayerHeight(layers, QuantityStructureLayer.IsSandCushion, attrs.SandCushionThickness);
+            double pipeCushionHeightForDepth = QuantityStructureLayer.ResolvePipeCushionHeight(
+                layers, attrs.SandCushionThickness);
             double startDepth;
             double endDepth;
             double avgDepth;
@@ -247,36 +249,38 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.EndNode = attrs.EndNode ?? string.Empty;
             row.Material = attrs.Material ?? string.Empty;
             row.Diameter = attrs.Diameter ?? string.Empty;
-            row.Length = Round(length);
-            row.StartDepth = Round(startDepth);
-            row.EndDepth = Round(endDepth);
-            row.AverageDepth = Round(avgDepth);
-            row.TrenchWidth = Round(width);
-            row.RoadThickness = Round(attrs.RoadThickness);
+            row.Length = Safe(length);
+            row.StartDepth = Safe(startDepth);
+            row.EndDepth = Safe(endDepth);
+            row.AverageDepth = Safe(avgDepth);
+            row.TrenchWidth = Safe(width);
+            row.RoadThickness = Safe(attrs.RoadThickness);
             row.ExcavationType = attrs.ExcavationType ?? string.Empty;
             row.BackfillType = attrs.BackfillType ?? string.Empty;
             row.BackfillStructure = attrs.BackfillStructure ?? string.Empty;
-            row.PipeOuterDiameter = Round(attrs.PipeOuterDiameter);
-            row.PipeDeductionVolume = Round(pipeVolume);
+            row.PipeOuterDiameter = Safe(attrs.PipeOuterDiameter);
+            row.PipeDeductionVolume = Safe(pipeVolume);
             row.PipeDeductionTarget = pipeDeductionTarget;
-            row.RoadCutting = Round(roadCutting);
-            row.RoadBreaking = Round(roadBreaking);
-            row.RoadWaste = Round(roadWaste);
-            row.MechanicalExcavation = Round(mechanical);
-            row.ManualExcavation = Round(manual);
-            row.SandCushion = Round(sandCushion);
-            row.SandBackfill = Round(sandBackfill);
-            row.GravelCushion = Round(gravel);
-            row.C25Restore = Round(c25Restore);
-            row.OriginalSoilBackfill = Round(originalSoil);
-            row.C25PipeEncasement = Round(encasement);
-            row.EarthworkOut = Round(earthOut);
+            row.RoadCutting = Safe(roadCutting);
+            row.RoadBreaking = Safe(roadBreaking);
+            row.RoadWaste = Safe(roadWaste);
+            row.MechanicalExcavation = Safe(mechanical);
+            row.ManualExcavation = Safe(manual);
+            row.SandCushion = Safe(sandCushion);
+            row.SandBackfill = Safe(sandBackfill);
+            row.GravelCushion = Safe(gravel);
+            row.C25Restore = Safe(c25Restore);
+            row.OriginalSoilBackfill = Safe(originalSoil);
+            row.C25PipeEncasement = Safe(encasement);
+            row.EarthworkOut = Safe(earthOut);
             row.Remark = string.Empty;
             row.ObjectKind = isBranch ? QuantityPipeAttributes.KindBranchPipe : QuantityPipeAttributes.KindMainPipe;
             row.BranchType = attrs.BranchType ?? string.Empty;
             row.CalculationSource = QuantityDashboardSources.Property;
             row.DataStatus = coBuried ? "仅统计长度（并埋）" : (calculateEarthwork || !isBranch ? "正常" : "仅统计长度");
             row.FormulaText = BuildMainFormulaText(row, c25Height, gravelHeight, sandCushionHeight, sandBackfillHeight, soilBackfillHeight, pipeDeductionTarget);
+            AddPipeCalculationSteps(row, calculateEarthwork, excavation, c25Height, gravelHeight, sandCushionHeight,
+                sandBackfillHeight, soilBackfillHeight, encasementHeight, pipeDeductionTarget);
             return row;
         }
 
@@ -342,35 +346,37 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             row.WellType = attrs.WellType ?? string.Empty;
             row.WellMaterialType = attrs.WellMaterialType ?? string.Empty;
             row.WellCoverMaterial = attrs.WellCoverMaterial ?? string.Empty;
-            row.GroundElevation = Round(attrs.GroundElevation);
-            row.WellDepth = Round(attrs.WellDepth);
-            row.ShaftLength = Round(attrs.ShaftLength);
-            row.ExcavationLength = Round(excavationLength);
-            row.ExcavationWidth = Round(excavationWidth);
-            row.RoadThickness = Round(attrs.RoadThickness);
+            row.GroundElevation = Safe(attrs.GroundElevation);
+            row.WellDepth = Safe(attrs.WellDepth);
+            row.ShaftLength = Safe(attrs.ShaftLength);
+            row.ExcavationLength = Safe(excavationLength);
+            row.ExcavationWidth = Safe(excavationWidth);
+            row.RoadThickness = Safe(attrs.RoadThickness);
             row.ExcavationType = attrs.ExcavationType ?? string.Empty;
             row.BackfillType = attrs.BackfillType ?? string.Empty;
             row.BackfillStructure = attrs.BackfillStructure ?? string.Empty;
             row.CoverPlate = attrs.CoverPlate ?? string.Empty;
-            row.WellRadius = Round(radius);
-            row.WellArea = Round(wellArea);
-            row.RoadCutting = Round(roadCutting);
-            row.RoadBreaking = Round(roadBreaking);
-            row.RoadWaste = Round(roadWaste);
-            row.MechanicalExcavation = Round(mechanical);
-            row.ManualExcavation = Round(manual);
-            row.SandCushion = Round(sandCushion);
-            row.C25Cushion = Round(c25Cushion);
-            row.CoverPlateGravelCushion = Round(coverGravel);
-            row.CoverPlateC25Foundation = Round(coverC25);
-            row.SandBackfill = Round(sandBackfill);
-            row.EarthworkOut = Round(earthOut);
+            row.WellRadius = Safe(radius);
+            row.WellArea = Safe(wellArea);
+            row.RoadCutting = Safe(roadCutting);
+            row.RoadBreaking = Safe(roadBreaking);
+            row.RoadWaste = Safe(roadWaste);
+            row.MechanicalExcavation = Safe(mechanical);
+            row.ManualExcavation = Safe(manual);
+            row.SandCushion = Safe(sandCushion);
+            row.C25Cushion = Safe(c25Cushion);
+            row.CoverPlateGravelCushion = Safe(coverGravel);
+            row.CoverPlateC25Foundation = Safe(coverC25);
+            row.SandBackfill = Safe(sandBackfill);
+            row.EarthworkOut = Safe(earthOut);
             row.CoverPlateCount = string.IsNullOrWhiteSpace(attrs.CoverPlate) || ContainsAny(attrs.CoverPlate, "无", "不设") ? 0 : 1;
             row.WellCoverCount = 1;
             row.Remark = string.Empty;
             row.CalculationSource = QuantityDashboardSources.Property;
             row.DataStatus = attrs.WellDepth > 0 && excavationLength > 0 && excavationWidth > 0 ? "正常" : "关键属性不完整";
             row.FormulaText = BuildWellFormulaText(row, sandCushionHeight, wellBottomCushionHeight, c25CushionHeight, coverGravelHeight, coverC25Height, sandBackfillHeight);
+            AddWellCalculationSteps(row, area, perimeter, effectiveBackfillArea, excavation, sandCushionHeight,
+                wellBottomCushionHeight, c25CushionHeight, coverGravelHeight, coverC25Height, sandBackfillHeight);
             return row;
         }
 
@@ -420,6 +426,129 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return string.Join("；", parts.ToArray());
         }
 
+        private static void AddPipeCalculationSteps(
+            QuantityMainPipeCalculationRow row,
+            bool calculateEarthwork,
+            double excavation,
+            double c25Height,
+            double gravelHeight,
+            double sandCushionHeight,
+            double sandBackfillHeight,
+            double soilBackfillHeight,
+            double encasementHeight,
+            string pipeDeductionTarget)
+        {
+            if (row == null) return;
+            string enabled = calculateEarthwork ? "按当前属性计入工程量" : "当前对象仅统计长度，土方及结构层工程量不计入";
+            string averageFormula = string.Equals(row.ObjectKind, QuantityPipeAttributes.KindBranchPipe, StringComparison.OrdinalIgnoreCase)
+                ? "采用支管深度（无支管深度时采用平均深度）"
+                : "(起点深度 + 终点深度) / 2（仅一端有效时采用该端）";
+            AddStep(row.CalculationSteps, "平均深度", averageFormula,
+                FormatAudit(row.StartDepth) + "，" + FormatAudit(row.EndDepth), row.AverageDepth, "m", enabled);
+            AddStep(row.CalculationSteps, "扣除管身体积", "π × (外径 / 2)² × 长度",
+                "π × (" + FormatAudit(row.PipeOuterDiameter) + " / 2)² × " + FormatAudit(row.Length),
+                row.PipeDeductionVolume, "m³", string.IsNullOrWhiteSpace(pipeDeductionTarget) ? "未启用扣除或无可扣减结构层" : "从" + PipeDeductionTargetName(pipeDeductionTarget) + "中扣除");
+            AddStep(row.CalculationSteps, "路面切缝", "长度 × 2",
+                FormatAudit(row.Length) + " × 2", row.RoadCutting, "m", enabled);
+            AddStep(row.CalculationSteps, "路面破碎", "长度 × 沟槽宽度",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth), row.RoadBreaking, "m²", enabled);
+            AddStep(row.CalculationSteps, "道路废料", "长度 × 沟槽宽度 × 路面厚度",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(row.RoadThickness), row.RoadWaste, "m³", enabled);
+            string excavationSubstitution = FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × max(" + FormatAudit(row.AverageDepth) + " - " + FormatAudit(row.RoadThickness) + ", 0)";
+            AddStep(row.CalculationSteps, "机械开挖", "长度 × 沟槽宽度 × max(平均深度 - 路面厚度, 0)",
+                excavationSubstitution, row.MechanicalExcavation, "m³", enabled + "；按开挖方式分配，开挖合计=" + FormatAudit(excavation));
+            AddStep(row.CalculationSteps, "人工开挖", "长度 × 沟槽宽度 × max(平均深度 - 路面厚度, 0)",
+                excavationSubstitution, row.ManualExcavation, "m³", enabled + "；按开挖方式分配，开挖合计=" + FormatAudit(excavation));
+            AddStep(row.CalculationSteps, "中粗砂垫层", "长度 × 沟槽宽度 × 层高",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(sandCushionHeight), row.SandCushion, "m³", enabled);
+            AddStep(row.CalculationSteps, "中粗砂回填", "max(长度 × 沟槽宽度 × 层高 - 管身扣除量, 0)",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(sandBackfillHeight) + " - " + FormatAudit(pipeDeductionTarget == "sand" ? row.PipeDeductionVolume : 0.0), row.SandBackfill, "m³", enabled);
+            AddStep(row.CalculationSteps, "碎石垫层", "长度 × 沟槽宽度 × 层高",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(gravelHeight), row.GravelCushion, "m³", enabled);
+            AddStep(row.CalculationSteps, "C25恢复", "长度 × 沟槽宽度 × 层高",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(c25Height), row.C25Restore, "m³", enabled);
+            AddStep(row.CalculationSteps, "原土回填", "max(长度 × 沟槽宽度 × 层高 - 管身扣除量, 0)",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(soilBackfillHeight) + " - " + FormatAudit(pipeDeductionTarget == "soil" ? row.PipeDeductionVolume : 0.0), row.OriginalSoilBackfill, "m³", enabled);
+            AddStep(row.CalculationSteps, "C25包管", "max(长度 × 沟槽宽度 × 层高 - 管身扣除量, 0)",
+                FormatAudit(row.Length) + " × " + FormatAudit(row.TrenchWidth) + " × " + FormatAudit(encasementHeight) + " - " + FormatAudit(pipeDeductionTarget == "encasement" ? row.PipeDeductionVolume : 0.0), row.C25PipeEncasement, "m³", enabled);
+            AddStep(row.CalculationSteps, "余土道渣外运", "max(道路废料 + 开挖合计 - 可回用原土, 0)",
+                FormatAudit(row.RoadWaste) + " + " + FormatAudit(excavation) + " - " + FormatAudit(row.OriginalSoilBackfill), row.EarthworkOut, "m³", enabled);
+        }
+
+        private static void AddWellCalculationSteps(
+            QuantityWellCalculationRow row,
+            double area,
+            double perimeter,
+            double effectiveBackfillArea,
+            double excavation,
+            double sandCushionHeight,
+            double wellBottomCushionHeight,
+            double c25CushionHeight,
+            double coverGravelHeight,
+            double coverC25Height,
+            double sandBackfillHeight)
+        {
+            if (row == null) return;
+            AddStep(row.CalculationSteps, "开挖平面面积", "开挖长 × 开挖宽",
+                FormatAudit(row.ExcavationLength) + " × " + FormatAudit(row.ExcavationWidth), area, "m²", "井类计算中间值");
+            AddStep(row.CalculationSteps, "井体占地面积", "π × 井半径²",
+                "π × " + FormatAudit(row.WellRadius) + "²", row.WellArea, "m²", "由井规格推算井半径");
+            AddStep(row.CalculationSteps, "有效回填面积", "max(开挖平面面积 - 井体占地面积, 0)",
+                FormatAudit(area) + " - " + FormatAudit(row.WellArea), effectiveBackfillArea, "m²", "井外可回填面积");
+            AddStep(row.CalculationSteps, "路面切缝", "2 × (开挖长 + 开挖宽)",
+                "2 × (" + FormatAudit(row.ExcavationLength) + " + " + FormatAudit(row.ExcavationWidth) + ")", row.RoadCutting, "m", "周长=" + FormatAudit(perimeter));
+            AddStep(row.CalculationSteps, "路面破碎", "开挖长 × 开挖宽",
+                FormatAudit(row.ExcavationLength) + " × " + FormatAudit(row.ExcavationWidth), row.RoadBreaking, "m²", string.Empty);
+            AddStep(row.CalculationSteps, "道路废料", "开挖平面面积 × 路面厚度",
+                FormatAudit(area) + " × " + FormatAudit(row.RoadThickness), row.RoadWaste, "m³", string.Empty);
+            string excavationSubstitution = FormatAudit(area) + " × max(" + FormatAudit(row.WellDepth) + " - " + FormatAudit(row.RoadThickness) + " + " + FormatAudit(wellBottomCushionHeight) + ", 0)";
+            AddStep(row.CalculationSteps, "机械开挖", "开挖平面面积 × max(井深 - 路面厚度 + 井下垫层, 0)",
+                excavationSubstitution, row.MechanicalExcavation, "m³", "按开挖方式分配，开挖合计=" + FormatAudit(excavation));
+            AddStep(row.CalculationSteps, "人工开挖", "开挖平面面积 × max(井深 - 路面厚度 + 井下垫层, 0)",
+                excavationSubstitution, row.ManualExcavation, "m³", "按开挖方式分配，开挖合计=" + FormatAudit(excavation));
+            AddStep(row.CalculationSteps, "中粗砂垫层", "开挖平面面积 × 层高",
+                FormatAudit(area) + " × " + FormatAudit(sandCushionHeight), row.SandCushion, "m³", string.Empty);
+            AddStep(row.CalculationSteps, "C25垫层", "开挖平面面积 × 层高",
+                FormatAudit(area) + " × " + FormatAudit(c25CushionHeight), row.C25Cushion, "m³", string.Empty);
+            AddStep(row.CalculationSteps, "盖板碎石垫层", "有效回填面积 × 层高",
+                FormatAudit(effectiveBackfillArea) + " × " + FormatAudit(coverGravelHeight), row.CoverPlateGravelCushion, "m³", string.Empty);
+            AddStep(row.CalculationSteps, "盖板C25基础", "有效回填面积 × 层高",
+                FormatAudit(effectiveBackfillArea) + " × " + FormatAudit(coverC25Height), row.CoverPlateC25Foundation, "m³", string.Empty);
+            AddStep(row.CalculationSteps, "中粗砂回填", "有效回填面积 × 回填层高",
+                FormatAudit(effectiveBackfillArea) + " × " + FormatAudit(sandBackfillHeight), row.SandBackfill, "m³", string.Empty);
+            AddStep(row.CalculationSteps, "余土道渣外运", "max(道路废料 + 开挖合计, 0)",
+                FormatAudit(row.RoadWaste) + " + " + FormatAudit(excavation), row.EarthworkOut, "m³", "中粗砂为新购材料，不抵扣土方外运");
+            AddStep(row.CalculationSteps, "承压盖板", "按井计数", row.CoverPlateCount.ToString(CultureInfo.InvariantCulture), row.CoverPlateCount, "座", row.CoverPlate ?? string.Empty);
+            AddStep(row.CalculationSteps, "井盖", "按井计数", row.WellCoverCount.ToString(CultureInfo.InvariantCulture), row.WellCoverCount, "套", row.WellCoverMaterial ?? string.Empty);
+        }
+
+        private static void AddStep(ICollection<QuantityCalculationStep> steps, string itemName, string formula, string substitution, double result, string unit, string explanation)
+        {
+            if (steps == null) return;
+            steps.Add(new QuantityCalculationStep
+            {
+                ItemName = itemName ?? string.Empty,
+                Formula = formula ?? string.Empty,
+                Substitution = substitution ?? string.Empty,
+                Result = Safe(result),
+                Unit = unit ?? string.Empty,
+                Explanation = explanation ?? string.Empty
+            });
+        }
+
+        private static string PipeDeductionTargetName(string target)
+        {
+            if (target == "sand") return "中粗砂回填";
+            if (target == "soil") return "原土回填";
+            if (target == "encasement") return "C25包管";
+            return "对应结构层";
+        }
+
+        private static string FormatAudit(double value)
+        {
+            return Safe(value).ToString("0.############", CultureInfo.InvariantCulture);
+        }
+
         private static double SumLayerHeight(List<QuantityStructureLayer> layers, Predicate<QuantityStructureLayer> predicate, double fallback)
         {
             double sum = QuantityStructureLayer.SumHeight(layers, predicate);
@@ -460,7 +589,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 foreach (QuantityStructureLayer layer in layers)
                 {
                     if (layer == null) continue;
-                    if (layer.IsPipeLayer) height += layer.Height;
+                    if (layer.IsBelowWellLayer || layer.IsCushionLayer) height += layer.Height;
                 }
             }
 
@@ -471,7 +600,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static bool IsWellUpperNonBackfillLayer(QuantityStructureLayer layer)
         {
             if (layer == null) return false;
-            if (layer.IsPipeLayer) return false;
+            if (layer.IsPipeLayer || layer.IsBelowWellLayer || layer.IsCushionLayer) return false;
             if (QuantityStructureLayer.IsSandBackfill(layer)) return false;
             if (QuantityStructureLayer.IsOriginalSoilBackfill(layer)) return false;
             return IsWellC25CushionLayer(layer) || IsCoverPlateGravelLayer(layer) || IsCoverPlateC25Layer(layer);
@@ -529,10 +658,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return false;
         }
 
-        private static double Round(double value)
+        private static double Safe(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
-            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+            return value;
         }
 
         private static string Format(double value)

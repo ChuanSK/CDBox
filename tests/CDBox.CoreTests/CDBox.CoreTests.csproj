@@ -6,18 +6,28 @@
     <RootNamespace>CDBox.CoreTests</RootNamespace>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
+    <AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="NPOI" Version="2.8.0" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Web.Extensions" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerModels.cs" Link="Source\LayerModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerRecognitionEngine.cs" Link="Source\LayerRecognitionEngine.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityCalculationReportModels.cs" Link="Source\QuantityCalculationReportModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardModels.cs" Link="Source\QuantityDashboardModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardExportService.cs" Link="Source\QuantityDashboardExportService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDependencyService.cs" Link="Source\QuantityDependencyService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\SectionDrawing\SectionDrawingModels.cs" Link="Source\SectionDrawingModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardClassification.cs" Link="Source\QuantityDashboardClassification.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSource.cs" Link="Source\CDBoxStudioUpdateSource.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSourceCatalog.cs" Link="Source\CDBoxStudioUpdateSourceCatalog.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioAnnotationSettingsPage.cs" Link="Source\CDBoxStudioAnnotationSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
@@ -32,5 +42,9 @@
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxRequiredRuntimeFiles.cs" Link="Source\CDBoxRequiredRuntimeFiles.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxAppSettings.cs" Link="Source\CDBoxAppSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxUpdateSourceValidator.cs" Link="Source\CDBoxUpdateSourceValidator.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColor.cs" Link="Source\CDBoxColor.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorConverter.cs" Link="Source\CDBoxColorConverter.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxStandardColorService.cs" Link="Source\CDBoxStandardColorService.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorOutputResolver.cs" Link="Source\CDBoxColorOutputResolver.cs" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Windows.Forms;
+using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -33,6 +35,7 @@ namespace TCPipeAutoDraw.Commands
         private bool _startupWorkflowQueued;
         private bool _startupWorkflowFinished;
         private DateTime _initializedAtUtc;
+        private int _startupUpdateCheckStarted;
 
         public void Initialize()
         {
@@ -58,6 +61,7 @@ namespace TCPipeAutoDraw.Commands
                 return;
             }
 
+            EnsureMenuBar();
             PipeLengthAnnotationInteractionService.Initialize();
             QueueStartupWorkflow();
         }
@@ -87,7 +91,7 @@ namespace TCPipeAutoDraw.Commands
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
             check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-9", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 30101, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 30200, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -291,7 +295,6 @@ namespace TCPipeAutoDraw.Commands
             AcadApp.Idle -= OnAcadIdleForStartupWorkflow;
             try
             {
-                EnsureMenuBar();
                 RunStartupWorkflow();
             }
             finally
@@ -307,8 +310,9 @@ namespace TCPipeAutoDraw.Commands
             {
                 CDBoxAppSettings settings = CDBoxAppSettingsStore.Load();
                 bool settingsChanged = false;
+                string installPromptIdentity = CDBoxStudioUpdateService.ReleaseIdentity + ":" + CDBoxStudioUpdateService.CurrentVersionCode.ToString();
 
-                if (settings.PromptInstallOnLoad && !CDBoxInstaller.IsInstalled())
+                if (settings.ShouldPromptForInstall(CDBoxInstaller.IsInstalled(), installPromptIdentity))
                 {
                     bool doNotAsk;
                     DialogResult installResult = CDBoxPromptDialog.ShowYesNo(
@@ -331,6 +335,9 @@ namespace TCPipeAutoDraw.Commands
                         TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), result.Message + "\r\n\r\n安装目录：" + result.InstallRoot, result.Success ? "CDBox 安装完成" : "CDBox 安装失败", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                     }
 
+                    settings.LastInstallPromptIdentity = installPromptIdentity;
+                    settingsChanged = true;
+
                     if (doNotAsk)
                     {
                         settings.PromptInstallOnLoad = false;
@@ -344,6 +351,58 @@ namespace TCPipeAutoDraw.Commands
             {
                 if (doc != null) doc.Editor.WriteMessage("\n[启动设置] " + ex.Message);
             }
+
+            QueueStartupUpdateCheck();
+        }
+
+        private void QueueStartupUpdateCheck()
+        {
+            if (Interlocked.Exchange(ref _startupUpdateCheckStarted, 1) != 0) return;
+            Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                CDBoxStudioUpdateResult result;
+                try
+                {
+                    result = CDBoxStudioUpdateService.Check(CDBoxStudioSettingsStore.Load());
+                }
+                catch (System.Exception ex)
+                {
+                    CDBoxStudioLogger.Error("启动检查更新失败。", ex);
+                    return;
+                }
+
+                if (result == null || !result.Success || !result.UpdateAvailable) return;
+                try
+                {
+                    dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(delegate
+                    {
+                        try
+                        {
+                            if (AcadApp.DocumentManager.MdiActiveDocument == null) return;
+                            string message = "发现 CDBox 新版本 " + result.LatestVersion
+                                + "（当前版本 " + result.CurrentVersion + "）。\r\n\r\n"
+                                + "启动检查只进行提示，不会自动下载或安装。是否打开 CDBox 设置查看并手动更新？";
+                            if (!string.IsNullOrWhiteSpace(result.Notes))
+                                message += "\r\n\r\n更新说明：\r\n" + result.Notes.Trim();
+                            DialogResult choice = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
+                                new AcadMainWindow(), message, "CDBox 更新提示",
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Information,
+                                MessageBoxDefaultButton.Button2);
+                            if (choice == DialogResult.Yes)
+                                CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+                        }
+                        catch (System.Exception ex)
+                        {
+                            CDBoxStudioLogger.Error("显示启动更新提示失败。", ex);
+                        }
+                    }));
+                }
+                catch (System.Exception ex)
+                {
+                    CDBoxStudioLogger.Error("调度启动更新提示失败。", ex);
+                }
+            });
         }
 
 
@@ -889,6 +948,8 @@ namespace TCPipeAutoDraw.Commands
 
                 if (ids.Length == 1)
                 {
+                    if (!legacy && QuantityAttributeDoubleClickService.TryOpen(doc, ids)) return;
+
                     QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, ids[0]);
                     if (info == null)
                     {
@@ -896,7 +957,16 @@ namespace TCPipeAutoDraw.Commands
                         return;
                     }
 
-                    CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, QuantityDashboardService.GetDocumentId(doc));
+                    if (legacy)
+                    {
+                        using (Form form = QuantityAttributeEditorFormFactory.Create(doc, info))
+                            form.ShowDialog(new AcadMainWindow());
+                    }
+                    else
+                    {
+                        CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info,
+                            QuantityDashboardService.GetDocumentId(doc));
+                    }
                     return;
                 }
 

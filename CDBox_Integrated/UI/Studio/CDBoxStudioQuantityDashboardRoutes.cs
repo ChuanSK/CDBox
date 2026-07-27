@@ -52,6 +52,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 case "openquantityobjecteditor": result = ObjectAction(request.Argument, false, true); return true;
                 case "copyquantitysummary": result = CopySummary(request.Argument); return true;
                 case "exportquantityreference": result = ExportReference(request.Argument); return true;
+                case "exportquantitycalculationprocess": result = ExportCalculationProcess(request.Argument); return true;
                 case "exportquantityreport":
                 case "openlegacyquantitycommand": result = RunFormalReport(request.Argument); return true;
                 case "savequantitysnapshot": result = SaveSnapshot(request.Argument); return true;
@@ -202,6 +203,27 @@ namespace TCPipeAutoDraw.UI.Studio
                 result.ToastKind = "error";
                 result.ToastMessage = "导出参考表失败：" + ex.Message;
                 CDBoxStudioLogger.Error("导出工程量参考表失败。", ex);
+            }
+            return result;
+        }
+
+        private static CDBoxStudioRouteResult ExportCalculationProcess(string payload)
+        {
+            var result = NewResult();
+            try
+            {
+                string path = CDBoxStudioQuantityDashboardApi.ExportCalculationProcess(payload);
+                if (string.IsNullOrWhiteSpace(path)) return result;
+                result.ToastKind = "success";
+                result.ToastMessage = "工程量计算过程已导出";
+                result.ExecuteScript = "window.CDBoxQuantityDashboardExported && window.CDBoxQuantityDashboardExported(" + ToJs(path) + ");";
+                CDBoxStudioLogger.Info("工程量计算过程导出完成：" + path);
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "导出计算过程失败：" + ex.Message;
+                CDBoxStudioLogger.Error("导出工程量计算过程失败。", ex);
             }
             return result;
         }

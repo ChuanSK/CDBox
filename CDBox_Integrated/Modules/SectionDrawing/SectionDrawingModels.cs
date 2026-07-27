@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace TCPipeAutoDraw.Modules.SectionDrawing
 {
     public enum SectionPipeVerticalMode
@@ -183,6 +186,21 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (diameter <= 0) return string.Empty;
             double mm = Math.Round(diameter * 1000.0, 0, MidpointRounding.AwayFromZero);
             return "DN" + mm.ToString("0");
+        }
+
+        public static bool TryParsePipeDiameter(string text, out double diameter)
+        {
+            diameter = 0.0;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            Match match = Regex.Match(text, @"DN\s*(?<mm>\d+(?:[\.,]\d+)?)", RegexOptions.IgnoreCase);
+            if (!match.Success) return false;
+
+            double millimeters;
+            string number = match.Groups["mm"].Value.Replace(',', '.');
+            if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out millimeters)) return false;
+            if (millimeters <= 0.0) return false;
+            diameter = millimeters / 1000.0;
+            return true;
         }
     }
 

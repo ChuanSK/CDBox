@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
 using TCPipeAutoDraw.Modules.LayerManager;
+using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.UI;
@@ -182,13 +184,18 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 ApplySettingsArgument(argument);
                 CDBoxStudioSettingsStore.Save(_settings);
+                PipeLengthAnnotationInteractionService.RefreshAppearance();
                 CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
                 appSettings.PromptInstallOnLoad = ReadBooleanArgument(argument, "promptinstall", appSettings.PromptInstallOnLoad);
                 CDBoxAppSettingsStore.Save(appSettings);
                 CDBoxStudioLogger.Info("保存 Studio 设置：Theme=" + _settings.Theme
                     + ", AnimationsEnabled=" + _settings.AnimationsEnabled
-                    + ", UpdateChannel=" + _settings.UpdateChannel
-                    + ", UpdateSourceUrl=" + _settings.UpdateSourceUrl);
+                    + ", AnnotationHudNormalOpacity=" + _settings.AnnotationHudNormalOpacity.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", AnnotationHudHoverOpacity=" + _settings.AnnotationHudHoverOpacity.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", AnnotationHudGlowEnabled=" + _settings.AnnotationHudGlowEnabled
+                    + ", AnnotationHudGlowIntensity=" + _settings.AnnotationHudGlowIntensity.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", ColorOutputMode=" + _settings.ColorOutputMode
+                    + ", UpdateChannel=" + _settings.UpdateChannel);
             }
             catch (Exception ex)
             {
@@ -219,16 +226,39 @@ namespace TCPipeAutoDraw.UI.Studio
                     case "animations":
                         _settings.AnimationsEnabled = IsTrue(value);
                         break;
+                    case "hudnormalopacity":
+                        _settings.AnnotationHudNormalOpacity = ParseDouble(value,
+                            _settings.AnnotationHudNormalOpacity);
+                        break;
+                    case "hudhoveropacity":
+                        _settings.AnnotationHudHoverOpacity = ParseDouble(value,
+                            _settings.AnnotationHudHoverOpacity);
+                        break;
+                    case "hudglowenabled":
+                        _settings.AnnotationHudGlowEnabled = IsTrue(value);
+                        break;
+                    case "hudglowintensity":
+                        _settings.AnnotationHudGlowIntensity = ParseDouble(value,
+                            _settings.AnnotationHudGlowIntensity);
+                        break;
+                    case "coloroutputmode":
+                        TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode outputMode;
+                        if (Enum.TryParse(value, true, out outputMode)) _settings.ColorOutputMode = outputMode;
+                        break;
                     case "updatechannel":
                         _settings.UpdateChannel = value;
-                        break;
-                    case "updatesourceurl":
-                        _settings.UpdateSourceUrl = value;
                         break;
                 }
             }
 
             _settings.Normalize();
+        }
+
+        private static double ParseDouble(string value, double fallback)
+        {
+            double parsed;
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture,
+                out parsed) ? parsed : fallback;
         }
 
         private static string DecodeArgumentValue(string value)
@@ -287,7 +317,20 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
                 if (update.Success) app.InstalledPath = update.InstallRoot;
                 CDBoxAppSettingsStore.Save(app);
-                return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = update.Success ? "success" : "error", ToastMessage = update.Message };
+                string prompt = update.Success
+                    ? "本地更新包已完成校验，独立更新器已启动。\r\n\r\n请正常关闭 AutoCAD，更新器将在 CAD 完全退出后继续安装。"
+                    : update.Message;
+                CDBoxMessageBox.Show(new AcadMainWindow(), prompt,
+                    update.Success ? "本地更新已准备" : "本地更新失败",
+                    MessageBoxButtons.OK,
+                    update.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                return new CDBoxStudioRouteResult
+                {
+                    Handled = true,
+                    RefreshPage = false,
+                    ToastKind = update.Success ? "success" : "error",
+                    ToastMessage = update.Success ? "本地更新已准备，请关闭 AutoCAD 完成安装" : "本地更新准备失败"
+                };
             }
         }
 
@@ -518,7 +561,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.1.1 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 3.2.0 独立窗口失败。", ex);
             }
             return result;
         }

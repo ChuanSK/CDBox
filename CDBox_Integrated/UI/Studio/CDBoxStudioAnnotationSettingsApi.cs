@@ -8,6 +8,7 @@ using TCPipeAutoDraw.Modules.AnnotationSettings;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
+using TCPipeAutoDraw.Core.Colors;
 using TCPipeAutoDraw.UI;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -280,13 +281,14 @@ namespace TCPipeAutoDraw.UI.Studio
         private static List<CDBoxStudioAnnotationColorOption> BuildColorOptions()
         {
             var result = new List<CDBoxStudioAnnotationColorOption>(255);
-            for (short i = 1; i <= 255; i++)
+            foreach (CDBoxColor color in CDBoxColorService.GetAciPalette())
             {
                 result.Add(new CDBoxStudioAnnotationColorOption
                 {
-                    index = i,
-                    name = GetColorName(i),
-                    cssColor = GetColorCss(i)
+                    index = (short)color.Index,
+                    name = color.DisplayName,
+                    cssColor = color.Hex,
+                    rgb = color.RgbText
                 });
             }
             return result;

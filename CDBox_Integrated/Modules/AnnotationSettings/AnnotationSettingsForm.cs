@@ -7,6 +7,8 @@ using Autodesk.AutoCAD.DatabaseServices;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
+using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.UI.Controls;
 
 namespace TCPipeAutoDraw.Modules.AnnotationSettings
 {
@@ -332,18 +334,18 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             colorPanel.Controls.Add(MakeInlineLabel("节点编号"));
             _nodeNoColor = MakeNumber(1M, 255M, 1M, 0);
             SetNumberValue(_nodeNoColor, _nodeInitialOptions.NodeNoColorIndex);
-            colorPanel.Controls.Add(_nodeNoColor);
+            colorPanel.Controls.Add(MakeColorIndexButton(_nodeNoColor));
             colorPanel.Controls.Add(MakeInlineLabel("普通文字"));
             _nodeTextColor = MakeNumber(1M, 255M, 7M, 0);
             SetNumberValue(_nodeTextColor, _nodeInitialOptions.TextColorIndex);
-            colorPanel.Controls.Add(_nodeTextColor);
+            colorPanel.Controls.Add(MakeColorIndexButton(_nodeTextColor));
             colorPanel.Controls.Add(MakeInlineLabel("预览引线"));
             _nodePreviewLeaderColor = MakeNumber(1M, 255M, 1M, 0);
             SetNumberValue(_nodePreviewLeaderColor, _nodeInitialOptions.PreviewLeaderColorIndex);
-            colorPanel.Controls.Add(_nodePreviewLeaderColor);
-            AddRow(table, 7, "颜色索引", colorPanel);
+            colorPanel.Controls.Add(MakeColorIndexButton(_nodePreviewLeaderColor));
+            AddRow(table, 7, "颜色", colorPanel);
 
-            var tip = MakeValueLabel("颜色索引使用 AutoCAD ACI 编号，常用：1红、2黄、3绿、4青、5蓝、6洋红、7白/黑。");
+            var tip = MakeValueLabel("点击颜色预览打开 CDBox 颜色选择器；节点标注设置当前按 ACI 保存。");
             tip.ForeColor = SystemColors.GrayText;
             AddRow(table, 8, "", tip);
 
@@ -999,6 +1001,37 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             label.TextAlign = ContentAlignment.MiddleLeft;
             label.Padding = new Padding(8, 6, 2, 0);
             return label;
+        }
+
+        private static Button MakeColorIndexButton(NumericUpDown valueControl)
+        {
+            var button = new Button
+            {
+                AutoSize = false,
+                Width = 148,
+                Height = 31,
+                Margin = new Padding(2, 1, 8, 1),
+                TextAlign = ContentAlignment.MiddleLeft,
+                FlatStyle = FlatStyle.Flat
+            };
+            Action update = delegate
+            {
+                CDBoxColor color = CDBoxColor.FromIndex((int)valueControl.Value);
+                button.Text = "■  " + color.DisplayName;
+                button.ForeColor = color.Index == 7
+                    ? SystemColors.ControlText
+                    : System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+            };
+            valueControl.ValueChanged += delegate { update(); };
+            button.Click += delegate
+            {
+                CDBoxColor selected;
+                if (!ColorPickerWindow.TryPick(CDBoxColor.FromIndex((int)valueControl.Value), out selected,
+                    false, false, false, false, false)) return;
+                valueControl.Value = CDBoxColorService.ToCompatibleColorIndex(selected, (short)valueControl.Value);
+            };
+            update();
+            return button;
         }
 
         private static NumericUpDown MakeNumber(decimal min, decimal max, decimal value, int decimalPlaces)

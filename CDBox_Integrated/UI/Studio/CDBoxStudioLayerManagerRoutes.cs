@@ -2,6 +2,8 @@
 using System.Windows.Forms;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.UI;
+using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.UI.Controls;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace TCPipeAutoDraw.UI.Studio
@@ -31,6 +33,9 @@ namespace TCPipeAutoDraw.UI.Studio
                     return true;
                 case "setcurrentlayer":
                     result = SetCurrentResult(request.Argument);
+                    return true;
+                case "openlayercolorpicker":
+                    result = OpenLayerColorPickerResult(request.Argument);
                     return true;
                 case "autorecognizelayerattributes":
                     result = AutoRecognizeResult(request.Argument);
@@ -159,6 +164,31 @@ namespace TCPipeAutoDraw.UI.Studio
                 result.ToastKind = "error";
                 result.ToastMessage = "设置当前图层失败：" + ex.Message;
                 CDBoxStudioLogger.Error("设置当前图层失败。", ex);
+            }
+            return result;
+        }
+
+        private static CDBoxStudioRouteResult OpenLayerColorPickerResult(string layerName)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true };
+            string name = (layerName ?? string.Empty).Trim();
+            try
+            {
+                CDBoxColor current = CDBoxStudioLayerManagerApi.GetLayerColor(name);
+                CDBoxColor selected;
+                if (!ColorPickerWindow.TryPick(current, out selected, false, false, true, true, true)) return result;
+                CDBoxStudioLayerActionResult action = CDBoxStudioLayerManagerApi.SetLayerColor(name, selected);
+                string envelope = CDBoxStudioLayerManagerApi.BuildEnvelopeJson(false);
+                result.ExecuteScript = "window.CDBoxLayerManagerReceive && window.CDBoxLayerManagerReceive(" + envelope + ");";
+                result.ToastKind = "success";
+                result.ToastMessage = action.message;
+                CDBoxStudioLogger.Info(action.message);
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "图层颜色修改失败：" + ex.Message;
+                CDBoxStudioLogger.Error("修改图层颜色失败。", ex);
             }
             return result;
         }

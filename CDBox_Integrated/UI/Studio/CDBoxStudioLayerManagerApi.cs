@@ -5,6 +5,7 @@ using System.Web.Script.Serialization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using TCPipeAutoDraw.Modules.LayerManager;
+using TCPipeAutoDraw.Core.Colors;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace TCPipeAutoDraw.UI.Studio
@@ -12,7 +13,10 @@ namespace TCPipeAutoDraw.UI.Studio
     internal static class CDBoxStudioLayerManagerApi
     {
         private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-        private static readonly string[] PriorityParents = { "井", "主管", "支管", "注记" };
+        private static readonly string[] PriorityParents =
+        {
+            "主管", "支管", "井", "结构层", "构筑物", "注记", "测点", "辅助"
+        };
 
         public static string BuildEnvelopeJson(bool countObjects)
         {
@@ -41,9 +45,28 @@ namespace TCPipeAutoDraw.UI.Studio
                     isPlottable = item.IsPlottable,
                     objectCount = countObjects ? (int?)item.ObjectCount : null,
                     colorIndex = item.ColorIndex,
-                    colorName = GetColorName(item.ColorIndex),
-                    colorHex = GetColorHex(item.ColorIndex),
-                    linetype = item.Linetype ?? string.Empty
+                    colorName = (item.Color ?? CDBoxColor.FromIndex(item.ColorIndex)).ToString(),
+                    colorHex = (item.Color ?? CDBoxColor.FromIndex(item.ColorIndex)).Hex,
+                    colorType = (item.Color ?? CDBoxColor.FromIndex(item.ColorIndex)).Type.ToString(),
+                    colorRgb = (item.Color ?? CDBoxColor.FromIndex(item.ColorIndex)).RgbText,
+                    linetype = item.Linetype ?? string.Empty,
+                    normalizedName = item.NormalizedName ?? string.Empty,
+                    suggestedName = item.SuggestedName ?? string.Empty,
+                    recognitionStatus = item.RecognitionStatus ?? string.Empty,
+                    confidencePercent = (int)Math.Round(Math.Max(0d, Math.Min(1d, item.RecognitionConfidence)) * 100d),
+                    recognitionSource = item.RecognitionSource ?? string.Empty,
+                    recognitionExplanation = item.RecognitionExplanation ?? string.Empty,
+                    recognitionConflicts = item.RecognitionConflicts ?? string.Empty,
+                    recognitionMissingFields = item.RecognitionMissingFields ?? string.Empty,
+                    recognizedParent = item.RecognitionParentGroup ?? string.Empty,
+                    recognizedCategory = item.RecognitionParentClass ?? string.Empty,
+                    objectType = item.ObjectType ?? string.Empty,
+                    specification = item.Specification ?? string.Empty,
+                    material = item.Material ?? string.Empty,
+                    constructionType = item.ConstructionType ?? string.Empty,
+                    nodeType = item.NodeType ?? string.Empty,
+                    structureType = item.StructureType ?? string.Empty,
+                    purpose = item.Purpose ?? string.Empty
                 });
             }
 
@@ -52,6 +75,7 @@ namespace TCPipeAutoDraw.UI.Studio
             foreach (CDBoxStudioLayerRow row in envelope.layers)
             {
                 if (!string.IsNullOrWhiteSpace(row.parent)) parentSet.Add(row.parent.Trim());
+                if (!string.IsNullOrWhiteSpace(row.recognizedParent)) parentSet.Add(row.recognizedParent.Trim());
             }
             envelope.parentOptions = PriorityParents
                 .Concat(parentSet.Where(x => !PriorityParents.Any(p => string.Equals(p, x, StringComparison.CurrentCultureIgnoreCase)))
@@ -124,12 +148,12 @@ namespace TCPipeAutoDraw.UI.Studio
                             continue;
                         }
 
-                        LayerMetadata metadata = new LayerMetadata
-                        {
-                            ParentGroup = (change.parent ?? string.Empty).Trim(),
-                            ParentClass = (change.category ?? string.Empty).Trim(),
-                            Tags = NormalizeTags(change.tags)
-                        };
+                        LayerMetadata metadata = LayerManagerService.GetLayerMetadata(db, tr, layerName).Clone();
+                        metadata.ParentGroup = (change.parent ?? string.Empty).Trim();
+                        metadata.ParentClass = (change.category ?? string.Empty).Trim();
+                        metadata.Tags = NormalizeTags(change.tags);
+                        metadata.RecognitionSource = "人工确认";
+                        metadata.RecognitionConfidence = 1d;
 
                         LayerManagerService.SetLayerMetadata(db, tr, layerName, metadata);
                         LayerMetadata saved = LayerManagerService.GetLayerMetadata(db, tr, layerName);
@@ -206,6 +230,18 @@ namespace TCPipeAutoDraw.UI.Studio
             if (name.Length == 0) throw new InvalidOperationException("未指定图层名。");
             LayerOperationResult operation = LayerManagerService.SetCurrentLayer(GetActiveDocument(), name);
             return FromOperation("setCurrent", new List<string> { name }, operation);
+        }
+
+        public static CDBoxColor GetLayerColor(string layerName)
+        {
+            return LayerManagerService.GetLayerColor(GetActiveDocument(), (layerName ?? string.Empty).Trim());
+        }
+
+        public static CDBoxStudioLayerActionResult SetLayerColor(string layerName, CDBoxColor color)
+        {
+            string name = (layerName ?? string.Empty).Trim();
+            LayerOperationResult operation = LayerManagerService.SetLayerColor(GetActiveDocument(), name, color);
+            return FromOperation("setLayerColor", new List<string> { name }, operation);
         }
 
         public static CDBoxStudioLayerActionResult AutoRecognize(string payload)

@@ -8,6 +8,7 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
 using TCPipeAutoDraw.Core.Cad;
+using TCPipeAutoDraw.Modules.AnnotationHud;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 
@@ -91,6 +92,9 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
                     ObjectId id = DrawCenteredDbText(db, tr, pos, line.Text, options.TextHeight, options.AnnotationLayerName, line.ColorIndex, textStyleId);
                     if (!id.IsNull) result.TextObjectIds.Add(id);
                 }
+
+                SimpleAnnotationObjectService.AttachNodeMetadata(db, tr,
+                    result.NodeObjectId, result.TextObjectIds);
 
                 tr.Commit();
             }

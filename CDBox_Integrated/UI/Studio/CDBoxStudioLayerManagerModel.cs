@@ -38,7 +38,26 @@ namespace TCPipeAutoDraw.UI.Studio
         public short colorIndex { get; set; }
         public string colorName { get; set; }
         public string colorHex { get; set; }
+        public string colorType { get; set; }
+        public string colorRgb { get; set; }
         public string linetype { get; set; }
+        public string normalizedName { get; set; }
+        public string suggestedName { get; set; }
+        public string recognitionStatus { get; set; }
+        public int confidencePercent { get; set; }
+        public string recognitionSource { get; set; }
+        public string recognitionExplanation { get; set; }
+        public string recognitionConflicts { get; set; }
+        public string recognitionMissingFields { get; set; }
+        public string recognizedParent { get; set; }
+        public string recognizedCategory { get; set; }
+        public string objectType { get; set; }
+        public string specification { get; set; }
+        public string material { get; set; }
+        public string constructionType { get; set; }
+        public string nodeType { get; set; }
+        public string structureType { get; set; }
+        public string purpose { get; set; }
 
         public CDBoxStudioLayerRow()
         {
@@ -48,7 +67,25 @@ namespace TCPipeAutoDraw.UI.Studio
             tags = new List<string>();
             colorName = string.Empty;
             colorHex = "#d1d5db";
+            colorType = "IndexColor";
+            colorRgb = string.Empty;
             linetype = string.Empty;
+            normalizedName = string.Empty;
+            suggestedName = string.Empty;
+            recognitionStatus = string.Empty;
+            recognitionSource = string.Empty;
+            recognitionExplanation = string.Empty;
+            recognitionConflicts = string.Empty;
+            recognitionMissingFields = string.Empty;
+            recognizedParent = string.Empty;
+            recognizedCategory = string.Empty;
+            objectType = string.Empty;
+            specification = string.Empty;
+            material = string.Empty;
+            constructionType = string.Empty;
+            nodeType = string.Empty;
+            structureType = string.Empty;
+            purpose = string.Empty;
         }
     }
 

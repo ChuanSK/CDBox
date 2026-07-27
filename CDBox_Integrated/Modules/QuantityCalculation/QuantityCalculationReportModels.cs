@@ -21,6 +21,25 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         }
     }
 
+    public sealed class QuantityCalculationStep
+    {
+        public string ItemName { get; set; }
+        public string Formula { get; set; }
+        public string Substitution { get; set; }
+        public double Result { get; set; }
+        public string Unit { get; set; }
+        public string Explanation { get; set; }
+
+        public QuantityCalculationStep()
+        {
+            ItemName = string.Empty;
+            Formula = string.Empty;
+            Substitution = string.Empty;
+            Unit = string.Empty;
+            Explanation = string.Empty;
+        }
+    }
+
     public sealed class QuantityMainPipeCalculationRow
     {
         public int Index { get; set; }
@@ -60,6 +79,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public string BranchType { get; set; }
         public string CalculationSource { get; set; }
         public string DataStatus { get; set; }
+        public List<QuantityCalculationStep> CalculationSteps { get; set; }
 
         public QuantityMainPipeCalculationRow()
         {
@@ -79,6 +99,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             BranchType = string.Empty;
             CalculationSource = string.Empty;
             DataStatus = string.Empty;
+            CalculationSteps = new List<QuantityCalculationStep>();
         }
     }
 
@@ -121,6 +142,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public string Remark { get; set; }
         public string CalculationSource { get; set; }
         public string DataStatus { get; set; }
+        public List<QuantityCalculationStep> CalculationSteps { get; set; }
 
         public QuantityWellCalculationRow()
         {
@@ -141,6 +163,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             DataStatus = string.Empty;
             CoverPlateCount = 1;
             WellCoverCount = 1;
+            CalculationSteps = new List<QuantityCalculationStep>();
         }
     }
 
@@ -151,6 +174,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public bool Locked { get; set; }
         public bool IsPipeLayer { get; set; }
         public bool IsBelowWellLayer { get; set; }
+        public bool IsCushionLayer { get; set; }
         public string RawText { get; set; }
 
         public QuantityStructureLayer()
@@ -173,20 +197,33 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 QuantityStructureLayer layer = new QuantityStructureLayer();
                 layer.RawText = line;
-                layer.Locked = ContainsAny(line, "锁定", "固定");
-                layer.IsBelowWellLayer = ContainsAny(line, "井下层", "井下方垫层");
-                layer.IsPipeLayer = layer.IsBelowWellLayer || ContainsAny(line, "管线层", "管道层", "管层");
-
                 MatchCollection matches = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?");
                 if (matches.Count > 0)
                 {
                     Match m = matches[matches.Count - 1];
                     layer.Height = ParseDouble(m.Value, 0.0);
                     string before = line.Substring(0, m.Index).Trim();
+                    string suffix = line.Substring(m.Index + m.Length).Trim();
+                    layer.Locked = ContainsAny(suffix, "锁定", "固定");
+                    layer.IsBelowWellLayer = ContainsAny(suffix, "井下层", "井下方垫层");
+                    layer.IsPipeLayer = ContainsAny(suffix, "管线层", "管道层", "管层");
+                    layer.IsCushionLayer = layer.IsBelowWellLayer || ContainsAny(suffix, "垫层");
                     layer.Name = CleanName(before.Length > 0 ? before : line);
+                    // 兼容旧数据：管线下方的砂垫层过去被标成“管线层”，
+                    // 新模型中应统一迁移为“垫层”。未显式标记的砂垫层也按垫层处理。
+                    if (IsSandCushion(layer)
+                        || (layer.IsPipeLayer && ContainsAny(layer.Name, "垫层")))
+                    {
+                        layer.IsCushionLayer = true;
+                        layer.IsPipeLayer = false;
+                    }
                 }
                 else
                 {
+                    layer.Locked = ContainsAny(line, "锁定", "固定");
+                    layer.IsBelowWellLayer = ContainsAny(line, "井下层", "井下方垫层");
+                    layer.IsPipeLayer = ContainsAny(line, "管线层", "管道层", "管层");
+                    layer.IsCushionLayer = layer.IsBelowWellLayer;
                     layer.Height = 0.0;
                     layer.Name = CleanName(line);
                 }
@@ -205,6 +242,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Locked = Locked,
                 IsPipeLayer = IsPipeLayer,
                 IsBelowWellLayer = IsBelowWellLayer,
+                IsCushionLayer = IsCushionLayer,
                 RawText = RawText ?? string.Empty
             };
         }
@@ -221,11 +259,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (layer.Locked) line += " 锁定";
                 if (nodeWellMode)
                 {
-                    if (layer.IsBelowWellLayer || layer.IsPipeLayer) line += " 井下层";
+                    if (layer.IsBelowWellLayer || layer.IsCushionLayer) line += " 垫层";
+                    else if (layer.IsPipeLayer) line += " 管线层";
                 }
                 else if (layer.IsPipeLayer)
                 {
                     line += " 管线层";
+                }
+                else if (layer.IsCushionLayer)
+                {
+                    line += " 垫层";
                 }
                 lines.Add(line);
             }
@@ -261,6 +304,25 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
             if (ContainsAny(text, "回填")) return false;
             return ContainsAny(text, "中粗砂垫层", "粗砂垫层", "砂垫层") || (ContainsAny(text, "砂") && ContainsAny(text, "垫层"));
+        }
+
+        public static bool IsMarkedCushion(QuantityStructureLayer layer)
+        {
+            return layer != null && (layer.IsCushionLayer || layer.IsBelowWellLayer);
+        }
+
+        public static double ResolvePipeCushionHeight(IEnumerable<QuantityStructureLayer> layers, double fallback)
+        {
+            if (layers != null)
+            {
+                var snapshot = new List<QuantityStructureLayer>();
+                foreach (QuantityStructureLayer layer in layers) if (layer != null) snapshot.Add(layer);
+                double marked = SumHeight(snapshot, IsMarkedCushion);
+                if (marked > 0) return marked;
+                double inferred = SumHeight(snapshot, IsSandCushion);
+                if (inferred > 0) return inferred;
+            }
+            return fallback > 0 ? fallback : 0.0;
         }
 
         public static bool IsSandBackfill(QuantityStructureLayer layer)

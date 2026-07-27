@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using Autodesk.AutoCAD.DatabaseServices;
+using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.UI.Controls;
 
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 {
@@ -28,22 +31,37 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private readonly ComboBox _textStyle;
         private readonly TextBox _textHeight;
         private readonly ComboBox _layer;
-        private readonly ComboBox _textColor;
-        private readonly ComboBox _leaderColor;
+        private readonly CDBoxColorPicker _textColor;
+        private readonly CDBoxColorPicker _leaderColor;
         private readonly ComboBox _linetype;
         private readonly ComboBox _lineWeight;
         private readonly TextBlock _status;
+        private readonly Border _animationRoot;
+        private readonly DropShadowEffect _glowEffect;
+        private readonly Brush _normalBorderBrush;
+        private readonly Brush _hoverBorderBrush;
+        private readonly AnnotationHudPopupAnimationController _popupAnimation;
         private PipeLengthAnnotationEditModel _model;
         private bool _binding;
         private bool _committing;
         private bool _adjustingLocation;
+        private bool _animationActive;
+        private bool _closeAnimationInProgress;
+        private bool _allowImmediateClose;
+        private Point _animationOrigin;
+        private double _restingLeft;
+        private double _restingTop;
+        private bool _hasRestingPosition;
         private Control _focusedEditor;
         private string _focusedValue;
+        private double _normalOpacity = 0.68;
+        private double _hoverOpacity = 1.0;
 
         public Func<PipeLengthAnnotationEditModel, PipeLengthAnnotationEditModel> CommitHandler { get; set; }
         public Func<PipeLengthAnnotationEditModel, PipeLengthAnnotationEditModel> BindingHandler { get; set; }
         public event EventHandler UserMoved;
         public bool HasInitializedPosition { get; private set; }
+        public bool IsClosingAnimation { get { return _closeAnimationInProgress; } }
 
         public PipeLengthAnnotationCardWindow()
         {
@@ -58,39 +76,44 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             AllowsTransparency = true;
             Background = Brushes.Transparent;
             Topmost = false;
-            Opacity = 0.68;
+            Opacity = _normalOpacity;
             FontFamily = new FontFamily("Microsoft YaHei UI");
             FontSize = 12.5;
 
-            var frame = new Border
+            _glowEffect = new DropShadowEffect
             {
-                Background = Brush("#EBFFFFFF"),
-                BorderBrush = Brush("#B8C8DAEE"),
+                BlurRadius = 22,
+                ShadowDepth = 0,
+                Direction = 0,
+                Opacity = 0.28,
+                Color = Color.FromRgb(66, 139, 255)
+            };
+            _normalBorderBrush = Brush("#B8C8DAEE");
+            _hoverBorderBrush = Brush("#FF73A9F5");
+            _animationRoot = new Border
+            {
+                Background = Brush("#FFFFFFFF"),
+                BorderBrush = _normalBorderBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(12),
-                Margin = new Thickness(10),
-                Effect = new DropShadowEffect
-                {
-                    BlurRadius = 18,
-                    ShadowDepth = 3,
-                    Direction = 270,
-                    Opacity = 0.28,
-                    Color = Color.FromRgb(30, 46, 72)
-                }
+                Padding = new Thickness(10),
+                Margin = new Thickness(14),
+                Effect = _glowEffect,
+                UseLayoutRounding = true
             };
-            Content = frame;
+            Content = _animationRoot;
+            _popupAnimation = new AnnotationHudPopupAnimationController(this, _animationRoot);
 
             var root = new StackPanel();
-            frame.Child = root;
+            _animationRoot.Child = root;
 
             _bindingInfo = new TextBlock
             {
                 Foreground = Brush("#53637A"),
                 FontSize = 11.5,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(1, 0, 1, 8),
-                Padding = new Thickness(0, 2, 0, 3),
+                Margin = new Thickness(1, 0, 1, 6),
+                Padding = new Thickness(0, 1, 0, 2),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.SizeAll,
                 ToolTip = "拖动浮窗"
@@ -98,7 +121,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _bindingInfo.MouseLeftButtonDown += DragHud;
             root.Children.Add(_bindingInfo);
 
-            var topRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            var topRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _userText = CreateTextBox();
@@ -107,8 +130,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _systemLength = new TextBlock
             {
                 MinWidth = 44,
-                MinHeight = 31,
-                Padding = new Thickness(8, 6, 8, 5),
+                MinHeight = 28,
+                Padding = new Thickness(7, 4, 7, 4),
                 Margin = new Thickness(5, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = Brush("#244A84"),
@@ -119,7 +142,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             topRow.Children.Add(_systemLength);
             root.Children.Add(topRow);
 
-            _bottomRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            _bottomRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
             _bottomRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             _bottomText = CreateTextBox();
             _bottomText.ToolTip = "下侧补充标注";
@@ -143,14 +166,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _morePanel = new StackPanel
             {
                 Visibility = System.Windows.Visibility.Collapsed,
-                Margin = new Thickness(0, 8, 0, 0)
+                Margin = new Thickness(0, 6, 0, 0)
             };
             root.Children.Add(_morePanel);
             var divider = new Border
             {
                 Height = 1,
                 Background = Brush("#DCE5F1"),
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 6)
             };
             _morePanel.Children.Add(divider);
 
@@ -162,8 +185,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             _textStyle = AddComboRow(options, 0, "文字样式");
             _textHeight = AddTextBoxRow(options, 1, "文字高度");
-            _textColor = AddComboRow(options, 2, "文字颜色");
-            _leaderColor = AddComboRow(options, 3, "引线颜色");
+            _textColor = AddColorPickerRow(options, 2, "文字颜色");
+            _leaderColor = AddColorPickerRow(options, 3, "引线颜色");
             _linetype = AddComboRow(options, 4, "引线线型");
             _lineWeight = AddComboRow(options, 5, "引线线宽");
             _layer = AddComboRow(options, 6, "标注图层");
@@ -171,24 +194,20 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 Content = "启用下侧标注",
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 5, 0, 3),
+                Margin = new Thickness(0, 3, 0, 2),
                 Foreground = Brush("#31415A")
             };
             Grid.SetRow(_bottomEnabled, 7);
             Grid.SetColumn(_bottomEnabled, 1);
             options.Children.Add(_bottomEnabled);
 
-            _textColor.DisplayMemberPath = "Name";
-            _leaderColor.DisplayMemberPath = "Name";
             _lineWeight.DisplayMemberPath = "Name";
-            _textColor.ItemsSource = BuildColorOptions();
-            _leaderColor.ItemsSource = BuildColorOptions();
             _lineWeight.ItemsSource = BuildLineWeightOptions();
 
             _status = new TextBlock
             {
                 Visibility = System.Windows.Visibility.Collapsed,
-                Margin = new Thickness(1, 7, 1, 0),
+                Margin = new Thickness(1, 5, 1, 0),
                 Foreground = Brush("#B43A3A"),
                 FontSize = 11.5,
                 TextWrapping = TextWrapping.Wrap
@@ -199,23 +218,97 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             HookTextEditor(_bottomText);
             HookTextEditor(_textHeight);
             HookImmediateCombo(_textStyle);
-            HookImmediateCombo(_textColor);
-            HookImmediateCombo(_leaderColor);
+            _textColor.SelectedColorChanged += ColorChanged;
+            _leaderColor.SelectedColorChanged += ColorChanged;
             HookImmediateCombo(_linetype);
             HookImmediateCombo(_lineWeight);
             HookImmediateCombo(_layer);
             _bottomEnabled.Checked += BottomEnabledChanged;
             _bottomEnabled.Unchecked += BottomEnabledChanged;
             PreviewKeyDown += WindowPreviewKeyDown;
-            MouseEnter += delegate { Opacity = 1.0; };
-            MouseLeave += delegate { Opacity = 0.68; };
-            LocationChanged += delegate { ConstrainAndSnapToWorkingArea(); };
-            SizeChanged += delegate { ConstrainAndSnapToWorkingArea(); };
+            MouseEnter += delegate { SetHudHover(true); };
+            MouseLeave += delegate { SetHudHover(false); };
+            LocationChanged += delegate { WindowGeometryChanged(); };
+            SizeChanged += delegate { WindowGeometryChanged(); };
         }
 
         public string AnnotationId { get { return _model == null ? string.Empty : _model.AnnotationId; } }
 
-        public void InitializePosition(double? rememberedLeft, double? rememberedTop)
+        public void ApplyAppearance(double normalOpacity, double hoverOpacity,
+            bool glowEnabled, double glowIntensity)
+        {
+            _normalOpacity = Clamp(normalOpacity, 0.20, 1.0);
+            _hoverOpacity = Clamp(hoverOpacity, 0.20, 1.0);
+            _glowEffect.Opacity = glowEnabled ? Clamp(glowIntensity, 0.0, 1.0) : 0.0;
+            Opacity = IsMouseOver ? _hoverOpacity : _normalOpacity;
+        }
+
+        private void SetHudHover(bool hovered)
+        {
+            Opacity = hovered ? _hoverOpacity : _normalOpacity;
+            _animationRoot.BorderBrush = hovered ? _hoverBorderBrush : _normalBorderBrush;
+            if (!_animationActive) _popupAnimation.SetHoverState(hovered);
+        }
+
+        public void ShowAnimated(Point origin, double? rememberedLeft, double? rememberedTop)
+        {
+            _animationOrigin = origin;
+            _animationRoot.BorderBrush = _normalBorderBrush;
+            _popupAnimation.PrepareForOpen();
+            if (!IsVisible) Show();
+            UpdateLayout();
+            InitializePosition(origin, rememberedLeft, rememberedTop);
+            Left = _restingLeft;
+            Top = _restingTop;
+            _animationActive = true;
+            _closeAnimationInProgress = false;
+            _animationRoot.IsHitTestVisible = false;
+            _popupAnimation.Open(origin, new Point(_restingLeft, _restingTop), delegate
+            {
+                _animationActive = false;
+                _animationRoot.IsHitTestVisible = true;
+                ConstrainAndSnapToWorkingArea();
+                CaptureRestingPosition();
+                SetHudHover(IsMouseOver);
+            });
+        }
+
+        public void SetAnimationOrigin(Point origin)
+        {
+            _animationOrigin = origin;
+        }
+
+        public void HideAnimated(Point origin)
+        {
+            _animationOrigin = origin;
+            if (!IsVisible) return;
+            BeginCloseAnimation(false);
+        }
+
+        public void CloseImmediately()
+        {
+            _allowImmediateClose = true;
+            _popupAnimation.CancelAndReset();
+            Close();
+        }
+
+        public bool TryGetRestingPosition(out double left, out double top)
+        {
+            left = _restingLeft;
+            top = _restingTop;
+            return _hasRestingPosition;
+        }
+
+        public Point GetCursorScreenPosition()
+        {
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            double scaleX = dpi.DpiScaleX <= 0.0 ? 1.0 : dpi.DpiScaleX;
+            double scaleY = dpi.DpiScaleY <= 0.0 ? 1.0 : dpi.DpiScaleY;
+            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
+            return new Point(cursor.X / scaleX, cursor.Y / scaleY);
+        }
+
+        private void InitializePosition(Point origin, double? rememberedLeft, double? rememberedTop)
         {
             if (HasInitializedPosition) return;
             HasInitializedPosition = true;
@@ -226,15 +319,50 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             else
             {
-                DpiScale dpi = VisualTreeHelper.GetDpi(this);
-                double scaleX = dpi.DpiScaleX <= 0 ? 1.0 : dpi.DpiScaleX;
-                double scaleY = dpi.DpiScaleY <= 0 ? 1.0 : dpi.DpiScaleY;
-                System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
-                Left = cursor.X / scaleX + 18.0;
-                Top = cursor.Y / scaleY + 18.0;
+                Left = origin.X + 20.0;
+                Top = origin.Y + 20.0;
             }
             ConstrainAndSnapToWorkingArea();
-            Opacity = IsMouseOver ? 1.0 : 0.68;
+            CaptureRestingPosition();
+            Opacity = IsMouseOver ? _hoverOpacity : _normalOpacity;
+        }
+
+        private void BeginCloseAnimation(bool closeWindow)
+        {
+            if (_closeAnimationInProgress || !IsVisible) return;
+            if (!_animationActive) CaptureRestingPosition();
+            _animationRoot.BorderBrush = _normalBorderBrush;
+            _animationActive = true;
+            _closeAnimationInProgress = true;
+            _animationRoot.IsHitTestVisible = false;
+            _popupAnimation.Close(_animationOrigin, delegate
+            {
+                if (closeWindow)
+                {
+                    _allowImmediateClose = true;
+                    Close();
+                    return;
+                }
+
+                Hide();
+                _popupAnimation.CancelAndReset();
+                Left = _restingLeft;
+                Top = _restingTop;
+                _closeAnimationInProgress = false;
+                _animationActive = false;
+                _animationRoot.IsHitTestVisible = true;
+            });
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (!_allowImmediateClose && IsVisible)
+            {
+                e.Cancel = true;
+                BeginCloseAnimation(true);
+                return;
+            }
+            base.OnClosing(e);
         }
 
         public void SetModel(PipeLengthAnnotationEditModel model)
@@ -255,8 +383,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 SetStringItems(_textStyle, model.TextStyleNames, model.TextStyleName);
                 SetStringItems(_layer, model.LayerNames, model.LayerName);
                 SetStringItems(_linetype, model.LinetypeNames, model.LinetypeName);
-                SelectColor(_textColor, model.TextColorIndex);
-                SelectColor(_leaderColor, model.LeaderColorIndex);
+                _textColor.SelectedColor = model.TextColor ?? CDBoxColor.FromIndex(model.TextColorIndex);
+                _leaderColor.SelectedColor = model.LeaderColor ?? CDBoxColor.FromIndex(model.LeaderColorIndex);
                 SelectLineWeight(model.LineWeight);
                 UpdateBindingInfo(model);
                 SetStatus(string.Empty, false);
@@ -291,26 +419,27 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private void DragHud(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton != MouseButton.Left) return;
+            if (e.ChangedButton != MouseButton.Left || _animationActive) return;
             e.Handled = true;
             try
             {
-                Opacity = 1.0;
+                Opacity = _hoverOpacity;
                 DragMove();
             }
             catch (InvalidOperationException) { }
             finally
             {
                 ConstrainAndSnapToWorkingArea();
+                CaptureRestingPosition();
                 EventHandler moved = UserMoved;
                 if (moved != null) moved(this, EventArgs.Empty);
-                Opacity = IsMouseOver ? 1.0 : 0.68;
+                SetHudHover(IsMouseOver);
             }
         }
 
         private void ConstrainAndSnapToWorkingArea()
         {
-            if (_adjustingLocation || !IsLoaded || double.IsNaN(Left) || double.IsNaN(Top)) return;
+            if (_adjustingLocation || _animationActive || !IsLoaded || double.IsNaN(Left) || double.IsNaN(Top)) return;
             try
             {
                 _adjustingLocation = true;
@@ -339,6 +468,22 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch { }
             finally { _adjustingLocation = false; }
+        }
+
+        private void WindowGeometryChanged()
+        {
+            if (_animationActive) return;
+            ConstrainAndSnapToWorkingArea();
+            CaptureRestingPosition();
+        }
+
+        private void CaptureRestingPosition()
+        {
+            if (_animationActive || double.IsNaN(Left) || double.IsInfinity(Left)
+                || double.IsNaN(Top) || double.IsInfinity(Top)) return;
+            _restingLeft = Left;
+            _restingTop = Top;
+            _hasRestingPosition = true;
         }
 
         private void ToggleMore(object sender, RoutedEventArgs e)
@@ -377,6 +522,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 if (!_binding && !_committing && IsLoaded) CommitCurrentModel();
             };
+        }
+
+        private void ColorChanged(object sender, EventArgs e)
+        {
+            if (!_binding && !_committing && IsLoaded) CommitCurrentModel();
         }
 
         private void EditorGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
@@ -462,8 +612,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 throw new InvalidOperationException("请输入有效的文字高度。 ");
             }
-            var textColor = _textColor.SelectedItem as ColorOption;
-            var leaderColor = _leaderColor.SelectedItem as ColorOption;
+            CDBoxColor textColor = _textColor.SelectedColor;
+            CDBoxColor leaderColor = _leaderColor.SelectedColor;
             var weight = _lineWeight.SelectedItem as LineWeightOption;
             bool hasBottom = _bottomEnabled.IsChecked == true;
             string userText = _userText.Text ?? string.Empty;
@@ -482,8 +632,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 TextStyleName = Convert.ToString(_textStyle.SelectedItem, CultureInfo.CurrentCulture) ?? string.Empty,
                 TextHeight = height,
                 LayerName = Convert.ToString(_layer.SelectedItem, CultureInfo.CurrentCulture) ?? string.Empty,
-                TextColorIndex = textColor == null ? _model.TextColorIndex : textColor.Index,
-                LeaderColorIndex = leaderColor == null ? _model.LeaderColorIndex : leaderColor.Index,
+                TextColorIndex = CDBoxColorService.ToCompatibleColorIndex(textColor, _model.TextColorIndex),
+                LeaderColorIndex = CDBoxColorService.ToCompatibleColorIndex(leaderColor, _model.LeaderColorIndex),
+                TextColor = textColor,
+                LeaderColor = leaderColor,
                 LinetypeName = Convert.ToString(_linetype.SelectedItem, CultureInfo.CurrentCulture) ?? string.Empty,
                 LineWeight = weight == null ? _model.LineWeight : weight.Value,
                 SourceObjectId = _model.SourceObjectId,
@@ -516,8 +668,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             return new TextBox
             {
-                MinHeight = 31,
-                Padding = new Thickness(8, 5, 8, 5),
+                MinHeight = 28,
+                Padding = new Thickness(7, 3, 7, 3),
                 BorderBrush = Brush("#C7D4E5"),
                 BorderThickness = new Thickness(1),
                 Background = Brush("#FAFCFF"),
@@ -529,7 +681,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             AddLabel(grid, row, label);
             TextBox box = CreateTextBox();
-            box.Margin = new Thickness(0, 3, 0, 3);
+            box.Margin = new Thickness(0, 2, 0, 2);
             Grid.SetRow(box, row);
             Grid.SetColumn(box, 1);
             grid.Children.Add(box);
@@ -541,9 +693,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             AddLabel(grid, row, label);
             var combo = new ComboBox
             {
-                MinHeight = 31,
-                Padding = new Thickness(6, 3, 6, 3),
-                Margin = new Thickness(0, 3, 0, 3),
+                MinHeight = 28,
+                Padding = new Thickness(6, 2, 6, 2),
+                Margin = new Thickness(0, 2, 0, 2),
                 BorderBrush = Brush("#C7D4E5"),
                 Background = Brush("#FAFCFF")
             };
@@ -553,6 +705,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return combo;
         }
 
+        private static CDBoxColorPicker AddColorPickerRow(Grid grid, int row, string label)
+        {
+            AddLabel(grid, row, label);
+            var picker = new CDBoxColorPicker
+            {
+                Margin = new Thickness(0, 2, 0, 2),
+                AllowByLayer = true,
+                AllowByBlock = true,
+                AllowTrueColor = true,
+                AllowColorBook = true,
+                AllowCDBoxStandard = true
+            };
+            Grid.SetRow(picker, row);
+            Grid.SetColumn(picker, 1);
+            grid.Children.Add(picker);
+            return picker;
+        }
+
         private static void AddLabel(Grid grid, int row, string text)
         {
             var label = new TextBlock
@@ -560,7 +730,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 Text = text,
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = Brush("#607089"),
-                Margin = new Thickness(0, 3, 7, 3),
+                Margin = new Thickness(0, 2, 7, 2),
                 FontSize = 11.5
             };
             Grid.SetRow(label, row);
@@ -572,8 +742,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return new Button
             {
                 Content = text,
-                MinHeight = 27,
-                Padding = new Thickness(2, 2, 2, 2),
+                MinHeight = 24,
+                Padding = new Thickness(2, 1, 2, 1),
                 Background = Brushes.Transparent,
                 Foreground = Brush("#3D63A7"),
                 BorderThickness = new Thickness(0),
@@ -588,16 +758,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             if (combo.SelectedIndex < 0 && combo.Items.Count > 0) combo.SelectedIndex = 0;
         }
 
-        private static void SelectColor(ComboBox combo, short index)
-        {
-            foreach (object item in combo.Items)
-            {
-                var option = item as ColorOption;
-                if (option != null && option.Index == index) { combo.SelectedItem = item; return; }
-            }
-            combo.SelectedIndex = 0;
-        }
-
         private void SelectLineWeight(LineWeight value)
         {
             foreach (object item in _lineWeight.Items)
@@ -606,18 +766,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 if (option != null && option.Value == value) { _lineWeight.SelectedItem = item; return; }
             }
             _lineWeight.SelectedIndex = 0;
-        }
-
-        private static IList<ColorOption> BuildColorOptions()
-        {
-            var result = new List<ColorOption>
-            {
-                new ColorOption("随层", 256), new ColorOption("红色", 1), new ColorOption("黄色", 2),
-                new ColorOption("绿色", 3), new ColorOption("青色", 4), new ColorOption("蓝色", 5),
-                new ColorOption("洋红", 6), new ColorOption("白色", 7)
-            };
-            for (short i = 8; i < 256; i++) result.Add(new ColorOption("索引 " + i.ToString(CultureInfo.InvariantCulture), i));
-            return result;
         }
 
         private static IList<LineWeightOption> BuildLineWeightOptions()
@@ -661,11 +809,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return brush;
         }
 
-        private sealed class ColorOption
+        private static double Clamp(double value, double minimum, double maximum)
         {
-            public string Name { get; private set; }
-            public short Index { get; private set; }
-            public ColorOption(string name, short index) { Name = name; Index = index; }
+            if (double.IsNaN(value) || double.IsInfinity(value)) return minimum;
+            return Math.Max(minimum, Math.Min(maximum, value));
         }
 
         private sealed class LineWeightOption

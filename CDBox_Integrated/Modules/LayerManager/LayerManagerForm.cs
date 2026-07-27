@@ -6,6 +6,8 @@ using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.UI.Controls;
 
 namespace TCPipeAutoDraw.Modules.LayerManager
 {
@@ -1145,6 +1147,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             modeColumn.Items.Add(LayerManagerService.MatchModeExact);
             modeColumn.Items.Add(LayerManagerService.MatchModeContains);
             modeColumn.Items.Add(LayerManagerService.MatchModeWildcard);
+            modeColumn.Items.Add(LayerManagerService.MatchModeKeywords);
+            modeColumn.Items.Add(LayerManagerService.MatchModeTemplate);
             modeColumn.Items.Add(LayerManagerService.MatchModeRegex);
             _grid.Columns.Add(modeColumn);
 
@@ -1299,13 +1303,31 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             var colorPanel = new FlowLayoutPanel();
             colorPanel.Dock = DockStyle.Fill;
             colorPanel.AutoSize = true;
-            colorPanel.Controls.Add(new Label { Text = "颜色 ACI：", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
+            colorPanel.Controls.Add(new Label { Text = "颜色：", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
             _numColor = new NumericUpDown();
             _numColor.Minimum = 1;
             _numColor.Maximum = 255;
             _numColor.Value = 7;
             _numColor.Width = 80;
-            colorPanel.Controls.Add(_numColor);
+            var colorButton = new Button { Width = 220, Height = 31, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            Action updateColorButton = delegate
+            {
+                CDBoxColor color = CDBoxColor.FromIndex((int)_numColor.Value);
+                colorButton.Text = "■  " + color.DisplayName + " · " + color.RgbText;
+                colorButton.ForeColor = color.Index == 7
+                    ? System.Drawing.SystemColors.ControlText
+                    : System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+            };
+            _numColor.ValueChanged += delegate { updateColorButton(); };
+            colorButton.Click += delegate
+            {
+                CDBoxColor selected;
+                if (!ColorPickerWindow.TryPick(CDBoxColor.FromIndex((int)_numColor.Value), out selected,
+                    false, false, false, false, false)) return;
+                _numColor.Value = CDBoxColorService.ToCompatibleColorIndex(selected, (short)_numColor.Value);
+            };
+            updateColorButton();
+            colorPanel.Controls.Add(colorButton);
             root.Controls.Add(colorPanel, 0, 2);
 
             var buttons = new FlowLayoutPanel();

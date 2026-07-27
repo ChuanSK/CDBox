@@ -44,7 +44,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             if (attrs.IsSpecialObject)
             {
-                if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind)) DistributeLayers(layers, attrs.AverageDepth, false);
+                if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
+                {
+                    attrs.AverageDepth = RoundForEditor(attrs.AverageDepth);
+                    DistributeLayers(layers, attrs.AverageDepth, false);
+                }
             }
             else if (QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind))
             {
@@ -57,6 +61,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             else if (nodeMode)
             {
+                ApplyWellSizeDefaults(attrs, old, changed);
                 DistributeLayers(layers, attrs.WellDepth, true);
             }
 
@@ -70,7 +75,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 Attributes = attrs,
                 Layers = layers,
-                RealExcavationDepth = nodeMode ? attrs.WellDepth + SumBelowWellLayers(layers) : 0.0
+                RealExcavationDepth = nodeMode ? RoundForEditor(attrs.WellDepth + SumBelowWellLayers(layers)) : 0.0
             };
             Validate(result, nodeMode, branchMode, attrs.IsSpecialObject);
             return result;
@@ -116,6 +121,41 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             DistributeLayers(layers, attrs.BranchDepth, false);
         }
 
+        private static void ApplyWellSizeDefaults(QuantityPipeAttributes attrs,
+            QuantityPipeAttributes previous, string changed)
+        {
+            if (attrs == null) return;
+
+            bool specificationChanged = string.Equals(changed, "WellSpec",
+                StringComparison.OrdinalIgnoreCase);
+            double oldLength = previous == null ? 0.0 : previous.ExcavationLength;
+            double oldWidth = previous == null ? 0.0 : previous.ExcavationWidth;
+
+            if (!Contains(attrs.WellSpec, "700"))
+            {
+                if (specificationChanged && Contains(attrs.WellSpec, "500"))
+                {
+                    if (attrs.ExcavationLength <= 0.0 || NearlyEqual(attrs.ExcavationLength, 1.5))
+                        attrs.ExcavationLength = 1.3;
+                    if (attrs.ExcavationWidth <= 0.0 || NearlyEqual(attrs.ExcavationWidth, 1.5))
+                        attrs.ExcavationWidth = 1.3;
+                }
+                return;
+            }
+
+            if (attrs.ExcavationLength <= 0.0
+                || NearlyEqual(attrs.ExcavationLength, 1.3)
+                || (specificationChanged && NearlyEqual(attrs.ExcavationLength, oldLength)
+                    && NearlyEqual(oldLength, 1.3)))
+                attrs.ExcavationLength = 1.5;
+
+            if (attrs.ExcavationWidth <= 0.0
+                || NearlyEqual(attrs.ExcavationWidth, 1.3)
+                || (specificationChanged && NearlyEqual(attrs.ExcavationWidth, oldWidth)
+                    && NearlyEqual(oldWidth, 1.3)))
+                attrs.ExcavationWidth = 1.5;
+        }
+
         private static void ApplyBranchRules(QuantityPipeAttributes attrs, List<QuantityStructureLayer> layers, QuantityPipeAttributes branchDefaults, string changed)
         {
             string type = attrs.BranchType ?? string.Empty;
@@ -145,28 +185,35 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static void DistributeLayers(List<QuantityStructureLayer> layers, double totalHeight, bool nodeMode)
         {
             if (layers == null || layers.Count == 0) return;
+            totalHeight = RoundForEditor(totalHeight);
             double locked = 0.0;
             var unlocked = new List<QuantityStructureLayer>();
             foreach (QuantityStructureLayer layer in layers)
             {
                 if (layer == null) continue;
-                bool below = nodeMode && (layer.IsBelowWellLayer || layer.IsPipeLayer);
+                bool below = nodeMode && (layer.IsBelowWellLayer || layer.IsCushionLayer);
                 if (below) continue;
                 if (layer.Locked) locked += layer.Height;
                 else unlocked.Add(layer);
             }
             if (unlocked.Count == 0) return;
-            double value = (totalHeight - locked) / unlocked.Count;
-            foreach (QuantityStructureLayer layer in unlocked) layer.Height = value;
+            double remaining = totalHeight - locked;
+            double value = RoundForEditor(remaining / unlocked.Count);
+            for (int i = 0; i < unlocked.Count; i++)
+            {
+                unlocked[i].Height = i == unlocked.Count - 1
+                    ? RoundForEditor(remaining - value * (unlocked.Count - 1))
+                    : value;
+            }
         }
 
         private static void RecalculateAverageDepth(QuantityPipeAttributes attrs)
         {
             double start = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
             double end = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
-            if (start > 0 && end > 0) attrs.AverageDepth = (start + end) / 2.0;
-            else if (start > 0) attrs.AverageDepth = start;
-            else if (end > 0) attrs.AverageDepth = end;
+            if (start > 0 && end > 0) attrs.AverageDepth = RoundForEditor((start + end) / 2.0);
+            else if (start > 0) attrs.AverageDepth = RoundForEditor(start);
+            else if (end > 0) attrs.AverageDepth = RoundForEditor(end);
             else attrs.AverageDepth = 0.0;
         }
 
@@ -186,9 +233,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static double GetPipeCushion(QuantityPipeAttributes attrs, List<QuantityStructureLayer> layers)
         {
             List<QuantityStructureLayer> source = layers ?? QuantityStructureLayer.Parse(attrs == null ? string.Empty : attrs.BackfillStructure);
-            double height = QuantityStructureLayer.SumHeight(source, QuantityStructureLayer.IsSandCushion);
-            if (source.Count == 0 && attrs != null) height = attrs.SandCushionThickness;
-            return height;
+            return QuantityStructureLayer.ResolvePipeCushionHeight(
+                source, attrs == null ? 0.0 : attrs.SandCushionThickness);
         }
 
         private static double SumBelowWellLayers(IEnumerable<QuantityStructureLayer> layers)
@@ -197,7 +243,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (layers == null) return total;
             foreach (QuantityStructureLayer layer in layers)
             {
-                if (layer != null && (layer.IsBelowWellLayer || layer.IsPipeLayer)) total += layer.Height;
+                if (layer != null && (layer.IsBelowWellLayer || layer.IsCushionLayer)) total += layer.Height;
             }
             return total;
         }
@@ -248,6 +294,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (string.IsNullOrWhiteSpace(text)) return false;
             foreach (string value in values) if (!string.IsNullOrWhiteSpace(value) && text.IndexOf(value, StringComparison.CurrentCultureIgnoreCase) >= 0) return true;
             return false;
+        }
+
+        private static bool NearlyEqual(double left, double right)
+        {
+            return Math.Abs(left - right) <= 0.0000001;
+        }
+
+        private static double RoundForEditor(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
+            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
         }
     }
 }

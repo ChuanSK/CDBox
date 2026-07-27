@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
+using TCPipeAutoDraw.Core.Colors;
 
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 {
@@ -353,7 +354,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                                 GetCurveLength(previous), out userText, out oldLength);
                         }
                     }
-                    string systemLength = PipeLengthAnnotationTextComposer.FormatLike(GetCurveLength(target), oldLength);
+                    string systemLength = FormatUsingCurrentSettings(GetCurveLength(target), oldLength);
                     if (top != null)
                     {
                         top.TextString = PipeLengthAnnotationTextComposer.Compose(userText, systemLength);
@@ -512,6 +513,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     LayerName = topText.Layer,
                     TextColorIndex = NormalizeColorIndex(topText.ColorIndex),
                     LeaderColorIndex = NormalizeColorIndex(leader == null ? (short)7 : leader.ColorIndex),
+                    TextColor = CDBoxColorService.FromCadColor(topText.Color),
+                    LeaderColor = CDBoxColorService.FromCadColor(leader == null ? null : leader.Color),
                     LinetypeName = leader == null ? "ByLayer" : leader.Linetype,
                     LineWeight = leader == null ? LineWeight.ByLayer : leader.LineWeight,
                     SourceObjectId = selectedMetadata.SourceObjectId,
@@ -556,7 +559,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     }
                     if (sourceCurve != null && !string.IsNullOrWhiteSpace(systemLengthText))
                     {
-                        systemLengthText = PipeLengthAnnotationTextComposer.FormatLike(
+                        systemLengthText = FormatUsingCurrentSettings(
                             GetCurveLength(sourceCurve), systemLengthText);
                     }
                     model.UserText = userText ?? string.Empty;
@@ -622,7 +625,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     Curve sourceCurve = source as Curve;
                     if (sourceCurve != null)
                     {
-                        model.SystemLengthText = PipeLengthAnnotationTextComposer.FormatLike(
+                        model.SystemLengthText = FormatUsingCurrentSettings(
                             GetCurveLength(sourceCurve), model.SystemLengthText);
                     }
                     topValue = PipeLengthAnnotationTextComposer.Compose(model.UserText, model.SystemLengthText);
@@ -636,7 +639,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 topText.TextString = topValue.Trim();
                 topText.Height = model.TextHeight;
                 if (!textStyleId.IsNull) topText.TextStyleId = textStyleId;
-                ApplyEntityLayerAndColor(topText, model.LayerName, model.TextColorIndex);
+                ApplyEntityLayerAndColor(topText, model.LayerName, model.TextColor, model.TextColorIndex);
                 try { topText.AdjustAlignment(doc.Database); } catch { }
 
                 DBText bottomText = bottomMember == null ? null : tr.GetObject(bottomMember.ObjectId, OpenMode.ForWrite, false) as DBText;
@@ -658,7 +661,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     bottomText.TextString = model.BottomText.Trim();
                     bottomText.Height = model.TextHeight;
                     if (!textStyleId.IsNull) bottomText.TextStyleId = textStyleId;
-                    ApplyEntityLayerAndColor(bottomText, model.LayerName, model.TextColorIndex);
+                    ApplyEntityLayerAndColor(bottomText, model.LayerName, model.TextColor, model.TextColorIndex);
                     try { bottomText.AdjustAlignment(doc.Database); } catch { }
                 }
 
@@ -791,9 +794,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
                 Curve pipe = tr.GetObject(newPipeId, OpenMode.ForWrite, false) as Curve;
-                if (!(pipe is Polyline) && !(pipe is Polyline2d) && !(pipe is Polyline3d))
+                if (!IsSupportedBindingCurve(pipe))
                 {
-                    throw new InvalidOperationException("绑定对象必须是二维或三维多段线。 ");
+                    throw new InvalidOperationException("绑定对象必须具有可用的长度属性。 ");
                 }
 
                 Point3d bindingPoint = pipe.GetClosestPointTo(pickedPoint, false);
@@ -817,7 +820,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     PipeLengthAnnotationTextComposer.SplitLastLengthToken(top.TextString, out userText, out oldLength);
                 }
-                string systemLength = PipeLengthAnnotationTextComposer.FormatLike(GetCurveLength(pipe), oldLength);
+                string systemLength = FormatUsingCurrentSettings(GetCurveLength(pipe), oldLength);
                 if (top != null)
                 {
                     top.TextString = PipeLengthAnnotationTextComposer.Compose(userText, systemLength);
@@ -943,7 +946,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                             PipeLengthAnnotationTextComposer.SplitLastLengthToken(top.TextString,
                                 out userText, out systemLength);
                         }
-                        systemLength = PipeLengthAnnotationTextComposer.FormatLike(
+                        systemLength = FormatUsingCurrentSettings(
                             GetCurveLength(sourceCurve), systemLength);
                         if (top != null)
                         {
@@ -1115,17 +1118,20 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return colorIndex < 0 ? (short)256 : (short)colorIndex;
         }
 
-        private static void ApplyEntityLayerAndColor(Entity entity, string layerName, short colorIndex)
+        private static void ApplyEntityLayerAndColor(Entity entity, string layerName, CDBoxColor color, short fallbackColorIndex)
         {
             if (entity == null) return;
             if (!string.IsNullOrWhiteSpace(layerName)) entity.Layer = layerName;
-            entity.ColorIndex = colorIndex <= 0 && colorIndex != 0 ? (short)256 : colorIndex;
+            CDBoxColor original = CDBoxColorService.FromCadColor(entity.Color);
+            CDBoxColor output = CDBoxColorService.PrepareForWrite(
+                color ?? CDBoxColor.FromIndex(fallbackColorIndex), original);
+            entity.Color = CDBoxColorService.ToCadColor(output);
         }
 
         private static void ApplyLineAppearance(Database db, Transaction tr, Entity entity, PipeLengthAnnotationEditModel model)
         {
             if (entity == null || model == null) return;
-            ApplyEntityLayerAndColor(entity, model.LayerName, model.LeaderColorIndex);
+            ApplyEntityLayerAndColor(entity, model.LayerName, model.LeaderColor, model.LeaderColorIndex);
             if (!string.IsNullOrWhiteSpace(model.LinetypeName))
             {
                 LinetypeTable table = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead, false) as LinetypeTable;
@@ -1164,7 +1170,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             bottom.TextString = model.BottomText.Trim();
             bottom.TextStyleId = topText.TextStyleId;
             bottom.LayerId = topText.LayerId;
-            bottom.ColorIndex = model.TextColorIndex;
+            CDBoxColor bottomColor = CDBoxColorService.PrepareForWrite(
+                model.TextColor ?? CDBoxColor.FromIndex(model.TextColorIndex),
+                CDBoxColorService.FromCadColor(topText.Color));
+            bottom.Color = CDBoxColorService.ToCadColor(bottomColor);
             ObjectId id = owner.AppendEntity(bottom);
             tr.AddNewlyCreatedDBObject(bottom, true);
             try { bottom.AdjustAlignment(db); } catch { }
@@ -1272,32 +1281,30 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             candidate = null;
             anchor = Point3d.Origin;
             message = string.Empty;
-            double tolerance = GetBindingTolerance(editor);
-            double bestDistance = double.MaxValue;
-            foreach (ObjectId id in EnumerateCurrentSpace(db, tr))
+            List<PipeSelectionCandidate> candidates = PipeLengthAnnotationService.FindCandidatesAtPoint(
+                db, tr, editor, candidatePoint);
+            if (candidates.Count == 0)
             {
-                Curve curve;
-                try { curve = tr.GetObject(id, OpenMode.ForRead, false) as Curve; }
-                catch { continue; }
-                if (!IsSupportedBindingCurve(curve)) continue;
-                string annotationId;
-                string annotationPart;
-                if (TryGetAnnotationPart(curve, out annotationId, out annotationPart)) continue;
-                Point3d closest;
-                try { closest = curve.GetClosestPointTo(candidatePoint, false); }
-                catch { continue; }
-                double distance = closest.DistanceTo(candidatePoint);
-                if (distance <= tolerance && distance < bestDistance)
-                {
-                    candidate = curve;
-                    anchor = closest;
-                    bestDistance = distance;
-                }
+                message = "绑定点未直接落在具有长度的对象上。";
+                return false;
             }
-
+            Document doc = null;
+            try { doc = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.GetDocument(db); }
+            catch { }
+            if (doc != null) OverlappingPipeSelectionService.EnrichDisplay(doc, candidates);
+            PipeSelectionCandidate selected = candidates.Count == 1
+                ? candidates[0]
+                : OverlappingPipeSelectionService.Select(doc, candidates, tr);
+            if (selected == null)
+            {
+                message = "已取消重叠对象选择，原绑定保持不变。";
+                return false;
+            }
+            candidate = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Curve;
+            anchor = selected.AnchorPoint;
             if (candidate == null)
             {
-                message = "绑定点未直接落在可绑定管线上。";
+                message = "所选对象已不可用，原绑定保持不变。";
                 return false;
             }
             return true;
@@ -1318,9 +1325,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
         }
 
+        private static string FormatUsingCurrentSettings(double length, string previousToken)
+        {
+            int decimals = PipeLengthAnnotationOptions.Default.DecimalPlaces;
+            try
+            {
+                PipeLengthAnnotationOptions options = PipeLengthAnnotationSettingsStore.Load();
+                if (options != null) decimals = options.DecimalPlaces;
+            }
+            catch { }
+            decimals = Math.Max(0, Math.Min(decimals, 6));
+            return PipeLengthAnnotationTextComposer.FormatWithDecimals(length, decimals, previousToken);
+        }
+
         private static bool IsSupportedBindingCurve(Curve curve)
         {
-            return curve is Polyline || curve is Polyline2d || curve is Polyline3d;
+            if (curve == null) return false;
+            double length = GetCurveLength(curve);
+            return !double.IsNaN(length) && !double.IsInfinity(length) && length > 0.0000001;
         }
 
         private static void SetAnchorValues(IDictionary<string, string> values, Curve curve, Point3d pickedPoint)

@@ -19,6 +19,12 @@ namespace TCPipeAutoDraw.UI.Studio
 
 .lm-grid-row.dragging{opacity:.4}.lm-grid-row.drag-target{box-shadow:inset 0 2px 0 var(--brand)}
 .lm-grid-row>div:first-child{display:flex;align-items:center;justify-content:center;gap:5px}.lm-drag-handle{display:inline-flex;align-items:center;justify-content:center;cursor:grab;user-select:none;color:var(--muted);font-weight:900;line-height:1}.lm-drag-handle:active{cursor:grabbing;color:var(--brand)}
+.lm-selection-box{display:none;position:absolute;z-index:30;pointer-events:none;border:1px solid rgba(59,130,246,.78);background:rgba(59,130,246,.12);border-radius:4px;box-shadow:0 0 0 1px rgba(255,255,255,.38) inset}.lm-grid-panel.marquee-active{cursor:crosshair;user-select:none}.lm-grid-row.marquee-hit{background:rgba(59,130,246,.15)!important}.lm-grid-row.selected{background:rgba(59,130,246,.09)}
+.lm-color-button{width:100%;min-width:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text);padding:5px 6px;cursor:pointer;text-align:left}.lm-color-button:hover{border-color:rgba(59,130,246,.42);background:rgba(59,130,246,.08);transform:translateY(-1px)}.lm-color-button .lm-color{min-width:0}.lm-color-button .lm-color span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lm-color-button .lm-color i{width:18px;height:18px}.lm-color-button small{display:block;margin-left:24px;color:var(--muted);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lm-recognition-filter{height:38px;max-width:150px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--text);padding:0 9px;outline:0}.lm-recognition-filter:focus{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 3px rgba(59,130,246,.09)}
+.lm-name .lm-name-suggestion{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b}
+.lm-recognition-status{display:grid;gap:2px;line-height:1.2;cursor:pointer;border-radius:7px}.lm-recognition-status:hover{background:rgba(59,130,246,.08)}.lm-recognition-status strong{font-size:11px}.lm-recognition-status small{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}.lm-recognition-status.status-标准 strong,.lm-recognition-overview .status-标准{color:#059669}.lm-recognition-status.status-兼容 strong,.lm-recognition-overview .status-兼容{color:#2563eb}.lm-recognition-status.status-信息不完整 strong,.lm-recognition-overview .status-信息不完整{color:#d97706}.lm-recognition-status.status-冲突 strong,.lm-recognition-status.status-混合 strong,.lm-recognition-overview .status-冲突,.lm-recognition-overview .status-混合{color:#dc2626}.lm-recognition-status.status-未识别 strong,.lm-recognition-overview .status-未识别{color:#64748b}
+.lm-recognition-overview{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 11px;border-radius:9px;background:var(--panel2);font-size:12px;color:var(--muted)}.lm-recognition-overview>strong{font-size:14px}.lm-recognition-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.lm-recognition-field,.lm-recognition-note{display:grid;gap:3px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}.lm-recognition-field span,.lm-recognition-note span{font-size:10px;color:var(--muted)}.lm-recognition-field strong,.lm-recognition-note strong{font-size:12px;word-break:break-word}.lm-recognition-note{margin-top:8px}.lm-recognition-note.warning{border-color:#fcd34d;background:#fffbeb}.lm-recognition-note.error{border-color:#fecaca;background:#fef2f2}.lm-recognition-explain{margin:10px 0 0!important;padding-top:9px;border-top:1px solid var(--line);font-size:12px!important;color:var(--muted);line-height:1.7!important}
 .lm-toolbar,.lm-tree,.lm-grid-panel{border-radius:12px}.lm-batch-edit,.lm-action-bar,.lm-modal{border-radius:12px}
 ";
         }
@@ -40,7 +46,96 @@ namespace TCPipeAutoDraw.UI.Studio
                 @"+'<div><span class=""lm-drag-handle"" draggable=""true"" title=""拖拽排序"">⋮⋮</span><input type=""checkbox"" data-row-check ");
             script = script.Replace(
                 "var check=el.querySelector('[data-row-check]');",
-                "var dragHandle=el.querySelector('.lm-drag-handle');if(dragHandle){dragHandle.ondragstart=function(ev){self.draggedLayerName=row.name;el.classList.add('dragging');if(ev.dataTransfer)ev.dataTransfer.effectAllowed='move';};dragHandle.ondragend=function(){self.draggedLayerName=null;self.$$('[data-layer]').forEach(function(x){x.classList.remove('dragging','drag-target');});};}el.ondragover=function(ev){if(!self.draggedLayerName||eq(self.draggedLayerName,row.name))return;ev.preventDefault();el.classList.add('drag-target');};el.ondragleave=function(){el.classList.remove('drag-target');};el.ondrop=function(ev){if(!self.draggedLayerName||eq(self.draggedLayerName,row.name))return;ev.preventDefault();var source=self.findRow(self.draggedLayerName);if(!source)return;var box=el.getBoundingClientRect(),after=ev.clientY>box.top+box.height/2,from=self.rows.indexOf(source);self.rows.splice(from,1);var to=self.rows.indexOf(row);if(after)to++;self.rows.splice(to,0,source);self.draggedLayerName=null;self.applyFilter(false);};var check=el.querySelector('[data-row-check]');");
+                "var dragHandle=el.querySelector('.lm-drag-handle');if(dragHandle){dragHandle.ondragstart=function(ev){self.draggedLayerName=row.name;el.classList.add('dragging');if(ev.dataTransfer)ev.dataTransfer.effectAllowed='move';};dragHandle.ondragend=function(){self.draggedLayerName=null;self.$$('[data-layer]').forEach(function(x){x.classList.remove('dragging','drag-target');});};}el.ondragover=function(ev){if(!self.draggedLayerName||eq(self.draggedLayerName,row.name))return;ev.preventDefault();el.classList.add('drag-target');};el.ondragleave=function(){el.classList.remove('drag-target');};el.ondrop=function(ev){if(!self.draggedLayerName||eq(self.draggedLayerName,row.name))return;ev.preventDefault();var source=self.findRow(self.draggedLayerName);if(!source)return;var box=el.getBoundingClientRect(),after=ev.clientY>box.top+box.height/2,from=self.rows.indexOf(source);self.rows.splice(from,1);var to=self.rows.indexOf(row);if(after)to++;self.rows.splice(to,0,source);self.draggedLayerName=null;self.applyFilter(false);};var check=el.querySelector('[data-row-check]');if(check)check.onclick=function(ev){if(ev.shiftKey){var value=check.checked;ev.preventDefault();self.selectRange(row.name,value);return false;}self.selectionAnchor=row.name;};");
+            script = script.Replace(
+                "+'<div class=\"lm-color\"><i style=\"background:'+html(row.colorHex||'#94a3b8')+'\"></i><span>'+html(row.colorName||('ACI '+row.colorIndex))+'</span></div><div title=\"'",
+                "+'<button type=\"button\" class=\"lm-color-button\" data-layer-color title=\"点击修改颜色 · '+html(row.colorRgb||row.colorHex||'')+'\"><span class=\"lm-color\"><i style=\"background:'+html(row.colorHex||'#94a3b8')+'\"></i><span>'+html(row.colorName||('ACI '+row.colorIndex))+'</span></span><small>'+html(row.colorRgb||row.colorType||'')+'</small></button><div title=\"'");
+            script = script.Replace(
+                "var dragHandle=el.querySelector('.lm-drag-handle');",
+                "var colorButton=el.querySelector('[data-layer-color]');if(colorButton)colorButton.onclick=function(ev){ev.preventDefault();ev.stopPropagation();self.post('openLayerColorPicker',row.name);};var dragHandle=el.querySelector('.lm-drag-handle');");
+            script = script.Replace(
+                "LayerManagerPage.prototype.setSelected=function(name,value){var k=low(name);if(value)this.selected[k]=true;else delete this.selected[k];this.updateSelectionUi();this.renderVirtual(true);};",
+                @"LayerManagerPage.prototype.selectRange=function(name,value){
+  var end=-1,anchor=-1;for(var i=0;i<this.visible.length;i++){if(eq(this.visible[i].name,name))end=i;if(this.selectionAnchor&&eq(this.visible[i].name,this.selectionAnchor))anchor=i;}if(end<0)return;if(anchor<0){anchor=end;this.selectionAnchor=name;}var from=Math.min(anchor,end),to=Math.max(anchor,end);for(var j=from;j<=to;j++){var k=low(this.visible[j].name);if(value===false)delete this.selected[k];else this.selected[k]=true;}this.updateSelectionUi();this.renderVirtual(true);
+};
+LayerManagerPage.prototype.setSelected=function(name,value){var k=low(name);if(value)this.selected[k]=true;else delete this.selected[k];this.updateSelectionUi();this.renderVirtual(true);};");
+            script = script.Replace(
+                "    el.ondblclick=function(ev){if(ev.target.closest('input,button,select,textarea'))return;self.post('setCurrentLayer',row.name);};",
+                @"    el.onclick=function(ev){if(self.suppressRowClick||ev.target.closest('input,button,select,textarea,.lm-drag-handle'))return;if(ev.shiftKey){ev.preventDefault();self.selectRange(row.name,true);}else if(ev.ctrlKey||ev.metaKey){ev.preventDefault();self.selectionAnchor=row.name;self.setSelected(row.name,!self.selected[low(row.name)]);}};
+    el.ondblclick=function(ev){if(self.suppressRowClick||ev.target.closest('input,button,select,textarea'))return;self.post('setCurrentLayer',row.name);};");
+            script = script.Replace(
+                "  if(scroll)scroll.addEventListener('scroll',function(){self.renderVirtual(false);self.hideContext();});",
+                "  if(scroll)scroll.addEventListener('scroll',function(){self.renderVirtual(false);self.hideContext();});this.bindMarqueeSelection();");
+            script = script.Replace(
+                "LayerManagerPage.prototype.receive=function(data){",
+                @"LayerManagerPage.prototype.bindMarqueeSelection=function(){
+  var self=this,scroll=this.$('[data-role=""grid-scroll""]'),panel=this.$('.lm-grid-panel');if(!scroll||!panel)return;var box=document.createElement('div');box.className='lm-selection-box';panel.appendChild(box);var drag=null;
+  function clearHits(){self.$$('[data-layer]').forEach(function(el){el.classList.remove('marquee-hit');});}
+  function hitNames(left,top,right,bottom){var names=[];self.$$('[data-layer]').forEach(function(el){var r=el.getBoundingClientRect(),hit=!(r.right<left||r.left>right||r.bottom<top||r.top>bottom);el.classList.toggle('marquee-hit',hit);if(hit)names.push(el.getAttribute('data-layer'));});return names;}
+  scroll.addEventListener('mousedown',function(ev){if(ev.button!==0||ev.target.closest('input,button,select,textarea,.lm-drag-handle'))return;drag={x:ev.clientX,y:ev.clientY,active:false,additive:!!(ev.ctrlKey||ev.metaKey||ev.shiftKey),base:Object.assign({},self.selected),hits:[]};});
+  document.addEventListener('mousemove',function(ev){if(!drag)return;var dx=ev.clientX-drag.x,dy=ev.clientY-drag.y;if(!drag.active&&Math.sqrt(dx*dx+dy*dy)<5)return;drag.active=true;self.suppressRowClick=true;panel.classList.add('marquee-active');ev.preventDefault();var p=panel.getBoundingClientRect(),left=Math.max(p.left,Math.min(drag.x,ev.clientX)),right=Math.min(p.right,Math.max(drag.x,ev.clientX)),top=Math.max(p.top,Math.min(drag.y,ev.clientY)),bottom=Math.min(p.bottom,Math.max(drag.y,ev.clientY));box.style.display='block';box.style.left=(left-p.left)+'px';box.style.top=(top-p.top)+'px';box.style.width=Math.max(1,right-left)+'px';box.style.height=Math.max(1,bottom-top)+'px';drag.hits=hitNames(left,top,right,bottom);});
+  document.addEventListener('mouseup',function(ev){if(!drag)return;var completed=drag.active,hits=drag.hits.slice(),next=drag.additive?drag.base:{};drag=null;box.style.display='none';panel.classList.remove('marquee-active');clearHits();if(completed){hits.forEach(function(name){next[low(name)]=true;});self.selected=next;if(hits.length)self.selectionAnchor=hits[hits.length-1];self.updateSelectionUi();self.renderVirtual(true);ev.preventDefault();}setTimeout(function(){self.suppressRowClick=false;},0);});
+};
+LayerManagerPage.prototype.receive=function(data){");
+            script = script.Replace(
+                "左键：全选或清空当前列表\\n右键：反选当前列表",
+                "左键：全选或清空当前列表\\n右键：反选当前列表\\nShift：连续多选；拖动空白区域：框选");
+            script = script.Replace(
+                "this.treeKey='all';this.expanded={井:true,主管:true,支管:true,注记:true,其他:true};this.search='';this.tagFilters={};",
+                "this.treeKey='all';this.expanded={主管:true,支管:true,井:true,结构层:true,构筑物:true,注记:true,测点:true,辅助:true,其他:true};this.search='';this.tagFilters={};this.recognitionFilter='all';");
+            script = script.Replace(
+                @"+'<div class=""lm-tag-filter""><button class=""lm-btn"" data-action=""toggle-tag-filter"">标签筛选 <em data-role=""tag-filter-count""></em> ▾</button><div class=""lm-tag-pop"" data-role=""tag-pop""></div></div>'",
+                @"+'<div class=""lm-tag-filter""><button class=""lm-btn"" data-action=""toggle-tag-filter"">标签筛选 <em data-role=""tag-filter-count""></em> ▾</button><div class=""lm-tag-pop"" data-role=""tag-pop""></div></div><select class=""lm-recognition-filter"" data-role=""recognition-filter"" title=""按识别状态筛选""><option value=""all"">全部识别状态</option><option value=""标准"">标准</option><option value=""兼容"">兼容</option><option value=""信息不完整"">信息不完整</option><option value=""冲突"">冲突</option><option value=""混合"">混合</option><option value=""未识别"">未识别</option></select>'");
+            script = script.Replace(
+                "bind('toggle-tag-filter',function(ev){ev.stopPropagation();self.toggleTagFilter();});",
+                "bind('toggle-tag-filter',function(ev){ev.stopPropagation();self.toggleTagFilter();});var recognitionFilter=this.$('[data-role=\"recognition-filter\"]');if(recognitionFilter)recognitionFilter.onchange=function(){self.recognitionFilter=recognitionFilter.value||'all';self.applyFilter(true);};");
+            script = script.Replace(
+                "r.tags=splitTags(r.tags);r._treeParent=r.parent;r._treeCategory=r.category;return r;",
+                "r.tags=splitTags(r.tags);r.recognitionStatus=trim(r.recognitionStatus)||'未识别';r._treeParent=r.parent||trim(r.recognizedParent);r._treeCategory=r.category||trim(r.recognizedCategory);return r;");
+            script = script.Replace(
+                "var q=low(this.search);if(q){var text=low([row.name,row.parent,row.category,arr(row.tags).join(' ')].join(' '));if(text.indexOf(q)<0)return false;}",
+                "var q=low(this.search);if(q){var text=low([row.name,row.normalizedName,row.suggestedName,row.parent,row.category,row.recognizedParent,row.recognizedCategory,row.objectType,row.specification,row.material,row.constructionType,row.nodeType,row.structureType,row.purpose,row.recognitionStatus,row.recognitionSource,arr(row.tags).join(' ')].join(' '));if(text.indexOf(q)<0)return false;}if(this.recognitionFilter&&this.recognitionFilter!=='all'&&!eq(row.recognitionStatus,this.recognitionFilter))return false;");
+            script = script.Replace(
+                "core=['井','主管','支管','注记']",
+                "core=['主管','支管','井','结构层','构筑物','注记','测点','辅助']");
+            script = script.Replace(
+                "var statuses=statusText(row),moving=dirty&&(!eq(row.parent,row._treeParent)||!eq(row.category,row._treeCategory));",
+                "var statuses=statusText(row),moving=dirty&&(!eq(row.parent,row._treeParent)||!eq(row.category,row._treeCategory)),recognition=trim(row.recognitionStatus)||'未识别',confidence=Math.max(0,Math.min(100,Number(row.confidencePercent)||0)),recognitionTitle=[row.recognitionExplanation,row.recognitionConflicts,row.recognitionMissingFields,row.suggestedName?('建议名称：'+row.suggestedName):''].filter(Boolean).join('\\n');");
+            script = script.Replace(
+                "+(moving?'<small>保存后移动分类</small>':'')+(failure?'<small class=\"error\">'+html(failure)+'</small>':'')+'</div>'",
+                "+(moving?'<small>保存后移动分类</small>':'')+(!moving&&row.suggestedName&&!eq(row.name,row.suggestedName)?'<small class=\"lm-name-suggestion\" title=\"标准化名称建议：'+html(row.suggestedName)+'\">建议：'+html(row.suggestedName)+'</small>':'')+(failure?'<small class=\"error\">'+html(failure)+'</small>':'')+'</div>'");
+            script = script.Replace(
+                @"'<div class=""lm-status '+(row.isCurrent?'current':'')+'"">'+(row.isCurrent?'● ':'')+html(statuses)+'</div><div class=""lm-count"">'+count+'</div>'",
+                @"'<div class=""lm-status lm-recognition-status status-'+html(recognition)+'"" data-recognition-detail title=""'+html(recognitionTitle)+'""><strong>'+html(recognition)+'</strong><small>'+confidence+'% · '+html(statuses)+'</small></div><div class=""lm-count"">'+count+'</div>'");
+            script = script.Replace(
+                "LayerManagerPage.prototype.bindRows=function(){",
+                @"LayerManagerPage.prototype.showRecognitionDetails=function(row){
+  if(!row)return;var field=function(label,value){return value?'<div class=""lm-recognition-field""><span>'+html(label)+'</span><strong>'+html(value)+'</strong></div>':'';},body='<div class=""lm-recognition-overview""><strong class=""status-'+html(row.recognitionStatus||'未识别')+'"">'+html(row.recognitionStatus||'未识别')+'</strong><span>置信度 '+Math.max(0,Math.min(100,Number(row.confidencePercent)||0))+'%</span><span>来源：'+html(row.recognitionSource||'未命中')+'</span></div><div class=""lm-recognition-fields"">'+field('建议父属性',row.recognizedParent)+field('建议分类',row.recognizedCategory)+field('对象类型',row.objectType)+field('规格',row.specification)+field('材料',row.material)+field('施工方式',row.constructionType)+field('节点类型',row.nodeType)+field('结构类型',row.structureType)+field('用途',row.purpose)+'</div>';
+  if(row.suggestedName&&!eq(row.name,row.suggestedName))body+='<div class=""lm-recognition-note""><span>标准化名称建议</span><strong>'+html(row.suggestedName)+'</strong></div>';
+  if(row.recognitionMissingFields)body+='<div class=""lm-recognition-note warning""><span>待补充</span><strong>'+html(row.recognitionMissingFields)+'</strong></div>';if(row.recognitionConflicts)body+='<div class=""lm-recognition-note error""><span>冲突</span><strong>'+html(row.recognitionConflicts)+'</strong></div>';if(row.recognitionExplanation)body+='<p class=""lm-recognition-explain"">'+html(row.recognitionExplanation)+'</p>';this.showModal('识别详情 · '+row.name,body,[{text:'关闭',kind:'normal'}]);
+};
+LayerManagerPage.prototype.bindRows=function(){");
+            script = script.Replace(
+                "var colorButton=el.querySelector('[data-layer-color]');",
+                "var recognitionDetail=el.querySelector('[data-recognition-detail]');if(recognitionDetail)recognitionDetail.onclick=function(ev){ev.preventDefault();ev.stopPropagation();self.showRecognitionDetails(row);};var colorButton=el.querySelector('[data-layer-color]');");
+            script = script.Replace(
+                "placeholder=\"搜索图层 / 父属性 / 分类 / 标签…\"",
+                "placeholder=\"搜索图层 / 结构化属性 / 识别状态 / 标签…\"");
+            script = script.Replace(
+                ">自动识别</button>",
+                ">应用识别结果</button>");
+            script = script.Replace(
+                "var body='<p>选择自动识别范围。识别完成后将刷新图层数据。</p>",
+                "var body='<p>当前列表已完成识别扫描。请选择要写入 CAD 图层属性的范围；冲突、混合、信息不完整项建议先查看提示并人工确认。</p>");
+            script = script.Replace(
+                "this.showModal('自动识别图层属性',body",
+                "this.showModal('应用识别结果',body");
+            script = script.Replace(
+                "{text:'开始识别',kind:'primary'",
+                "{text:'确认应用',kind:'primary'");
+            script = script.Replace(
+                "LayerManagerPage.prototype.renderSummary=function(){var s=this.$('[data-role=\"summary\"]');if(s)s.textContent='共 '+this.rows.length+' 个图层，当前显示 '+this.visible.length+' 个';var ss=this.$('[data-role=\"selection-summary\"]'),n=this.selectedNames().length;if(ss)ss.textContent=n?'已勾选 '+n+' 个图层':'';};",
+                "LayerManagerPage.prototype.renderSummary=function(){var s=this.$('[data-role=\"summary\"]'),counts={};this.rows.forEach(function(r){var k=trim(r.recognitionStatus)||'未识别';counts[k]=(counts[k]||0)+1;});if(s)s.textContent='共 '+this.rows.length+' 个图层，显示 '+this.visible.length+' 个 · 冲突 '+(counts['冲突']||0)+' · 混合 '+(counts['混合']||0)+' · 待补充 '+(counts['信息不完整']||0)+' · 未识别 '+(counts['未识别']||0);var ss=this.$('[data-role=\"selection-summary\"]'),n=this.selectedNames().length;if(ss)ss.textContent=n?'已勾选 '+n+' 个图层':'';};");
             return script;
         }
 

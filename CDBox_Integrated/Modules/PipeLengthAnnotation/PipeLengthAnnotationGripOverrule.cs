@@ -19,6 +19,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static BindingMarkerDrawableOverrule _markerOverrule;
         private static readonly Dictionary<ObjectId, PendingBindingEdit> PendingBindings =
             new Dictionary<ObjectId, PendingBindingEdit>();
+        private static readonly HashSet<ObjectId> MovedBindingGrips = new HashSet<ObjectId>();
         private static readonly Queue<Action> IdleActions = new Queue<Action>();
         private static bool _idleHooked;
         private static bool _markerRefreshQueued;
@@ -56,6 +57,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _instance.Dispose();
             _instance = null;
             PendingBindings.Clear();
+            MovedBindingGrips.Clear();
             _selectedMarkerDatabase = null;
             _selectedMarkerLeaderId = ObjectId.Null;
             _selectedMarkerAnnotationId = string.Empty;
@@ -121,6 +123,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                             entity, out annotationId, out annotationPart);
                         PendingBindings[entity.ObjectId] = new PendingBindingEdit(
                             binding.OriginalPoint, annotationId);
+                        MovedBindingGrips.Add(entity.ObjectId);
                         if (dragDocument != null && !string.IsNullOrWhiteSpace(annotationId))
                         {
                             PipeLengthAnnotationInteractionService.NotifySpatialEditStarted(dragDocument, annotationId);
@@ -427,6 +430,30 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 // The visible selected-state marker is drawn with the leader itself.
                 // Consuming the drag glyph here keeps the marker hidden while dragging.
                 return true;
+            }
+
+            public override void OnGripStatusChanged(ObjectId entityId, Status status)
+            {
+                base.OnGripStatusChanged(entityId, status);
+                if (entityId.IsNull) return;
+
+                Document doc = null;
+                try { doc = AcadApp.DocumentManager.GetDocument(entityId.Database); } catch { }
+                if (doc == null) return;
+
+                string annotationId;
+                if (!PipeLengthAnnotationObjectService.TryGetAnnotationId(entityId, out annotationId)
+                    || string.IsNullOrWhiteSpace(annotationId)) return;
+
+                if (status == Status.GripStart)
+                {
+                    PipeLengthAnnotationInteractionService.NotifySpatialEditStarted(doc, annotationId);
+                    return;
+                }
+
+                if (status != Status.GripEnd && status != Status.GripAbort) return;
+                if (MovedBindingGrips.Remove(entityId)) return;
+                PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(doc, annotationId);
             }
         }
 

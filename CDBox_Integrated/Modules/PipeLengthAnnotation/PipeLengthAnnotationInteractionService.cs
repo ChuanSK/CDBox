@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using TCPipeAutoDraw.Modules.AnnotationHud;
+using TCPipeAutoDraw.Modules.QuantityCalculation;
+using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
@@ -25,10 +29,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static bool _bindingRefreshActive;
         private static bool _synchronizingAnnotationSelection;
         private static bool _selectionSyncPending;
+        private static bool _documentSaveActive;
+        private static int _spatialEditCompletionVersion;
         private static PipeLengthAnnotationCardWindow _window;
         private static Document _document;
         private static PipeLengthAnnotationEditModel _model;
-        private static DispatcherTimer _restoreTimer;
 
         public static void Initialize()
         {
@@ -48,6 +53,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             PipeLengthAnnotationGripOverrule.Terminate();
             _initialized = false;
             CloseWindow();
+            SimpleAnnotationHudInteractionService.CloseWindow();
             DetachDocument();
         }
 
@@ -55,46 +61,68 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             PipeLengthAnnotationGripOverrule.SuspendSelectedMarker(doc, annotationId);
             if (doc == null || doc != _document) return;
+            _spatialEditCompletionVersion++;
             _spatialEditActive = true;
             if (_window == null || _model == null
                 || !string.Equals(_model.AnnotationId, annotationId,
                     StringComparison.OrdinalIgnoreCase)) return;
-            StopRestoreTimer();
-            _restoreAfterSpatialEdit = _window.IsVisible;
-            if (_window.IsVisible) _window.Hide();
+            _restoreAfterSpatialEdit = _restoreAfterSpatialEdit
+                || _window.IsVisible || _window.IsClosingAnimation;
+            if (_window.IsVisible) _window.HideAnimated(ResolveAnimationOrigin(doc, _model));
         }
 
         internal static void NotifySpatialEditFinished(Document doc, string annotationId)
         {
             PipeLengthAnnotationGripOverrule.ResumeSelectedMarker(doc, annotationId);
             if (doc == null || doc != _document) return;
-            _spatialEditActive = false;
-            if (_window == null || _model == null
-                || !string.Equals(_model.AnnotationId, annotationId,
-                    StringComparison.OrdinalIgnoreCase)) return;
-            if (!_restoreAfterSpatialEdit) return;
-            StopRestoreTimer();
-            _restoreTimer = new DispatcherTimer(DispatcherPriority.Background)
+            int completionVersion = ++_spatialEditCompletionVersion;
+            try
             {
-                Interval = TimeSpan.FromMilliseconds(150)
-            };
-            _restoreTimer.Tick += delegate
-            {
-                StopRestoreTimer();
-                if (_spatialEditActive || !_restoreAfterSpatialEdit || _window == null || _document != doc) return;
-                try
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(delegate
                 {
-                    PipeLengthAnnotationEditModel refreshed =
-                        PipeLengthAnnotationObjectService.LoadEditModel(doc, _model.SelectedObjectId);
-                    if (refreshed == null) return;
-                    _model = refreshed;
-                    _window.SetModel(refreshed);
-                    _window.Show();
-                }
-                catch { }
-                finally { _restoreAfterSpatialEdit = false; }
-            };
-            _restoreTimer.Start();
+                    if (_document != doc || completionVersion != _spatialEditCompletionVersion) return;
+                    try
+                    {
+                        RestoreAnnotationSelection(doc, annotationId);
+                        if (!_restoreAfterSpatialEdit || _window == null || _model == null
+                            || !string.Equals(_model.AnnotationId, annotationId,
+                                StringComparison.OrdinalIgnoreCase)) return;
+
+                        PipeLengthAnnotationEditModel refreshed =
+                            PipeLengthAnnotationObjectService.LoadEditModel(doc, _model.SelectedObjectId);
+                        if (refreshed == null) return;
+                        _model = refreshed;
+                        _window.SetModel(refreshed);
+                        _window.ShowAnimated(ResolveAnimationOrigin(doc, refreshed), null, null);
+                    }
+                    catch { }
+                    finally
+                    {
+                        _restoreAfterSpatialEdit = false;
+                        _spatialEditActive = false;
+                    }
+                }));
+            }
+            catch
+            {
+                _spatialEditActive = false;
+                _restoreAfterSpatialEdit = false;
+            }
+        }
+
+        private static void RestoreAnnotationSelection(Document doc, string annotationId)
+        {
+            if (doc == null || string.IsNullOrWhiteSpace(annotationId)) return;
+            try
+            {
+                ObjectId[] ids = PipeLengthAnnotationObjectService.GetAnnotationObjectIds(doc, annotationId);
+                if (ids.Length == 0) return;
+                _synchronizingAnnotationSelection = true;
+                try { doc.Editor.SetImpliedSelection(ids); }
+                finally { _synchronizingAnnotationSelection = false; }
+                PipeLengthAnnotationGripOverrule.SetSelectedAnnotation(doc, annotationId);
+            }
+            catch { _synchronizingAnnotationSelection = false; }
         }
 
         internal static void RefreshCard(Document doc, ObjectId annotationObjectId)
@@ -109,6 +137,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     if (model == null) return;
                     _model = model;
                     _window.SetModel(model);
+                    _window.SetAnimationOrigin(ResolveAnimationOrigin(doc, model));
                 }
                 catch { }
             }));
@@ -122,20 +151,86 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 try { if (new WindowInteropHelper(_window).Handle == e.Message.hwnd) return; }
                 catch { }
             }
+            if (SimpleAnnotationHudInteractionService.IsOwnWindowHandle(e.Message.hwnd)) return;
 
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
-            PromptSelectionResult implied;
-            try { implied = doc.Editor.SelectImplied(); }
-            catch { return; }
-            if (implied.Status != PromptStatus.OK || implied.Value == null) return;
+            ObjectId[] selectedIds = ReadImpliedSelection(doc);
+            if (selectedIds.Length == 0) return;
 
             ObjectId annotationObjectId;
             if (!PipeLengthAnnotationObjectService.TryResolveAnnotationObject(
-                doc, implied.Value.GetObjectIds(), out annotationObjectId)) return;
+                doc, selectedIds, out annotationObjectId))
+            {
+                ObjectId simpleObjectId;
+                if (SimpleAnnotationObjectService.TryResolveAnnotationObject(doc, selectedIds,
+                    out simpleObjectId))
+                {
+                    e.Handled = true;
+                    Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background,
+                        new Action(delegate
+                        {
+                            CloseWindow();
+                            SimpleAnnotationHudInteractionService.TryOpen(doc, selectedIds);
+                        }));
+                    return;
+                }
+
+                if (QuantityAttributeDoubleClickService.CanOpen(doc, selectedIds))
+                {
+                    e.Handled = true;
+                    Point screenPoint = GetDoubleClickScreenPoint(e.Message);
+                    Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background,
+                        new Action(delegate
+                        {
+                            if (doc.IsDisposed || AcadApp.DocumentManager.MdiActiveDocument != doc) return;
+                            CloseWindow();
+                            SimpleAnnotationHudInteractionService.CloseWindow();
+                            QuantityAttributeDoubleClickService.TryOpenWithOverlapSelection(
+                                doc, selectedIds, screenPoint);
+                        }));
+                }
+                return;
+            }
             e.Handled = true;
             Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background,
-                new Action(delegate { ShowCard(doc, annotationObjectId); }));
+                new Action(delegate
+                {
+                    SimpleAnnotationHudInteractionService.CloseWindow();
+                    ShowCard(doc, annotationObjectId);
+                }));
+        }
+
+        private static ObjectId[] ReadImpliedSelection(Document doc)
+        {
+            if (doc == null) return new ObjectId[0];
+            try
+            {
+                PromptSelectionResult implied = doc.Editor.SelectImplied();
+                if (implied.Status == PromptStatus.OK && implied.Value != null)
+                    return implied.Value.GetObjectIds();
+            }
+            catch { }
+            return new ObjectId[0];
+        }
+
+        private static Point GetDoubleClickScreenPoint(MSG message)
+        {
+            try
+            {
+                long value = message.lParam.ToInt64();
+                var point = new NativePoint
+                {
+                    X = unchecked((short)(value & 0xFFFF)),
+                    Y = unchecked((short)((value >> 16) & 0xFFFF))
+                };
+                if (message.hwnd != IntPtr.Zero && ClientToScreen(message.hwnd, ref point))
+                    return new Point(point.X, point.Y);
+            }
+            catch { }
+
+            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
+            return new Point(cursor.X, cursor.Y);
         }
 
         private static void ShowCard(Document doc, ObjectId selectedObjectId)
@@ -147,7 +242,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 if (model == null) return;
                 EnsureWindow();
                 AttachDocument(doc);
-                StopRestoreTimer();
                 _spatialEditActive = false;
                 _restoreAfterSpatialEdit = false;
                 _model = model;
@@ -155,16 +249,18 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 ObjectId[] annotationIds = PipeLengthAnnotationObjectService.GetAnnotationObjectIds(doc, model.AnnotationId);
                 if (annotationIds.Length > 0) doc.Editor.SetImpliedSelection(annotationIds);
                 PipeLengthAnnotationGripOverrule.SetSelectedAnnotation(doc, model.AnnotationId);
-                if (!_window.IsVisible)
+                Point origin = ResolveAnimationOrigin(doc, model);
+                if (!_window.IsVisible || _window.IsClosingAnimation)
                 {
                     IntPtr owner = AcadApp.MainWindow == null ? IntPtr.Zero : AcadApp.MainWindow.Handle;
                     if (owner != IntPtr.Zero) new WindowInteropHelper(_window).Owner = owner;
-                    _window.Show();
-                    double left;
-                    double top;
-                    bool remembered = PipeLengthAnnotationHudPositionStore.TryLoad(out left, out top);
-                    _window.InitializePosition(remembered ? (double?)left : null, remembered ? (double?)top : null);
+                    double left = 0.0;
+                    double top = 0.0;
+                    bool remembered = !_window.HasInitializedPosition
+                        && PipeLengthAnnotationHudPositionStore.TryLoad(out left, out top);
+                    _window.ShowAnimated(origin, remembered ? (double?)left : null, remembered ? (double?)top : null);
                 }
+                else _window.SetAnimationOrigin(origin);
                 _window.Activate();
             }
             catch (Exception ex)
@@ -181,16 +277,33 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 CommitHandler = ApplyModel,
                 BindingHandler = ToggleBinding
             };
+            ApplyWindowAppearance(_window, CDBoxStudioSettingsStore.Load());
             _window.UserMoved += delegate { SaveHudPosition(); };
             _window.Closed += delegate
             {
                 SaveHudPosition();
-                StopRestoreTimer();
                 _window = null;
                 _model = null;
                 _spatialEditActive = false;
                 _restoreAfterSpatialEdit = false;
             };
+        }
+
+        internal static void RefreshAppearance()
+        {
+            SimpleAnnotationHudInteractionService.RefreshAppearance();
+            if (_window == null) return;
+            try { ApplyWindowAppearance(_window, CDBoxStudioSettingsStore.Load()); }
+            catch { }
+        }
+
+        private static void ApplyWindowAppearance(PipeLengthAnnotationCardWindow window,
+            CDBoxStudioSettings settings)
+        {
+            if (window == null || settings == null) return;
+            window.ApplyAppearance(settings.AnnotationHudNormalOpacity,
+                settings.AnnotationHudHoverOpacity, settings.AnnotationHudGlowEnabled,
+                settings.AnnotationHudGlowIntensity);
         }
 
         private static PipeLengthAnnotationEditModel ApplyModel(PipeLengthAnnotationEditModel submitted)
@@ -233,11 +346,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             if (_document == null) return;
             _document.CloseWillStart += DocumentCloseWillStart;
             _document.ImpliedSelectionChanged += DocumentImpliedSelectionChanged;
+            _document.CommandWillStart += DocumentCommandWillStart;
             _document.CommandEnded += DocumentCommandEnded;
             _document.CommandCancelled += DocumentCommandAborted;
             _document.CommandFailed += DocumentCommandAborted;
             _document.Database.ObjectModified += DatabaseObjectModified;
             _document.Database.ObjectErased += DatabaseObjectErased;
+            _document.Database.BeginSave += DatabaseBeginSave;
+            _document.Database.SaveComplete += DatabaseSaveComplete;
+            _document.Database.AbortSave += DatabaseAbortSave;
         }
 
         private static void DetachDocument()
@@ -247,15 +364,21 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 PipeLengthAnnotationGripOverrule.ClearSelectedAnnotation(_document);
                 try { _document.CloseWillStart -= DocumentCloseWillStart; } catch { }
                 try { _document.ImpliedSelectionChanged -= DocumentImpliedSelectionChanged; } catch { }
+                try { _document.CommandWillStart -= DocumentCommandWillStart; } catch { }
                 try { _document.CommandEnded -= DocumentCommandEnded; } catch { }
                 try { _document.CommandCancelled -= DocumentCommandAborted; } catch { }
                 try { _document.CommandFailed -= DocumentCommandAborted; } catch { }
                 try { _document.Database.ObjectModified -= DatabaseObjectModified; } catch { }
                 try { _document.Database.ObjectErased -= DatabaseObjectErased; } catch { }
+                try { _document.Database.BeginSave -= DatabaseBeginSave; } catch { }
+                try { _document.Database.SaveComplete -= DatabaseSaveComplete; } catch { }
+                try { _document.Database.AbortSave -= DatabaseAbortSave; } catch { }
             }
             DirtySourceHandles.Clear();
+            _spatialEditCompletionVersion++;
             _selectionSyncPending = false;
             _synchronizingAnnotationSelection = false;
+            _documentSaveActive = false;
             _document = null;
         }
 
@@ -265,6 +388,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             try
             {
                 PromptSelectionResult selection = _document.Editor.SelectImplied();
+                ObjectId[] selectedIds = selection.Status == PromptStatus.OK && selection.Value != null
+                    ? selection.Value.GetObjectIds() : new ObjectId[0];
+                SimpleAnnotationHudInteractionService.OnSelectionChanged(_document, selectedIds);
                 ObjectId resolved;
                 if (selection.Status != PromptStatus.OK || selection.Value == null
                     || !PipeLengthAnnotationObjectService.TryResolveAnnotationObject(_document,
@@ -345,7 +471,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private static void QueueDirtySource(DBObject value)
         {
-            if (_bindingRefreshActive) return;
+            if (_bindingRefreshActive || _documentSaveActive) return;
             Curve curve = value as Curve;
             if (curve == null || curve.ObjectId.IsNull) return;
             string annotationId;
@@ -363,16 +489,74 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static void DocumentCommandEnded(object sender, CommandEventArgs e)
         {
             if (_document == null) return;
-            PipeLengthAnnotationGripOverrule.CompletePendingBindings(_document);
-            RefreshDirtyBindings();
+            bool saveCommand = _documentSaveActive || IsDrawingSaveCommand(
+                e == null ? string.Empty : e.GlobalCommandName);
+            _documentSaveActive = false;
+            if (saveCommand) DirtySourceHandles.Clear();
+            else
+            {
+                PipeLengthAnnotationGripOverrule.CompletePendingBindings(_document);
+                RefreshDirtyBindings();
+            }
+            SimpleAnnotationHudInteractionService.OnCommandFinished(_document);
         }
 
         private static void DocumentCommandAborted(object sender, CommandEventArgs e)
         {
             if (_document == null) return;
+            bool saveCommand = _documentSaveActive || IsDrawingSaveCommand(
+                e == null ? string.Empty : e.GlobalCommandName);
+            _documentSaveActive = false;
+            if (saveCommand) DirtySourceHandles.Clear();
             PipeLengthAnnotationGripOverrule.CancelPendingBindings(_document);
-            RefreshDirtyBindings();
+            if (!saveCommand) RefreshDirtyBindings();
+            SimpleAnnotationHudInteractionService.OnCommandFinished(_document);
         }
+
+        private static void DocumentCommandWillStart(object sender, CommandEventArgs e)
+        {
+            if (_document == null) return;
+            string commandName = e == null ? string.Empty : e.GlobalCommandName;
+            _documentSaveActive = IsDrawingSaveCommand(commandName);
+            if (_documentSaveActive) DirtySourceHandles.Clear();
+            SimpleAnnotationHudInteractionService.OnCommandWillStart(_document,
+                commandName);
+        }
+
+        private static void DatabaseBeginSave(object sender, DatabaseIOEventArgs e)
+        {
+            _documentSaveActive = true;
+            DirtySourceHandles.Clear();
+        }
+
+        private static void DatabaseSaveComplete(object sender, DatabaseIOEventArgs e)
+        {
+            _documentSaveActive = false;
+            DirtySourceHandles.Clear();
+        }
+
+        private static void DatabaseAbortSave(object sender, EventArgs e)
+        {
+            _documentSaveActive = false;
+            DirtySourceHandles.Clear();
+        }
+
+        private static bool IsDrawingSaveCommand(string commandName)
+        {
+            string value = (commandName ?? string.Empty).Trim().TrimStart('_', '.').ToUpperInvariant();
+            return value == "SAVE" || value == "QSAVE" || value == "SAVEAS" || value == "SAVEALL";
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ClientToScreen(IntPtr hWnd, ref NativePoint point);
 
         private static void RefreshDirtyBindings()
         {
@@ -395,6 +579,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static void DocumentCloseWillStart(object sender, EventArgs e)
         {
             CloseWindow();
+            SimpleAnnotationHudInteractionService.CloseWindow();
             DetachDocument();
         }
 
@@ -403,31 +588,46 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Document activated = e == null ? AcadApp.DocumentManager.MdiActiveDocument : e.Document;
             if (activated == _document) return;
             CloseWindow();
+            SimpleAnnotationHudInteractionService.CloseWindow();
             AttachDocument(activated);
-        }
-
-        private static void StopRestoreTimer()
-        {
-            if (_restoreTimer == null) return;
-            try { _restoreTimer.Stop(); } catch { }
-            _restoreTimer = null;
         }
 
         private static void SaveHudPosition()
         {
             if (_window == null || !_window.HasInitializedPosition) return;
-            PipeLengthAnnotationHudPositionStore.Save(_window.Left, _window.Top);
+            double left;
+            double top;
+            if (_window.TryGetRestingPosition(out left, out top))
+            {
+                PipeLengthAnnotationHudPositionStore.Save(left, top);
+            }
+        }
+
+        private static Point ResolveAnimationOrigin(Document doc, PipeLengthAnnotationEditModel model)
+        {
+            if (doc != null && model != null && model.HasBindingPoint)
+            {
+                try { return doc.Editor.PointToScreen(model.BindingPoint, 0); }
+                catch { }
+            }
+            if (_window != null)
+            {
+                try { return _window.GetCursorScreenPosition(); }
+                catch { }
+            }
+            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
+            return new Point(cursor.X, cursor.Y);
         }
 
         private static void CloseWindow()
         {
-            StopRestoreTimer();
             if (_window != null)
             {
-                try { _window.Close(); } catch { }
+                try { _window.CloseImmediately(); } catch { }
             }
             _window = null;
             _model = null;
+            _spatialEditCompletionVersion++;
             _spatialEditActive = false;
             _restoreAfterSpatialEdit = false;
         }
