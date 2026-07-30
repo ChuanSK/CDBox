@@ -10,6 +10,7 @@ namespace TCPipeAutoDraw.UI.Studio
         public List<string> parentOptions { get; set; }
         public Dictionary<string, List<string>> categoriesByParent { get; set; }
         public List<string> tagOptions { get; set; }
+        public List<CDBoxStudioLayerPreset> presets { get; set; }
 
         public CDBoxStudioLayerManagerEnvelope()
         {
@@ -19,6 +20,38 @@ namespace TCPipeAutoDraw.UI.Studio
             parentOptions = new List<string>();
             categoriesByParent = new Dictionary<string, List<string>>();
             tagOptions = new List<string>();
+            presets = new List<CDBoxStudioLayerPreset>();
+        }
+    }
+
+    internal sealed class CDBoxStudioLayerPreset
+    {
+        public string id { get; set; }
+        public string name { get; set; }
+        public string description { get; set; }
+        public bool isBuiltIn { get; set; }
+        public List<string> layers { get; set; }
+
+        public CDBoxStudioLayerPreset()
+        {
+            id = string.Empty;
+            name = string.Empty;
+            description = string.Empty;
+            layers = new List<string>();
+        }
+    }
+
+    internal sealed class CDBoxStudioLayerPresetRequest
+    {
+        public string id { get; set; }
+        public string name { get; set; }
+        public List<string> layers { get; set; }
+
+        public CDBoxStudioLayerPresetRequest()
+        {
+            id = string.Empty;
+            name = string.Empty;
+            layers = new List<string>();
         }
     }
 

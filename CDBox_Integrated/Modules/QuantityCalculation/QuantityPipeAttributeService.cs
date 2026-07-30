@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -8,6 +9,8 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
 using TCPipeAutoDraw.Modules.LayerManager;
+using TCPipeAutoDraw.Modules.AnnotationHud;
+using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
@@ -218,6 +221,63 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return ids;
         }
 
+        internal static bool TryReadSavedAttributes(Database db, Transaction tr,
+            ObjectId objectId, out QuantityPipeAttributes attributes)
+        {
+            attributes = null;
+            if (db == null || tr == null || objectId.IsNull) return false;
+            try
+            {
+                Entity entity = tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
+                if (entity == null || !HasPipeAttributes(entity, tr)) return false;
+                attributes = ReadPipeAttributes(entity, tr);
+                return attributes != null;
+            }
+            catch { return false; }
+        }
+
+        internal static List<string> RepairClonedAttributeObjects(Database db,
+            Transaction tr, IDictionary<ObjectId, ObjectId> cloneMap)
+        {
+            var changedNodeHandles = new List<string>();
+            if (db == null || tr == null || cloneMap == null) return changedNodeHandles;
+            foreach (KeyValuePair<ObjectId, ObjectId> pair in cloneMap)
+            {
+                if (pair.Value.IsNull) continue;
+                Entity clone;
+                try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
+                catch { continue; }
+                if (clone == null) continue;
+
+                QuantityPipeAttributes attributes = HasPipeAttributes(clone, tr)
+                    ? ReadPipeAttributes(clone, tr)
+                    : null;
+                bool originalInDestination = false;
+                try
+                {
+                    originalInDestination = !pair.Key.IsNull && pair.Key.Database == db;
+                }
+                catch { }
+                if (attributes == null && originalInDestination)
+                {
+                    try
+                    {
+                        Entity original = tr.GetObject(pair.Key, OpenMode.ForRead, false) as Entity;
+                        if (original != null && HasPipeAttributes(original, tr))
+                            attributes = ReadPipeAttributes(original, tr);
+                    }
+                    catch { }
+                }
+                if (attributes == null) continue;
+
+                try { WritePipeAttributes(clone, tr, attributes.Clone()); }
+                catch { continue; }
+                if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
+                    changedNodeHandles.Add(clone.Handle.ToString());
+            }
+            return changedNodeHandles;
+        }
+
         public static QuantityPipeWriteResult WritePipeAttributes(Document doc, ObjectId objectId, QuantityPipeAttributes attributes)
         {
             if (doc == null) throw new ArgumentNullException("doc");
@@ -225,6 +285,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
 
             Database db = doc.Database;
+            string changedNodeHandle = string.Empty;
+            string changedPipeHandle = string.Empty;
+            var linkedPipeHandles = new List<string>();
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Entity entity = tr.GetObject(objectId, OpenMode.ForWrite, false) as Entity;
@@ -242,23 +305,79 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 // 这样修改井深后，相关主管不会继续保留旧深度。
                 if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
                 {
-                    RefreshMainPipeDepthsLinkedToNode(db, tr, objectId, attributes);
+                    linkedPipeHandles = RefreshMainPipeDepthsLinkedToNode(db, tr, objectId, attributes);
+                    changedNodeHandle = entity.Handle.ToString();
+                }
+                else if (QuantityPipeAttributes.IsMainPipeKind(attributes.ObjectKind)
+                    || QuantityPipeAttributes.IsBranchKind(attributes.ObjectKind))
+                {
+                    changedPipeHandle = entity.Handle.ToString();
                 }
 
                 tr.Commit();
             }
 
+            RefreshBoundNodeAnnotations(doc, changedNodeHandle);
+            if (!string.IsNullOrWhiteSpace(changedPipeHandle)) linkedPipeHandles.Add(changedPipeHandle);
+            RefreshBoundPipeAnnotations(doc, linkedPipeHandles);
+
             return new QuantityPipeWriteResult { Success = true, SuccessCount = 1, Message = "已写入当前对象属性。" };
         }
 
-        private static void RefreshMainPipeDepthsLinkedToNode(Database db, Transaction tr, ObjectId nodeObjectId, QuantityPipeAttributes nodeAttrs)
+        private static void RefreshBoundNodeAnnotations(Document doc,
+            IEnumerable<string> sourceHandles)
         {
-            if (db == null || tr == null || nodeAttrs == null) return;
-            if (string.IsNullOrWhiteSpace(nodeAttrs.NodeNo)) return;
+            if (doc == null || sourceHandles == null) return;
+            try { SimpleAnnotationObjectService.RefreshNodeAnnotationsForSourceHandles(doc, sourceHandles); }
+            catch { }
+        }
+
+        private static void RefreshBoundNodeAnnotations(Document doc, string sourceHandle)
+        {
+            if (string.IsNullOrWhiteSpace(sourceHandle)) return;
+            RefreshBoundNodeAnnotations(doc, new[] { sourceHandle });
+        }
+
+        private static void RefreshBoundPipeAnnotations(Document doc, IEnumerable<string> sourceHandles)
+        {
+            if (doc == null || sourceHandles == null) return;
+            try
+            {
+                PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
+                    doc, sourceHandles, string.Empty);
+            }
+            catch
+            {
+                // 属性写入不能因个别旧标注损坏而失败。
+            }
+        }
+
+        private static void RefreshBoundAnnotationsAfterBatch(Document doc,
+            IEnumerable<string> sourceHandles)
+        {
+            if (doc == null || sourceHandles == null) return;
+            var handles = new HashSet<string>(
+                sourceHandles.Where(x => !string.IsNullOrWhiteSpace(x)),
+                StringComparer.OrdinalIgnoreCase);
+            if (handles.Count == 0) return;
+
+            // 批量编辑后统一检查两套绑定注记。不能仅依据写入后的对象类型
+            // 决定是否刷新，否则对象类型被批量修改、普通可计长曲线或关联主管
+            // 可能保留旧的标注内容。
+            RefreshBoundNodeAnnotations(doc, handles);
+            RefreshBoundPipeAnnotations(doc, handles);
+        }
+
+        private static List<string> RefreshMainPipeDepthsLinkedToNode(Database db, Transaction tr,
+            ObjectId nodeObjectId, QuantityPipeAttributes nodeAttrs)
+        {
+            var changedHandles = new List<string>();
+            if (db == null || tr == null || nodeAttrs == null) return changedHandles;
+            if (string.IsNullOrWhiteSpace(nodeAttrs.NodeNo)) return changedHandles;
 
             string nodeNo = nodeAttrs.NodeNo.Trim();
             BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
-            if (space == null) return;
+            if (space == null) return changedHandles;
 
             foreach (ObjectId id in space)
             {
@@ -307,12 +426,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                     if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                     WritePipeAttributes(entity, tr, pipeAttrs);
+                    changedHandles.Add(entity.Handle.ToString());
                 }
                 catch
                 {
                     // 单条主管同步失败不应影响井属性保存。
                 }
             }
+            return changedHandles;
         }
 
         public static QuantityPipeWriteResult ApplyToSelection(Document doc, QuantityPipeAttributes sourceAttributes, bool keepIdentityFields)
@@ -343,6 +464,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             int total = res.Value == null ? 0 : res.Value.Count;
             int processed = 0;
             bool showProgress = progress != null && total > 1;
+            var changedAnnotationSourceHandles = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             if (showProgress) ReportProgress(progress, 0, total, "正在批量写入属性...");
 
             Database db = doc.Database;
@@ -399,6 +522,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, old, "BatchWrite");
                         if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                         WritePipeAttributes(entity, tr, attrs);
+                        changedAnnotationSourceHandles.Add(
+                            entity.Handle.ToString());
+                        if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind))
+                        {
+                            foreach (string linkedHandle in
+                                RefreshMainPipeDepthsLinkedToNode(
+                                    db, tr, entity.ObjectId, attrs))
+                                changedAnnotationSourceHandles.Add(linkedHandle);
+                        }
                         success++;
                     }
                     catch
@@ -414,9 +546,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 tr.Commit();
             }
+            RefreshBoundAnnotationsAfterBatch(doc,
+                changedAnnotationSourceHandles);
 
             string message = "批量写入完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
             if (unavailableLayerSkip > 0) message += "\n其中 " + unavailableLayerSkip + " 个对象因图层锁定、冻结或关闭而跳过。";
+            if (success > 0)
+                message += "\n已检查并同步可更新的绑定注记。";
             return new QuantityPipeWriteResult
             {
                 Success = success > 0,
@@ -449,6 +585,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             int branchCount = 0;
             int nodeCount = 0;
             List<string> errors = new List<string>();
+            var changedAnnotationSourceHandles = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
             bool showProgress = progress != null && ids.Count > 1;
             if (showProgress) ReportProgress(progress, 0, ids.Count, "正在按默认表补填空字段...");
 
@@ -514,6 +652,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, previous, "ApplyDefaults");
                             if (!entity.IsWriteEnabled) entity.UpgradeOpen();
                             WritePipeAttributes(entity, tr, attrs);
+                            changedAnnotationSourceHandles.Add(
+                                entity.Handle.ToString());
+                            if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind))
+                            {
+                                foreach (string linkedHandle in
+                                    RefreshMainPipeDepthsLinkedToNode(
+                                        db, tr, entity.ObjectId, attrs))
+                                    changedAnnotationSourceHandles.Add(
+                                        linkedHandle);
+                            }
                             tr.Commit();
                         }
 
@@ -547,6 +695,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
                 }
             }
+            RefreshBoundAnnotationsAfterBatch(doc,
+                changedAnnotationSourceHandles);
 
             string message = "默认表补填完成：成功 " + success + " 个";
             if (success > 0) message += "（主管 " + mainCount + "，支管 " + branchCount + "，节点/井 " + nodeCount + "）";
@@ -554,6 +704,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因对象不可写，或图层锁定、冻结、关闭而跳过。";
             message += "\n跳过包括：无关对象、特殊对象、不可写对象，以及已无空字段需要补填的对象。";
             message += "\n识别规则：仅父属性为“主管”“支管”“井”的对象参与；父属性为“井”时分类必须为“检查、沉泥井”。";
+            if (success > 0)
+                message += "\n已检查并同步可更新的绑定注记。";
             if (errors.Count > 0) message += "\n前几项失败原因：" + string.Join("；", errors.ToArray());
 
             return new QuantityPipeWriteResult
@@ -1238,7 +1390,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             string wellSpec = InferWellSpec(sourceText);
-            if (!string.IsNullOrWhiteSpace(wellSpec) && (overwrite || string.IsNullOrWhiteSpace(attrs.WellSpec)))
+            // 图层中明确写出的井径属于对象识别结果，应覆盖默认表中的占位规格。
+            // 否则“700铸铁井盖”会被默认的 φ500 挡住，连带导致开挖尺寸仍为 1.3 m。
+            if (!string.IsNullOrWhiteSpace(wellSpec)
+                && (overwrite || string.IsNullOrWhiteSpace(attrs.WellSpec)
+                    || QuantityPipeAttributes.IsNodeKind(inferredKind)))
             {
                 attrs.WellSpec = wellSpec;
             }

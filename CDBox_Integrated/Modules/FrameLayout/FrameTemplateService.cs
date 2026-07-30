@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.Geometry;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace TCPipeAutoDraw.Modules.FrameLayout
 {
@@ -71,69 +72,225 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 sourceDb.ReadDwgFile(dwgPath, FileOpenMode.OpenForReadAndAllShare, true, "");
                 sourceDb.CloseInput(true);
 
-                using (Transaction targetTr = targetDb.TransactionManager.StartTransaction())
+                if (!EnsureImportModelSpace(sourceDb))
+                    throw new InvalidOperationException(
+                        "模板 DWG 的模型空间和布局空间中均没有可导入的图形对象。");
+
+                string rawName = SanitizeBlockName(
+                    Path.GetFileNameWithoutExtension(dwgPath));
+                if (string.IsNullOrWhiteSpace(rawName))
+                    rawName = DefaultImportedBlockName;
+                using (Transaction nameTr =
+                    targetDb.TransactionManager.StartTransaction())
                 {
-                    string rawName = Path.GetFileNameWithoutExtension(dwgPath);
-                    if (string.IsNullOrWhiteSpace(rawName))
-                        rawName = DefaultImportedBlockName;
+                    newBlockName = CadDbHelper.MakeUniqueBlockName(targetDb,
+                        nameTr, rawName);
+                    nameTr.Commit();
+                }
 
-                    newBlockName = CadDbHelper.MakeUniqueBlockName(targetDb, targetTr, rawName);
+                // 整图插入由 AutoCAD 复制嵌套块、图层、样式、代理对象及
+                // 关联依赖，比逐实体 WblockCloneObjects 更适合模板图纸。
+                ObjectId newBtrId = targetDb.Insert(newBlockName, sourceDb,
+                    false);
+                if (newBtrId.IsNull)
+                    throw new InvalidOperationException(
+                        "AutoCAD 未能创建模板图纸块定义。");
 
-                    BlockTable targetBt = (BlockTable)targetTr.GetObject(targetDb.BlockTableId, OpenMode.ForWrite);
-
-                    BlockTableRecord newBtr = new BlockTableRecord();
-                    newBtr.Name = newBlockName;
-
-                    ObjectId newBtrId = targetBt.Add(newBtr);
-                    targetTr.AddNewlyCreatedDBObject(newBtr, true);
-
-                    ObjectIdCollection sourceIds = new ObjectIdCollection();
-
-                    using (Transaction sourceTr = sourceDb.TransactionManager.StartTransaction())
-                    {
-                        BlockTable sourceBt = (BlockTable)sourceTr.GetObject(sourceDb.BlockTableId, OpenMode.ForRead);
-                        BlockTableRecord sourceMs = (BlockTableRecord)sourceTr.GetObject(
-                            sourceBt[BlockTableRecord.ModelSpace],
-                            OpenMode.ForRead
-                        );
-
-                        foreach (ObjectId id in sourceMs)
-                        {
-                            if (id.IsNull || id.IsErased)
-                                continue;
-
-                            Entity ent = sourceTr.GetObject(id, OpenMode.ForRead) as Entity;
-                            if (ent == null)
-                                continue;
-
-                            sourceIds.Add(id);
-                        }
-
-                        if (sourceIds.Count == 0)
-                            throw new InvalidOperationException("模板 DWG 模型空间中没有可导入的图形对象。");
-
-                        IdMapping mapping = new IdMapping();
-                        sourceDb.WblockCloneObjects(
-                            sourceIds,
-                            newBtrId,
-                            mapping,
-                            DuplicateRecordCloning.Replace,
-                            false
-                        );
-
-                        sourceTr.Commit();
-                    }
-
+                using (Transaction targetTr =
+                    targetDb.TransactionManager.StartTransaction())
+                {
                     BlockReference br = new BlockReference(insertPoint, newBtrId);
                     br.Layer = "0";
-
+                    BlockTableRecord definition = targetTr.GetObject(newBtrId,
+                        OpenMode.ForRead, false) as BlockTableRecord;
+                    bool hasExtents = false;
+                    Extents3d extents = new Extents3d();
+                    if (definition != null)
+                        extents = CadDbHelper.GetBlockDefinitionExtents(
+                            targetTr, definition, out hasExtents);
+                    if (hasExtents)
+                    {
+                        Point3d localCenter = new Point3d(
+                            (extents.MinPoint.X + extents.MaxPoint.X) * 0.5,
+                            (extents.MinPoint.Y + extents.MaxPoint.Y) * 0.5,
+                            (extents.MinPoint.Z + extents.MaxPoint.Z) * 0.5);
+                        Point3d displayedCenter =
+                            localCenter.TransformBy(br.BlockTransform);
+                        br.Position += insertPoint - displayedCenter;
+                    }
                     ObjectId brId = CadDbHelper.AppendToModelSpace(targetDb, targetTr, br);
-
                     targetTr.Commit();
-
                     return brId;
                 }
             }
+        }
+
+        private static bool EnsureImportModelSpace(Database sourceDb)
+        {
+            if (sourceDb == null) return false;
+            using (Transaction tr =
+                sourceDb.TransactionManager.StartTransaction())
+            {
+                BlockTable table = tr.GetObject(sourceDb.BlockTableId,
+                    OpenMode.ForRead, false) as BlockTable;
+                if (table == null) return false;
+                BlockTableRecord modelSpace = tr.GetObject(
+                    table[BlockTableRecord.ModelSpace], OpenMode.ForRead,
+                    false) as BlockTableRecord;
+                if (modelSpace == null) return false;
+                if (GetDrawableEntityIds(tr, modelSpace).Count > 0)
+                {
+                    tr.Commit();
+                    return true;
+                }
+
+                ObjectIdCollection bestLayoutEntities = null;
+                foreach (ObjectId id in table)
+                {
+                    BlockTableRecord record = tr.GetObject(id,
+                        OpenMode.ForRead, false) as BlockTableRecord;
+                    if (record == null || !record.IsLayout
+                        || record.ObjectId == modelSpace.ObjectId)
+                        continue;
+                    ObjectIdCollection ids =
+                        GetDrawableEntityIds(tr, record);
+                    if (ids.Count > 0 && (bestLayoutEntities == null
+                        || ids.Count > bestLayoutEntities.Count))
+                        bestLayoutEntities = ids;
+                }
+                if (bestLayoutEntities == null
+                    || bestLayoutEntities.Count == 0)
+                    return false;
+
+                modelSpace.UpgradeOpen();
+                sourceDb.DeepCloneObjects(bestLayoutEntities,
+                    modelSpace.ObjectId, new IdMapping(), false);
+                tr.Commit();
+                return true;
+            }
+        }
+
+        private static ObjectIdCollection GetDrawableEntityIds(
+            Transaction tr, BlockTableRecord record)
+        {
+            var result = new ObjectIdCollection();
+            if (tr == null || record == null) return result;
+            foreach (ObjectId id in record)
+            {
+                if (id.IsNull || id.IsErased) continue;
+                try
+                {
+                    Entity entity = tr.GetObject(id, OpenMode.ForRead,
+                        false) as Entity;
+                    if (entity != null && !(entity is Viewport))
+                        result.Add(id);
+                }
+                catch
+                {
+                }
+            }
+            return result;
+        }
+
+        private static string SanitizeBlockName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return DefaultImportedBlockName;
+            char[] invalid = { '<', '>', '/', '\\', '"', ':', ';', '?',
+                '*', '|', ',', '=', '`' };
+            string result = value.Trim();
+            foreach (char character in invalid)
+                result = result.Replace(character, '_');
+            return string.IsNullOrWhiteSpace(result)
+                ? DefaultImportedBlockName : result;
+        }
+
+        public void ExportBlockDefinition(Database db, ObjectId blockTableRecordId,
+            string targetPath)
+        {
+            if (db == null) throw new ArgumentNullException("db");
+            if (blockTableRecordId.IsNull)
+                throw new InvalidOperationException("图框块定义无效。");
+            if (string.IsNullOrWhiteSpace(targetPath))
+                throw new ArgumentException("模板保存路径为空。", "targetPath");
+
+            string directory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            using (Database exported = db.Wblock(blockTableRecordId))
+            {
+                exported.SaveAs(targetPath, DwgVersion.Current);
+            }
+        }
+
+        public ObjectId EnsureTemplateBlock(Database targetDb, Transaction targetTr,
+            FrameTemplateCatalogItem template)
+        {
+            if (targetDb == null) throw new ArgumentNullException("targetDb");
+            if (targetTr == null) throw new ArgumentNullException("targetTr");
+            if (template == null) throw new ArgumentNullException("template");
+
+            BlockTable targetBt = (BlockTable)targetTr.GetObject(
+                targetDb.BlockTableId, OpenMode.ForRead);
+            if (targetBt.Has(template.BlockName))
+                return targetBt[template.BlockName];
+
+            string sourcePath = FrameTemplateCatalogStore.ResolveTemplatePath(
+                template.SourceDwgPath);
+            if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+                throw new FileNotFoundException(
+                    "模板资源文件不存在，请在图框设置中重新添加该模板。", sourcePath);
+
+            using (Database sourceDb = new Database(false, true))
+            {
+                sourceDb.ReadDwgFile(sourcePath,
+                    FileOpenMode.OpenForReadAndAllShare, true, string.Empty);
+                sourceDb.CloseInput(true);
+
+                targetBt.UpgradeOpen();
+                BlockTableRecord newBtr = new BlockTableRecord
+                {
+                    Name = template.BlockName,
+                    Origin = Point3d.Origin
+                };
+                ObjectId newBtrId = targetBt.Add(newBtr);
+                targetTr.AddNewlyCreatedDBObject(newBtr, true);
+
+                ObjectIdCollection sourceIds = new ObjectIdCollection();
+                using (Transaction sourceTr =
+                    sourceDb.TransactionManager.StartTransaction())
+                {
+                    BlockTable sourceBt = (BlockTable)sourceTr.GetObject(
+                        sourceDb.BlockTableId, OpenMode.ForRead);
+                    BlockTableRecord sourceMs = (BlockTableRecord)sourceTr.GetObject(
+                        sourceBt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    foreach (ObjectId id in sourceMs)
+                    {
+                        if (id.IsNull || id.IsErased) continue;
+                        if (sourceTr.GetObject(id, OpenMode.ForRead, false) is Entity)
+                            sourceIds.Add(id);
+                    }
+                    if (sourceIds.Count == 0)
+                        throw new InvalidOperationException("模板资源中没有可用图形。");
+
+                    IdMapping mapping = new IdMapping();
+                    sourceDb.WblockCloneObjects(sourceIds, newBtrId, mapping,
+                        DuplicateRecordCloning.Ignore, false);
+                    sourceTr.Commit();
+                }
+                return newBtrId;
+            }
+        }
+
+        public static string BuildCatalogBlockName(string templateId)
+        {
+            string suffix = string.IsNullOrWhiteSpace(templateId)
+                ? Guid.NewGuid().ToString("N").Substring(0, 12)
+                : new string(templateId.Where(char.IsLetterOrDigit).ToArray());
+            if (suffix.Length > 16) suffix = suffix.Substring(0, 16);
+            if (suffix.Length == 0) suffix = Guid.NewGuid().ToString("N").Substring(0, 12);
+            return "CDBOX_FRAME_" + suffix.ToUpperInvariant();
         }
 
         public static string GetBlockReferenceEffectiveName(Transaction tr, BlockReference br)

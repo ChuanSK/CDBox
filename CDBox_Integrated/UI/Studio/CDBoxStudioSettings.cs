@@ -16,6 +16,7 @@ namespace TCPipeAutoDraw.UI.Studio
             AnnotationHudHoverOpacity = 1.0;
             AnnotationHudGlowEnabled = true;
             AnnotationHudGlowIntensity = 0.28;
+            DoubleClickOpenEnabled = true;
             ColorOutputMode = TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode.PreserveOriginalType;
             UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
         }
@@ -26,6 +27,7 @@ namespace TCPipeAutoDraw.UI.Studio
         public double AnnotationHudHoverOpacity { get; set; }
         public bool AnnotationHudGlowEnabled { get; set; }
         public double AnnotationHudGlowIntensity { get; set; }
+        public bool DoubleClickOpenEnabled { get; set; }
         public TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode ColorOutputMode { get; set; }
         public string UpdateChannel { get; set; }
 

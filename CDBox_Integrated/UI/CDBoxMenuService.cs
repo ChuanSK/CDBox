@@ -346,34 +346,57 @@ namespace TCPipeAutoDraw.UI
 
         private static void BuildMenu(object topMenu)
         {
-            AddCommandItem(topMenu, "CDBox 工作台", "CDSTUDIO");
-            AddCommandItem(topMenu, "图层管理器", "CDLAYER");
+            object survey = AddSubMenu(topMenu, "测绘工具",
+                "CDBox_Survey");
+            AddCommandItem(survey, "简码识别", "CDJMSB");
+            AddCommandItem(survey, "简码识别设置", "CDJMSZ");
+            AddSeparator(topMenu);
 
-            object annotation = AddSubMenu(topMenu, "标注", "CDBox_Annotation");
-            AddCommandItem(annotation, "表面积标注", "CDSURF");
-            AddCommandItem(annotation, "管线长度标注", "CDLEN");
-            AddCommandItem(annotation, "节点标注", "CDNODE");
-            AddCommandItem(annotation, "标注设置", "CDBZSET");
+            // ActiveX PopupMenu 在不同 AutoCAD/CASS 版本中没有稳定的位图图标接口，
+            // 使用菜单字体可直接显示的单色符号作为兼容图标。
+            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
+            AddSeparator(topMenu);
 
-            object section = AddSubMenu(topMenu, "断面", "CDBox_Section");
-            AddCommandItem(section, "断面图生成", "CDSEC");
-            AddCommandItem(section, "批量断面生成", "PLDM");
+            object annotation = AddSubMenu(topMenu, "✎ 标注", "CDBox_Annotation");
+            AddCommandItem(annotation, "▱ 表面积标注", "CDSURF");
+            AddCommandItem(annotation, "⌁ 管线长度标注", "CDLEN");
+            AddCommandItem(annotation, "◇ 节点标注", "CDNODE");
+            AddSeparator(annotation);
+            AddCommandItem(annotation, "⚙ 标注设置", "CDBZSET");
 
-            object pipeAttribute = AddSubMenu(topMenu, "管线属性", "CDBox_PipeAttribute");
-            AddCommandItem(pipeAttribute, "属性编辑器", "SX");
-            AddCommandItem(pipeAttribute, "属性清除", "SXQC");
-            AddCommandItem(pipeAttribute, "属性默认表", "SXMRB");
+            object section = AddSubMenu(topMenu, "◫ 断面", "CDBox_Section");
+            AddCommandItem(section, "▧ 断面图生成", "CDSEC");
+            AddCommandItem(section, "▦ 批量断面生成", "PLDM");
+            AddSeparator(section);
+            AddCommandItem(section, "▥ 纵断面生成", "CDZDM");
+            AddCommandItem(section, "⚙ 纵断面设置", "CDZDMSZ");
 
-            object quantity = AddSubMenu(topMenu, "工程量", "CDBox_Quantity");
-            AddCommandItem(quantity, "工程量看板", "CDQBOARD");
-            AddCommandItem(quantity, "工程量表格生成", "GCL");
+            object pipeAttribute = AddSubMenu(topMenu, "◇ 管线属性", "CDBox_PipeAttribute");
+            AddCommandItem(pipeAttribute, "✎ 属性编辑器", "SX");
+            AddCommandItem(pipeAttribute, "× 属性清除", "SXQC");
+            AddSeparator(pipeAttribute);
+            AddCommandItem(pipeAttribute, "▤ 属性默认表", "SXMRB");
+            AddSeparator(topMenu);
 
-            object frame = AddSubMenu(topMenu, "图框工具", "CDBox_Frame");
-            AddCommandItem(frame, "添加图框模版", "TCFRAMEADD");
-            AddCommandItem(frame, "矩形裁图布框", "TCFRAMECUT");
+            object quantity = AddSubMenu(topMenu, "Σ 工程量", "CDBox_Quantity");
+            AddCommandItem(quantity, "▣ 工程量看板", "CDQBOARD");
+            AddCommandItem(quantity, "▤ 工程量表格生成", "GCL");
 
-            AddCommandItem(topMenu, "CDBox设置", "CDSET");
-            AddCommandItem(topMenu, "关于超重氢工具箱", "CDABOUT");
+            object frame = AddSubMenu(topMenu, "▣ 图框工具", "CDBox_Frame");
+            AddCommandItem(frame, "＋ 添加图框模版", "TCFRAMEADD");
+            AddCommandItem(frame, "▱ 布置裁图区域", "TCFRAMECUT");
+            AddCommandItem(frame, "▦ 裁图区域布框", "TCFRAMELAYOUT");
+            AddCommandItem(frame, "□ 直接布置图框", "TCFRAMEPLACE");
+            AddCommandItem(frame, "⚙ 图框设置", "TCFRAMESET");
+
+            object table = AddSubMenu(topMenu, "▤ 表格工具", "CDBox_Table");
+            AddCommandItem(table, "▦ Excel 转 CAD 表格", "CDEXCEL");
+            AddSeparator(topMenu);
+
+            AddCommandItem(topMenu, "▦ CDBox 工作台", "CDSTUDIO");
+            AddCommandItem(topMenu, "⚙ CDBox设置", "CDSET");
+            AddSeparator(topMenu);
+            AddCommandItem(topMenu, "ⓘ 关于超重氢工具箱", "CDABOUT");
         }
 
         private static object AddSubMenu(object parent, string label, string tag)
@@ -465,6 +488,30 @@ namespace TCPipeAutoDraw.UI
             {
                 object result = Invoke(parent, "AddMenuItem", indexes[i], label, macro);
                 if (result != null) return result;
+            }
+
+            return null;
+        }
+
+        private static object AddSeparator(object parent)
+        {
+            if (parent == null) return null;
+
+            int count = GetCount(parent);
+            object[] indexes =
+            {
+                string.Empty, count, count + 1, Math.Max(0, count - 1), 0, 1
+            };
+            for (int i = 0; i < indexes.Length; i++)
+            {
+                int before = GetCount(parent);
+                object result = Invoke(parent, "AddSeparator", indexes[i]);
+                if (result != null || GetCount(parent) > before)
+                    return result ?? parent;
+                before = GetCount(parent);
+                result = Invoke(parent, "AddMenuSeparator", indexes[i]);
+                if (result != null || GetCount(parent) > before)
+                    return result ?? parent;
             }
 
             return null;

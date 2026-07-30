@@ -168,6 +168,274 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return result;
         }
 
+        internal static List<PipeSelectionCandidate> FindOverlappingCandidates(Database db,
+            Transaction tr, Editor editor, ObjectId selectedObjectId, Point3d pickedPoint)
+        {
+            var result = new List<PipeSelectionCandidate>();
+            if (db == null || tr == null || editor == null || selectedObjectId.IsNull) return result;
+
+            Curve selectedCurve;
+            try { selectedCurve = tr.GetObject(selectedObjectId, OpenMode.ForRead, false) as Curve; }
+            catch { return result; }
+            if (!IsSupportedLengthCurve(selectedCurve)) return result;
+
+            Vector3d viewDirection = GetViewDirection(editor);
+            double tolerance = GetCurveOverlapTolerance(selectedCurve);
+            List<DisplayCurveSegment> selectedSegments = BuildDisplaySegments(
+                selectedCurve, viewDirection);
+            DisplayCurveBounds selectedBounds;
+            if (selectedSegments.Count == 0
+                || !TryGetDisplayBounds(selectedCurve, viewDirection, out selectedBounds)) return result;
+            BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
+            if (space == null) return result;
+
+            foreach (ObjectId id in space)
+            {
+                Curve curve;
+                try { curve = tr.GetObject(id, OpenMode.ForRead, false) as Curve; }
+                catch { continue; }
+                if (!IsSupportedLengthCurve(curve)) continue;
+                string annotationId;
+                string annotationPart;
+                if (PipeLengthAnnotationObjectService.TryGetAnnotationPart(
+                    curve, out annotationId, out annotationPart)) continue;
+                if (id != selectedObjectId)
+                {
+                    DisplayCurveBounds curveBounds;
+                    if (!TryGetDisplayBounds(curve, viewDirection, out curveBounds)
+                        || !selectedBounds.Intersects(curveBounds, tolerance)) continue;
+                    List<DisplayCurveSegment> curveSegments = BuildDisplaySegments(curve, viewDirection);
+                    if (!HaveCoincidentDisplaySegment(selectedSegments, curveSegments,
+                        viewDirection, tolerance, Math.Min(GetCurveLength(selectedCurve),
+                            GetCurveLength(curve)))) continue;
+                }
+
+                Point3d closestPoint;
+                double distance;
+                if (!TryGetDisplayClosestPoint(curve, pickedPoint, viewDirection,
+                    out closestPoint, out distance))
+                {
+                    try { closestPoint = curve.StartPoint; }
+                    catch { closestPoint = pickedPoint; }
+                    distance = id == selectedObjectId ? 0.0 : double.MaxValue;
+                }
+                if (id == selectedObjectId) distance = 0.0;
+                double length = GetCurveLength(curve);
+                result.Add(new PipeSelectionCandidate
+                {
+                    ObjectId = id,
+                    AnchorPoint = closestPoint,
+                    Distance = distance,
+                    Length = length,
+                    LayerName = curve.Layer ?? string.Empty,
+                    Title = "长度对象",
+                    Detail = (curve.Layer ?? string.Empty) + " · 长度 "
+                        + length.ToString("0.##", CultureInfo.InvariantCulture) + "m"
+                });
+            }
+
+            result.Sort(delegate(PipeSelectionCandidate left, PipeSelectionCandidate right)
+            {
+                bool leftSelected = left.ObjectId == selectedObjectId;
+                bool rightSelected = right.ObjectId == selectedObjectId;
+                if (leftSelected != rightSelected) return leftSelected ? -1 : 1;
+                int compare = left.Distance.CompareTo(right.Distance);
+                if (compare != 0) return compare;
+                return string.Compare(left.LayerName, right.LayerName,
+                    StringComparison.CurrentCultureIgnoreCase);
+            });
+            return result;
+        }
+
+        private static bool HaveCoincidentDisplaySegment(
+            IList<DisplayCurveSegment> leftSegments,
+            IList<DisplayCurveSegment> rightSegments,
+            Vector3d viewDirection, double tolerance, double shorterLength)
+        {
+            if (leftSegments == null || rightSegments == null
+                || leftSegments.Count == 0 || rightSegments.Count == 0) return false;
+
+            double minimumOverlap = Math.Max(tolerance * 4.0, shorterLength * 0.000001);
+            for (int i = 0; i < leftSegments.Count; i++)
+            {
+                for (int j = 0; j < rightSegments.Count; j++)
+                {
+                    if (HaveCoincidentDisplayPortion(leftSegments[i], rightSegments[j],
+                        viewDirection, tolerance, minimumOverlap)) return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool HaveCoincidentDisplayPortion(DisplayCurveSegment left,
+            DisplayCurveSegment right, Vector3d viewDirection, double tolerance,
+            double minimumOverlap)
+        {
+            if (left.Length <= tolerance || right.Length <= tolerance) return false;
+            double parallel = Math.Abs(left.Direction.CrossProduct(right.Direction)
+                .DotProduct(viewDirection));
+            if (parallel > left.Length * right.Length * 0.01) return false;
+
+            Vector3d offset = ProjectToDisplayPlane(right.Start - left.Start, viewDirection);
+            double lineDistance = Math.Abs(offset.CrossProduct(left.Direction)
+                .DotProduct(viewDirection)) / left.Length;
+            if (lineDistance > tolerance) return false;
+
+            Vector3d unit = left.Direction / left.Length;
+            double rightStart = offset.DotProduct(unit);
+            double rightEnd = ProjectToDisplayPlane(right.End - left.Start, viewDirection)
+                .DotProduct(unit);
+            double overlapStart = Math.Max(0.0, Math.Min(rightStart, rightEnd));
+            double overlapEnd = Math.Min(left.Length, Math.Max(rightStart, rightEnd));
+            return overlapEnd - overlapStart >= minimumOverlap;
+        }
+
+        private static List<DisplayCurveSegment> BuildDisplaySegments(Curve curve,
+            Vector3d viewDirection)
+        {
+            var result = new List<DisplayCurveSegment>();
+            if (curve == null) return result;
+            double start;
+            double end;
+            try
+            {
+                start = curve.StartParam;
+                end = curve.EndParam;
+            }
+            catch { return result; }
+
+            int divisions;
+            Polyline polyline = curve as Polyline;
+            if (curve is Line) divisions = 1;
+            else if (polyline != null) divisions = Math.Max(1, Math.Min(256,
+                (int)Math.Ceiling(Math.Max(Math.Abs(end - start), 1.0) * 8.0)));
+            else divisions = 64;
+
+            Point3d previous;
+            try { previous = curve.GetPointAtParameter(start); }
+            catch
+            {
+                try { previous = curve.StartPoint; }
+                catch { return result; }
+            }
+            for (int i = 1; i <= divisions; i++)
+            {
+                double parameter = start + (end - start) * i / divisions;
+                Point3d current;
+                try { current = curve.GetPointAtParameter(parameter); }
+                catch
+                {
+                    if (i != divisions) continue;
+                    try { current = curve.EndPoint; }
+                    catch { continue; }
+                }
+                Vector3d direction = ProjectToDisplayPlane(current - previous, viewDirection);
+                double length = direction.Length;
+                if (length > 0.0000001)
+                {
+                    result.Add(new DisplayCurveSegment
+                    {
+                        Start = previous,
+                        End = current,
+                        Direction = direction,
+                        Length = length
+                    });
+                }
+                previous = current;
+            }
+            return result;
+        }
+
+        private static bool TryGetDisplayBounds(Curve curve, Vector3d viewDirection,
+            out DisplayCurveBounds bounds)
+        {
+            bounds = new DisplayCurveBounds();
+            if (curve == null) return false;
+            Extents3d extents;
+            try { extents = curve.GeometricExtents; }
+            catch { return false; }
+
+            Vector3d normal = viewDirection.Length > 0.0000001
+                ? viewDirection.GetNormal()
+                : Vector3d.ZAxis;
+            Vector3d xAxis;
+            try { xAxis = normal.GetPerpendicularVector().GetNormal(); }
+            catch { xAxis = Vector3d.XAxis; }
+            Vector3d yAxis = normal.CrossProduct(xAxis);
+            if (yAxis.Length <= 0.0000001) yAxis = Vector3d.YAxis;
+            else yAxis = yAxis.GetNormal();
+
+            Point3d min = extents.MinPoint;
+            Point3d max = extents.MaxPoint;
+            bool initialized = false;
+            for (int x = 0; x < 2; x++)
+            {
+                for (int y = 0; y < 2; y++)
+                {
+                    for (int z = 0; z < 2; z++)
+                    {
+                        Point3d point = new Point3d(x == 0 ? min.X : max.X,
+                            y == 0 ? min.Y : max.Y, z == 0 ? min.Z : max.Z);
+                        Vector3d offset = point - Point3d.Origin;
+                        double displayX = offset.DotProduct(xAxis);
+                        double displayY = offset.DotProduct(yAxis);
+                        if (!initialized)
+                        {
+                            bounds.MinX = bounds.MaxX = displayX;
+                            bounds.MinY = bounds.MaxY = displayY;
+                            initialized = true;
+                        }
+                        else
+                        {
+                            bounds.MinX = Math.Min(bounds.MinX, displayX);
+                            bounds.MaxX = Math.Max(bounds.MaxX, displayX);
+                            bounds.MinY = Math.Min(bounds.MinY, displayY);
+                            bounds.MaxY = Math.Max(bounds.MaxY, displayY);
+                        }
+                    }
+                }
+            }
+            return initialized;
+        }
+
+        private static Vector3d ProjectToDisplayPlane(Vector3d vector, Vector3d viewDirection)
+        {
+            Vector3d direction = viewDirection.Length > 0.0000001
+                ? viewDirection.GetNormal()
+                : Vector3d.ZAxis;
+            return vector - direction.MultiplyBy(vector.DotProduct(direction));
+        }
+
+        private static double GetCurveOverlapTolerance(Curve curve)
+        {
+            double length = Math.Max(GetCurveLength(curve), 1.0);
+            return Math.Max(0.0000001, length * 0.000001);
+        }
+
+        private struct DisplayCurveSegment
+        {
+            public Point3d Start;
+            public Point3d End;
+            public Vector3d Direction;
+            public double Length;
+        }
+
+        private struct DisplayCurveBounds
+        {
+            public double MinX;
+            public double MaxX;
+            public double MinY;
+            public double MaxY;
+
+            public bool Intersects(DisplayCurveBounds other, double tolerance)
+            {
+                return MaxX + tolerance >= other.MinX
+                    && other.MaxX + tolerance >= MinX
+                    && MaxY + tolerance >= other.MinY
+                    && other.MaxY + tolerance >= MinY;
+            }
+        }
+
         private static bool IsSupportedLengthCurve(Curve curve)
         {
             if (curve == null) return false;
@@ -325,6 +593,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     : topText.Remove(systemIndex, systemLengthText.Length).TrimEnd(),
                 SystemLengthText = systemLengthText,
                 BottomText = BuildBottomAnnotationText(options, result),
+                SourceLayer = result.PipeLayerName ?? string.Empty,
+                SourceParent = result.PipeParentGroup ?? string.Empty,
+                SourceClass = result.PipeParentClass ?? string.Empty,
+                SourceTags = result.PipeTagText ?? string.Empty,
                 IsQuantityPipe = IsQuantityPipeResult(result)
             };
             return true;

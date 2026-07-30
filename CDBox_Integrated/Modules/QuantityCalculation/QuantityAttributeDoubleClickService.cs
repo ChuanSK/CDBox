@@ -39,7 +39,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 && !TryResolveOpenableObject(doc, selectedIds, out selectedObjectId)) return false;
 
             List<PipeSelectionCandidate> candidates = FindOpenableCandidates(
-                doc, screenPoint);
+                doc, selectedObjectId, screenPoint);
             if (candidates.Count > 1)
             {
                 CDBoxStudioLogger.Info("双击属性编辑器检测到重叠管线：" + candidates.Count + " 个候选。");
@@ -60,18 +60,39 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         }
 
         private static List<PipeSelectionCandidate> FindOpenableCandidates(
-            Document doc, Point screenPoint)
+            Document doc, ObjectId selectedObjectId, Point screenPoint)
         {
             var result = new List<PipeSelectionCandidate>();
-            if (doc == null) return result;
+            if (doc == null || selectedObjectId.IsNull) return result;
             List<PipeSelectionCandidate> candidates;
+            Point3d pickedPoint = Point3d.Origin;
+            bool hasPickedPoint = false;
             try
             {
-                Point3d pickedPoint = doc.Editor.PointToWorld(screenPoint);
+                pickedPoint = doc.Editor.PointToWorld(screenPoint);
+                hasPickedPoint = true;
+            }
+            catch { }
+            try
+            {
                 using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
                 {
-                    candidates = PipeLengthAnnotationService.FindCandidatesAtPoint(
-                        doc.Database, tr, doc.Editor, pickedPoint);
+                    if (!hasPickedPoint)
+                    {
+                        Curve selectedCurve = tr.GetObject(selectedObjectId,
+                            OpenMode.ForRead, false) as Curve;
+                        if (selectedCurve != null)
+                        {
+                            try
+                            {
+                                pickedPoint = selectedCurve.GetPointAtParameter(
+                                    (selectedCurve.StartParam + selectedCurve.EndParam) * 0.5);
+                            }
+                            catch { try { pickedPoint = selectedCurve.StartPoint; } catch { } }
+                        }
+                    }
+                    candidates = PipeLengthAnnotationService.FindOverlappingCandidates(
+                        doc.Database, tr, doc.Editor, selectedObjectId, pickedPoint);
                     tr.Commit();
                 }
             }

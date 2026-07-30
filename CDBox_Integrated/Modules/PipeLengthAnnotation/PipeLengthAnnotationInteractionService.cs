@@ -23,6 +23,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private const int WmLeftButtonDoubleClick = 0x0203;
         private static readonly HashSet<string> DirtySourceHandles =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<CloneBatch> PendingCloneBatches =
+            new List<CloneBatch>();
         private static bool _initialized;
         private static bool _spatialEditActive;
         private static bool _restoreAfterSpatialEdit;
@@ -30,6 +32,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static bool _synchronizingAnnotationSelection;
         private static bool _selectionSyncPending;
         private static bool _documentSaveActive;
+        private static bool _doubleClickOpenEnabled = true;
         private static int _spatialEditCompletionVersion;
         private static PipeLengthAnnotationCardWindow _window;
         private static Document _document;
@@ -38,6 +41,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public static void Initialize()
         {
             if (_initialized) return;
+            RefreshSettingsCache();
             AcadApp.PreTranslateMessage += PreTranslateMessage;
             AcadApp.DocumentManager.DocumentActivated += DocumentActivated;
             PipeLengthAnnotationGripOverrule.Initialize();
@@ -146,6 +150,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private static void PreTranslateMessage(object sender, PreTranslateMessageEventArgs e)
         {
             if (e == null || e.Message.message != WmLeftButtonDoubleClick) return;
+            if (!_doubleClickOpenEnabled) return;
             if (_window != null && _window.IsVisible)
             {
                 try { if (new WindowInteropHelper(_window).Handle == e.Message.hwnd) return; }
@@ -291,10 +296,27 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         internal static void RefreshAppearance()
         {
-            SimpleAnnotationHudInteractionService.RefreshAppearance();
-            if (_window == null) return;
-            try { ApplyWindowAppearance(_window, CDBoxStudioSettingsStore.Load()); }
+            CDBoxStudioSettings settings = null;
+            try
+            {
+                settings = CDBoxStudioSettingsStore.Load();
+                _doubleClickOpenEnabled = settings.DoubleClickOpenEnabled;
+            }
             catch { }
+            SimpleAnnotationHudInteractionService.RefreshAppearance();
+            if (_window == null || settings == null) return;
+            try { ApplyWindowAppearance(_window, settings); }
+            catch { }
+        }
+
+        private static void RefreshSettingsCache()
+        {
+            try
+            {
+                _doubleClickOpenEnabled =
+                    CDBoxStudioSettingsStore.Load().DoubleClickOpenEnabled;
+            }
+            catch { _doubleClickOpenEnabled = true; }
         }
 
         private static void ApplyWindowAppearance(PipeLengthAnnotationCardWindow window,
@@ -352,6 +374,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _document.CommandFailed += DocumentCommandAborted;
             _document.Database.ObjectModified += DatabaseObjectModified;
             _document.Database.ObjectErased += DatabaseObjectErased;
+            _document.Database.BeginDeepCloneTranslation += DatabaseBeginDeepCloneTranslation;
             _document.Database.BeginSave += DatabaseBeginSave;
             _document.Database.SaveComplete += DatabaseSaveComplete;
             _document.Database.AbortSave += DatabaseAbortSave;
@@ -370,11 +393,13 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 try { _document.CommandFailed -= DocumentCommandAborted; } catch { }
                 try { _document.Database.ObjectModified -= DatabaseObjectModified; } catch { }
                 try { _document.Database.ObjectErased -= DatabaseObjectErased; } catch { }
+                try { _document.Database.BeginDeepCloneTranslation -= DatabaseBeginDeepCloneTranslation; } catch { }
                 try { _document.Database.BeginSave -= DatabaseBeginSave; } catch { }
                 try { _document.Database.SaveComplete -= DatabaseSaveComplete; } catch { }
                 try { _document.Database.AbortSave -= DatabaseAbortSave; } catch { }
             }
             DirtySourceHandles.Clear();
+            PendingCloneBatches.Clear();
             _spatialEditCompletionVersion++;
             _selectionSyncPending = false;
             _synchronizingAnnotationSelection = false;
@@ -469,6 +494,34 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             QueueDirtySource(e == null ? null : e.DBObject);
         }
 
+        private static void DatabaseBeginDeepCloneTranslation(object sender,
+            IdMappingEventArgs e)
+        {
+            if (_document == null || e == null || e.IdMapping == null) return;
+            try
+            {
+                IdMapping mapping = e.IdMapping;
+                if (mapping.DestinationDatabase != _document.Database) return;
+                var batch = new CloneBatch();
+                batch.IsCrossDatabase = mapping.OriginalDatabase != mapping.DestinationDatabase;
+                foreach (IdPair pair in mapping)
+                {
+                    if (!pair.IsCloned || !pair.IsPrimary
+                        || pair.Key.IsNull || pair.Value.IsNull) continue;
+                    batch.ObjectMap[pair.Key] = pair.Value;
+                    try
+                    {
+                        string originalHandle = pair.Key.Handle.ToString();
+                        if (!string.IsNullOrWhiteSpace(originalHandle))
+                            batch.ClonesByOriginalHandle[originalHandle] = pair.Value;
+                    }
+                    catch { }
+                }
+                if (batch.ObjectMap.Count > 0) PendingCloneBatches.Add(batch);
+            }
+            catch { }
+        }
+
         private static void QueueDirtySource(DBObject value)
         {
             if (_bindingRefreshActive || _documentSaveActive) return;
@@ -492,9 +545,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             bool saveCommand = _documentSaveActive || IsDrawingSaveCommand(
                 e == null ? string.Empty : e.GlobalCommandName);
             _documentSaveActive = false;
-            if (saveCommand) DirtySourceHandles.Clear();
+            if (saveCommand)
+            {
+                DirtySourceHandles.Clear();
+                PendingCloneBatches.Clear();
+            }
             else
             {
+                RepairPendingClones();
                 PipeLengthAnnotationGripOverrule.CompletePendingBindings(_document);
                 RefreshDirtyBindings();
             }
@@ -507,7 +565,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             bool saveCommand = _documentSaveActive || IsDrawingSaveCommand(
                 e == null ? string.Empty : e.GlobalCommandName);
             _documentSaveActive = false;
-            if (saveCommand) DirtySourceHandles.Clear();
+            if (saveCommand)
+            {
+                DirtySourceHandles.Clear();
+                PendingCloneBatches.Clear();
+            }
+            else RepairPendingClones();
             PipeLengthAnnotationGripOverrule.CancelPendingBindings(_document);
             if (!saveCommand) RefreshDirtyBindings();
             SimpleAnnotationHudInteractionService.OnCommandFinished(_document);
@@ -574,6 +637,64 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch { }
             finally { _bindingRefreshActive = false; }
+        }
+
+        private static void RepairPendingClones()
+        {
+            if (_document == null || PendingCloneBatches.Count == 0) return;
+            CloneBatch[] batches = PendingCloneBatches.ToArray();
+            PendingCloneBatches.Clear();
+            var pipeHandles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var nodeHandles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool previousRefreshState = _bindingRefreshActive;
+            try
+            {
+                _bindingRefreshActive = true;
+                using (DocumentLock docLock = _document.LockDocument())
+                using (Transaction tr = _document.Database.TransactionManager.StartTransaction())
+                {
+                    for (int i = 0; i < batches.Length; i++)
+                    {
+                        List<string> nodes = QuantityPipeAttributeService.RepairClonedAttributeObjects(
+                            _document.Database, tr, batches[i].ObjectMap);
+                        for (int j = 0; j < nodes.Count; j++) nodeHandles.Add(nodes[j]);
+                        List<string> pipes = PipeLengthAnnotationObjectService.RepairClonedObjects(
+                            _document.Database, tr, batches[i].ObjectMap,
+                            batches[i].ClonesByOriginalHandle, batches[i].IsCrossDatabase);
+                        for (int j = 0; j < pipes.Count; j++) pipeHandles.Add(pipes[j]);
+                        SimpleAnnotationObjectService.RepairClonedAnnotations(
+                            _document.Database, tr, batches[i].ObjectMap,
+                            batches[i].ClonesByOriginalHandle, batches[i].IsCrossDatabase);
+                    }
+                    tr.Commit();
+                }
+
+                if (nodeHandles.Count > 0)
+                    SimpleAnnotationObjectService.RefreshNodeAnnotationsForSourceHandles(
+                        _document, nodeHandles);
+                if (pipeHandles.Count > 0)
+                {
+                    ObjectId refreshId = PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
+                        _document, pipeHandles, _model == null ? string.Empty : _model.AnnotationId);
+                    if (!refreshId.IsNull) RefreshCard(_document, refreshId);
+                }
+            }
+            catch { }
+            finally { _bindingRefreshActive = previousRefreshState; }
+        }
+
+        private sealed class CloneBatch
+        {
+            public Dictionary<ObjectId, ObjectId> ObjectMap { get; private set; }
+            public Dictionary<string, ObjectId> ClonesByOriginalHandle { get; private set; }
+            public bool IsCrossDatabase { get; set; }
+
+            public CloneBatch()
+            {
+                ObjectMap = new Dictionary<ObjectId, ObjectId>();
+                ClonesByOriginalHandle = new Dictionary<string, ObjectId>(
+                    StringComparer.OrdinalIgnoreCase);
+            }
         }
 
         private static void DocumentCloseWillStart(object sender, EventArgs e)

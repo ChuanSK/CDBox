@@ -9,7 +9,7 @@ namespace TCPipeAutoDraw.Core.Modules
     /// </summary>
     public static class TCModuleRegistry
     {
-        public static IList<ITCModule> CreateDefaultModules(Action drawPipeAction, Action layerManagerAction, Action annotationSettingsAction, Action surfaceAreaAnnotationAction, Action pipeLengthAnnotationAction, Action nodeAnnotationAction, Action sectionDrawingAction, Action frameTemplateAction, Action frameCutLayoutAction, Action quantityPipeAttributeAction, Action quantityCalculationAction)
+        public static IList<ITCModule> CreateDefaultModules(Action drawPipeAction, Action layerManagerAction, Action annotationSettingsAction, Action surfaceAreaAnnotationAction, Action pipeLengthAnnotationAction, Action nodeAnnotationAction, Action sectionDrawingAction, Action frameTemplateAction, Action frameCutLayoutAction, Action quantityPipeAttributeAction, Action quantityCalculationAction, Action excelToCadAction)
         {
             var modules = new List<ITCModule>();
 
@@ -71,8 +71,8 @@ namespace TCPipeAutoDraw.Core.Modules
 
             modules.Add(new TCModuleDescriptor(
                 "frame-cut-layout",
-                "矩形裁图布框",
-                "框选矩形裁图范围，指定裁图方向，按模板有效区域自动布置图框并添加指北针。",
+                "布置裁图区域",
+                "选择图幅与裁图方向，布置对应模板的红色矩形裁图框，或将闭合曲线设为裁图区域。",
                 "TCFRAMECUT",
                 true,
                 frameCutLayoutAction));
@@ -92,6 +92,14 @@ namespace TCPipeAutoDraw.Core.Modules
                 "GCL",
                 true,
                 quantityCalculationAction));
+
+            modules.Add(new TCModuleDescriptor(
+                "excel-to-cad",
+                "Excel 转 CAD 表格",
+                "读取 Excel 使用区域、打印区域或当前选择区域，按分解线文字、原生 TABLE 或块形式生成 CAD 表格。",
+                "CDEXCEL",
+                true,
+                excelToCadAction));
 
             modules.Add(new TCModuleDescriptor(
                 "pipe-draw",

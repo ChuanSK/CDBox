@@ -561,9 +561,9 @@ namespace TCPipeAutoDraw.Core.Startup
             string upgradeCode = "{E8BB42A0-7694-4C58-98D6-13C2D2814A1E}";
             if (string.IsNullOrWhiteSpace(assemblyFileName)) assemblyFileName = GetMainAssemblyFileName();
             string appVersion = string.IsNullOrWhiteSpace(CDBoxStudioUpdateService.CurrentVersion)
-                ? "3.2.0" : CDBoxStudioUpdateService.CurrentVersion;
+                ? "3.3.0" : CDBoxStudioUpdateService.CurrentVersion;
 
-            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD" };
+            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "CDPROFILE", "CDZDM", "CDPROFILESET", "CDZDMSZ", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD", "CDEXCEL", "GU_XL", "TCFRAMEADD", "TCFRAMECUT", "TCFRAMELAYOUT", "TCFRAMEPLACE", "TCFRAMESET", "CDSHORTCODE", "CDJMSB", "CDSHORTCODESET", "CDJMSZ" };
             var xml = new StringBuilder();
             xml.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
             xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"" + EscapeXml(appVersion) + "\" Name=\"CDBox\" Description=\"CDBox 管线测绘辅助插件\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");

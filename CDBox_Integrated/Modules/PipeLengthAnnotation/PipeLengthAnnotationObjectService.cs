@@ -888,6 +888,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             if (doc == null || sourceHandles == null) return ObjectId.Null;
             var dirty = new HashSet<string>(sourceHandles, StringComparer.OrdinalIgnoreCase);
             if (dirty.Count == 0) return ObjectId.Null;
+            Dictionary<string, PipeLengthAnnotationBindingContent> refreshedContent =
+                BuildBindingContentBySourceHandle(doc, dirty);
             ObjectId refreshId = ObjectId.Null;
             bool changed = false;
 
@@ -913,6 +915,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, annotationId);
                     AnnotationMember topMember = FindMember(members, "MainText");
+                    AnnotationMember bottomMember = FindMember(members, "SecondaryText");
                     AnnotationMember leaderMember = FindMember(members, "LeaderLine");
                     if (topMember == null) continue;
                     Entity source = FindSourceObject(doc.Database, tr, topMember.Metadata.SourceObjectId,
@@ -934,6 +937,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     else
                     {
                         DBText top = tr.GetObject(topMember.ObjectId, OpenMode.ForWrite, false) as DBText;
+                        DBText bottom = bottomMember == null ? null
+                            : tr.GetObject(bottomMember.ObjectId, OpenMode.ForWrite, false) as DBText;
                         Polyline leader = leaderMember == null ? null
                             : tr.GetObject(leaderMember.ObjectId, OpenMode.ForWrite, false) as Polyline;
                         Point3d fallback = leader != null && leader.NumberOfVertices > 0
@@ -946,25 +951,91 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                             PipeLengthAnnotationTextComposer.SplitLastLengthToken(top.TextString,
                                 out userText, out systemLength);
                         }
-                        systemLength = FormatUsingCurrentSettings(
-                            GetCurveLength(sourceCurve), systemLength);
+                        string previousSystemLength = systemLength;
+                        PipeLengthAnnotationBindingContent content;
+                        refreshedContent.TryGetValue(topMember.Metadata.SourceHandle ?? string.Empty,
+                            out content);
+                        systemLength = content == null || string.IsNullOrWhiteSpace(content.SystemLengthText)
+                            ? FormatUsingCurrentSettings(GetCurveLength(sourceCurve), systemLength)
+                            : content.SystemLengthText;
                         if (top != null)
                         {
                             top.TextString = PipeLengthAnnotationTextComposer.Compose(userText, systemLength);
                             try { top.AdjustAlignment(doc.Database); } catch { }
                         }
+                        string nextBottomText = content == null
+                            ? (bottom == null ? string.Empty
+                                : PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
+                                    bottom.TextString, previousSystemLength, systemLength))
+                            : (content.BottomText ?? string.Empty);
+                        if (bottom != null && string.IsNullOrWhiteSpace(nextBottomText))
+                        {
+                            RemoveFromNativeGroup(doc.Database, tr, bottomMember.Metadata.GroupName,
+                                bottomMember.ObjectId);
+                            bottom.Erase();
+                            bottom = null;
+                        }
+                        else if (bottom != null)
+                        {
+                            bottom.TextString = nextBottomText.Trim();
+                            try { bottom.AdjustAlignment(doc.Database); } catch { }
+                        }
+                        else if (top != null && !string.IsNullOrWhiteSpace(nextBottomText))
+                        {
+                            var editModel = new PipeLengthAnnotationEditModel
+                            {
+                                BottomText = nextBottomText.Trim(),
+                                TextHeight = top.Height,
+                                TextColor = CDBoxColorService.FromCadColor(top.Color)
+                            };
+                            bottom = CreateBottomText(doc.Database, tr, top, leaderMember, members,
+                                editModel);
+                            Dictionary<string, string> bottomValues;
+                            if (bottom != null && TryReadRecord(tr, bottom,
+                                AnnotationSourceXrecordName, out bottomValues))
+                            {
+                                bottomValues["ContentMode"] = "Auto";
+                                bottomValues["BindingState"] = "Bound";
+                                bottomValues["UserText"] = userText ?? string.Empty;
+                                bottomValues["SystemLengthText"] = systemLength;
+                                if (content != null)
+                                {
+                                    bottomValues["SourceLayer"] = content.SourceLayer;
+                                    bottomValues["SourceParent"] = content.SourceParent;
+                                    bottomValues["SourceClass"] = content.SourceClass;
+                                    bottomValues["SourceTags"] = content.SourceTags;
+                                }
+                                WriteRecord(tr, bottom, AnnotationSourceXrecordName,
+                                    BuildRecordValues(bottomValues));
+                            }
+                        }
                         if (leader != null && leader.NumberOfVertices > 0)
                         {
                             leader.SetPointAt(0, new Point2d(anchor.X, anchor.Y));
+                            if (top != null)
+                            {
+                                AlignTextsToUnifiedLeader(leader, top, bottom, top.Height);
+                                ResizeUnifiedLeaderLanding(leader, top, bottom, top.Height);
+                            }
                         }
                         foreach (AnnotationMember member in members)
                         {
-                            Entity entity = tr.GetObject(member.ObjectId, OpenMode.ForWrite, false) as Entity;
+                            Entity entity;
+                            try { entity = tr.GetObject(member.ObjectId, OpenMode.ForWrite, false) as Entity; }
+                            catch { continue; }
+                            if (entity == null || entity.IsErased) continue;
                             Dictionary<string, string> values;
-                            if (entity == null || !TryReadRecord(tr, entity, AnnotationSourceXrecordName, out values)) continue;
+                            if (!TryReadRecord(tr, entity, AnnotationSourceXrecordName, out values)) continue;
                             values["BindingState"] = "Bound";
                             values["MetadataVersion"] = MetadataVersion;
-                            values["SourceLayer"] = source.Layer ?? string.Empty;
+                            values["SourceLayer"] = content == null
+                                ? (source.Layer ?? string.Empty) : content.SourceLayer;
+                            if (content != null)
+                            {
+                                values["SourceParent"] = content.SourceParent;
+                                values["SourceClass"] = content.SourceClass;
+                                values["SourceTags"] = content.SourceTags;
+                            }
                             values["UserText"] = userText ?? string.Empty;
                             values["SystemLengthText"] = systemLength;
                             SetAnchorValues(values, sourceCurve, anchor);
@@ -981,6 +1052,39 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             if (changed) doc.Editor.Regen();
             return refreshId;
+        }
+
+        private static Dictionary<string, PipeLengthAnnotationBindingContent>
+            BuildBindingContentBySourceHandle(Document doc, IEnumerable<string> sourceHandles)
+        {
+            var result = new Dictionary<string, PipeLengthAnnotationBindingContent>(
+                StringComparer.OrdinalIgnoreCase);
+            if (doc == null || sourceHandles == null) return result;
+
+            foreach (string rawHandle in sourceHandles)
+            {
+                string sourceHandle = (rawHandle ?? string.Empty).Trim();
+                if (sourceHandle.Length == 0 || result.ContainsKey(sourceHandle)) continue;
+                try
+                {
+                    long handleValue;
+                    if (!long.TryParse(sourceHandle, NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture, out handleValue)) continue;
+                    ObjectId sourceId = doc.Database.GetObjectId(false, new Handle(handleValue), 0);
+                    PipeLengthAnnotationBindingContent content;
+                    string ignoredError;
+                    if (!sourceId.IsNull && PipeLengthAnnotationService.TryBuildBindingContent(
+                        doc, sourceId, out content, out ignoredError) && content != null)
+                    {
+                        result[sourceHandle] = content;
+                    }
+                }
+                catch
+                {
+                    // 单个旧句柄或损坏对象不应阻止其他绑定标注刷新。
+                }
+            }
+            return result;
         }
 
         private static void EnsureUnifiedLeader(Document doc, ObjectId selectedObjectId)
@@ -1033,7 +1137,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private static Entity FindSourceObject(Database db, Transaction tr, string sourceObjectId, string sourceHandle)
         {
-            Entity handleMatch = null;
+            Entity identityMatch = null;
+            int identityMatchCount = 0;
             foreach (ObjectId id in EnumerateCurrentSpace(db, tr))
             {
                 Entity entity;
@@ -1045,10 +1150,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     && string.Equals(identity.CDBoxObjectId, sourceObjectId, StringComparison.OrdinalIgnoreCase))
                 {
                     if (string.Equals(entity.Handle.ToString(), sourceHandle, StringComparison.OrdinalIgnoreCase)) return entity;
-                    if (handleMatch == null) handleMatch = entity;
+                    identityMatch = entity;
+                    identityMatchCount++;
                 }
             }
-            return handleMatch;
+            // A persistent identity fallback is safe only when it resolves uniquely.
+            // Legacy/copy-corrupted drawings can contain duplicate CDBoxObjectId values;
+            // choosing the first one would silently bind an annotation to the wrong pipe.
+            return identityMatchCount == 1 ? identityMatch : null;
         }
 
         private static List<string> ReadTextStyleNames(Database db, Transaction tr)
@@ -1429,6 +1538,132 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 if (values != null && values.TryGetValue(keys[i], out value)) result.Add(keys[i] + "=" + (value ?? string.Empty));
             }
             return result.ToArray();
+        }
+
+        internal static List<string> RepairClonedObjects(Database db, Transaction tr,
+            IDictionary<ObjectId, ObjectId> cloneMap,
+            IDictionary<string, ObjectId> clonesByOriginalHandle,
+            bool isCrossDatabase)
+        {
+            var clonedSourceHandles = new List<string>();
+            if (db == null || tr == null || cloneMap == null || cloneMap.Count == 0)
+                return clonedSourceHandles;
+            var sourceReferences = new Dictionary<string, ClonedSourceReference>(
+                StringComparer.OrdinalIgnoreCase);
+
+            if (clonesByOriginalHandle != null)
+            {
+                foreach (KeyValuePair<string, ObjectId> pair in clonesByOriginalHandle)
+                {
+                    if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value.IsNull) continue;
+                    Entity clone;
+                    try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
+                    catch { continue; }
+                    ObjectIdentity identity;
+                    if (clone == null || !TryReadObjectIdentity(tr, clone, out identity)) continue;
+
+                    string newObjectId = Guid.NewGuid().ToString("D");
+                    try
+                    {
+                        WriteRecord(tr, clone, ObjectIdentityXrecordName,
+                            "MetadataVersion=" + MetadataVersion,
+                            "CDBoxObjectId=" + newObjectId,
+                            "CDBoxObjectType=" + (string.IsNullOrWhiteSpace(identity.CDBoxObjectType)
+                                ? "Pipe" : identity.CDBoxObjectType));
+                    }
+                    catch { continue; }
+                    string clonedHandle = clone.Handle.ToString();
+                    sourceReferences[pair.Key] = new ClonedSourceReference
+                    {
+                        ObjectId = newObjectId,
+                        Handle = clonedHandle
+                    };
+                    clonedSourceHandles.Add(clonedHandle);
+                }
+            }
+
+            var clonedAnnotations = new Dictionary<string, List<ClonedAnnotationMember>>(
+                StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<ObjectId, ObjectId> pair in cloneMap)
+            {
+                if (pair.Value.IsNull) continue;
+                Entity clone;
+                try { clone = tr.GetObject(pair.Value, OpenMode.ForRead, false) as Entity; }
+                catch { continue; }
+                AnnotationMetadata metadata;
+                if (clone == null || !TryReadAnnotationMetadata(tr, clone, out metadata)) continue;
+                List<ClonedAnnotationMember> members;
+                if (!clonedAnnotations.TryGetValue(metadata.AnnotationId, out members))
+                {
+                    members = new List<ClonedAnnotationMember>();
+                    clonedAnnotations[metadata.AnnotationId] = members;
+                }
+                members.Add(new ClonedAnnotationMember
+                {
+                    ObjectId = pair.Value,
+                    Metadata = metadata
+                });
+            }
+
+            foreach (KeyValuePair<string, List<ClonedAnnotationMember>> pair in clonedAnnotations)
+            {
+                List<ClonedAnnotationMember> members = pair.Value;
+                if (members == null || members.Count == 0) continue;
+                string newAnnotationId = Guid.NewGuid().ToString("D");
+                string groupName = BuildUniqueGroupName(db, tr, newAnnotationId);
+                string frozenText = string.Empty;
+                string detachedLengthToken = string.Empty;
+                var memberIds = new List<ObjectId>();
+                for (int i = 0; i < members.Count; i++)
+                {
+                    memberIds.Add(members[i].ObjectId);
+                    if (!string.Equals(members[i].Metadata.AnnotationPart, "MainText",
+                        StringComparison.OrdinalIgnoreCase)) continue;
+                    detachedLengthToken = members[i].Metadata.SystemLengthText ?? string.Empty;
+                    try
+                    {
+                        DBText top = tr.GetObject(members[i].ObjectId,
+                            OpenMode.ForRead, false) as DBText;
+                        if (top != null) frozenText = top.TextString ?? string.Empty;
+                    }
+                    catch { }
+                }
+                try { CreateNativeGroup(db, tr, groupName, newAnnotationId, memberIds); }
+                catch { groupName = string.Empty; }
+
+                for (int i = 0; i < members.Count; i++)
+                {
+                    ClonedAnnotationMember member = members[i];
+                    Entity entity;
+                    try { entity = tr.GetObject(member.ObjectId, OpenMode.ForWrite, false) as Entity; }
+                    catch { continue; }
+                    Dictionary<string, string> values;
+                    if (entity == null || !TryReadRecord(tr, entity,
+                        AnnotationSourceXrecordName, out values)) continue;
+                    values["MetadataVersion"] = MetadataVersion;
+                    values["AnnotationId"] = newAnnotationId;
+                    values["GroupName"] = groupName;
+                    ClonedSourceReference source;
+                    if (sourceReferences.TryGetValue(member.Metadata.SourceHandle, out source))
+                    {
+                        values["SourceObjectId"] = source.ObjectId;
+                        values["SourceHandle"] = source.Handle;
+                    }
+                    else if (isCrossDatabase)
+                    {
+                        values["BindingState"] = "Detached";
+                        values["SourceObjectId"] = string.Empty;
+                        values["SourceHandle"] = string.Empty;
+                        values["SourceLayer"] = string.Empty;
+                        values["UserText"] = frozenText;
+                        values["SystemLengthText"] = string.Empty;
+                        values["DetachedLengthToken"] = detachedLengthToken;
+                    }
+                    WriteRecord(tr, entity, AnnotationSourceXrecordName,
+                        BuildRecordValues(values));
+                }
+            }
+            return clonedSourceHandles;
         }
 
         private static string EnsureStablePipeObjectId(Database db, Transaction tr, ObjectId pipeId)
@@ -1828,6 +2063,18 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             public string CDBoxObjectId { get; set; }
             public string CDBoxObjectType { get; set; }
             public string MetadataVersion { get; set; }
+        }
+
+        private sealed class ClonedSourceReference
+        {
+            public string ObjectId { get; set; }
+            public string Handle { get; set; }
+        }
+
+        private sealed class ClonedAnnotationMember
+        {
+            public ObjectId ObjectId { get; set; }
+            public AnnotationMetadata Metadata { get; set; }
         }
 
         private sealed class AnnotationMember

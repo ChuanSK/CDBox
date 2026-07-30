@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
+using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.UI;
 
@@ -18,6 +19,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private readonly CDBoxStudioSettings _settings;
         private readonly Action<string> _scriptSink;
         private readonly CDBoxStudioUpdateRoutes _updateRoutes;
+        private readonly CDBoxStudioExcelToCadWindow _excelToCadRoutes;
 
         public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioSettings settings)
             : this(actionsById, settings, null)
@@ -32,6 +34,9 @@ namespace TCPipeAutoDraw.UI.Studio
             _scriptSink = scriptSink;
             CDBoxStudioQuantityDashboardRoutes.Configure(_scriptSink);
             _updateRoutes = new CDBoxStudioUpdateRoutes(_settings, _scriptSink, ApplySettingsArgument);
+            _excelToCadRoutes = CDBoxStudioExcelToCadWindow.CreateEmbedded(
+                Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument,
+                ExcelToCadCommandService.ResolveDefaultTextHeight());
         }
 
         public CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)
@@ -43,6 +48,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 return result;
             }
 
+            CDBoxStudioRouteResult excelToCadResult;
+            if (_excelToCadRoutes.TryRoute(request,
+                Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument,
+                out excelToCadResult)) return excelToCadResult;
+
             CDBoxStudioRouteResult quantityDashboardResult;
             if (CDBoxStudioQuantityDashboardRoutes.TryRoute(request, out quantityDashboardResult)) return quantityDashboardResult;
 
@@ -51,6 +61,19 @@ namespace TCPipeAutoDraw.UI.Studio
 
             CDBoxStudioRouteResult sectionDrawingResult;
             if (CDBoxStudioSectionDrawingRoutes.TryRoute(request, _scriptSink, out sectionDrawingResult)) return sectionDrawingResult;
+
+            CDBoxStudioRouteResult frameSettingsResult;
+            if (CDBoxStudioFrameSettingsRoutes.TryRoute(request,
+                out frameSettingsResult)) return frameSettingsResult;
+
+            CDBoxStudioRouteResult shortCodeSettingsResult;
+            if (CDBoxStudioShortCodeSettingsRoutes.TryRoute(request,
+                out shortCodeSettingsResult)) return shortCodeSettingsResult;
+
+            CDBoxStudioRouteResult longitudinalProfileSettingsResult;
+            if (CDBoxStudioLongitudinalProfileSettingsRoutes.TryRoute(
+                request, out longitudinalProfileSettingsResult))
+                return longitudinalProfileSettingsResult;
 
             CDBoxStudioRouteResult layerManagerResult;
             if (CDBoxStudioLayerManagerRoutes.TryRoute(request, false, out layerManagerResult)) return layerManagerResult;
@@ -114,6 +137,15 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "opensectiondrawingwindow":
                     return RouteOpenSectionDrawingWindow();
+
+                case "openframesettingswindow":
+                    return RouteOpenFrameSettingsWindow();
+
+                case "openlongitudinalprofilesettingswindow":
+                    CDBoxStudioLongitudinalProfileSettingsWindow.ShowWindow(
+                        new AcadMainWindow());
+                    result.ToastKind = "success";
+                    return result;
 
                 case "layermanageropened":
                     return RouteLayerManagerOpened();
@@ -194,6 +226,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     + ", AnnotationHudHoverOpacity=" + _settings.AnnotationHudHoverOpacity.ToString("0.##", CultureInfo.InvariantCulture)
                     + ", AnnotationHudGlowEnabled=" + _settings.AnnotationHudGlowEnabled
                     + ", AnnotationHudGlowIntensity=" + _settings.AnnotationHudGlowIntensity.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", DoubleClickOpenEnabled=" + _settings.DoubleClickOpenEnabled
                     + ", ColorOutputMode=" + _settings.ColorOutputMode
                     + ", UpdateChannel=" + _settings.UpdateChannel);
             }
@@ -240,6 +273,9 @@ namespace TCPipeAutoDraw.UI.Studio
                     case "hudglowintensity":
                         _settings.AnnotationHudGlowIntensity = ParseDouble(value,
                             _settings.AnnotationHudGlowIntensity);
+                        break;
+                    case "doubleclickopen":
+                        _settings.DoubleClickOpenEnabled = IsTrue(value);
                         break;
                     case "coloroutputmode":
                         TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode outputMode;
@@ -561,7 +597,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.2.0 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 3.3.0 独立窗口失败。", ex);
             }
             return result;
         }
@@ -583,6 +619,27 @@ namespace TCPipeAutoDraw.UI.Studio
             return result;
         }
 
+        private CDBoxStudioRouteResult RouteOpenFrameSettingsWindow()
+        {
+            var result = new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                ToastKind = "success"
+            };
+            try
+            {
+                CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow());
+                result.ToastMessage = "已打开图框设置独立窗口";
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "图框设置独立窗口打开失败：" + ex.Message;
+                CDBoxStudioLogger.Error("打开图框设置独立 WebView2 窗口失败。", ex);
+            }
+            return result;
+        }
+
         private static Autodesk.AutoCAD.DatabaseServices.ObjectId ResolveHandle(Autodesk.AutoCAD.ApplicationServices.Document doc, string handle)
         {
             long value;
@@ -594,6 +651,7 @@ namespace TCPipeAutoDraw.UI.Studio
         public void Dispose()
         {
             CDBoxStudioQuantityDashboardRoutes.Unconfigure(_scriptSink);
+            if (_excelToCadRoutes != null) _excelToCadRoutes.Dispose();
         }
 
         private CDBoxStudioRouteResult RouteLayerManagerOpened()

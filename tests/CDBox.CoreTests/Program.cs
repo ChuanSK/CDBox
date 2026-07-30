@@ -10,9 +10,18 @@ using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Core.Colors;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
+using TCPipeAutoDraw.Modules.NodeAnnotation;
+using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.SectionDrawing;
+using TCPipeAutoDraw.Modules.FrameLayout;
+using TCPipeAutoDraw.Modules.ShortCodeRecognition;
+using TCPipeAutoDraw.Modules.LongitudinalProfile;
 using TCPipeAutoDraw.UI.Studio;
+using NPOI.SS.UserModel;
+using NPOI.SS.Util;
+using NPOI.HSSF.UserModel;
+using NPOI.XSSF.UserModel;
 
 namespace CDBox.CoreTests
 {
@@ -27,6 +36,7 @@ namespace CDBox.CoreTests
             Run("有效长度与默认表克隆", TestEffectiveLengthAndDefaultClone);
             Run("结构层解析", TestStructureLayers);
             Run("工程量管线分类", TestQuantityPipeClassification);
+            Run("特殊对象跳过数据质量检查", TestSpecialObjectsSkipQualityCheck);
             Run("沉泥井管沟深度", TestSiltWellDepth);
             Run("工程量依赖联动", TestQuantityDependencyRules);
             Run("常用文本解析", TestPrimitiveParsing);
@@ -43,6 +53,11 @@ namespace CDBox.CoreTests
             Run("断面图 Preview 10 共享页面", TestSectionDrawingSharedPage);
             Run("属性默认表统一表格交互", TestQuantityDefaultsTableInteraction);
             Run("标注浮窗文字组合与旧数据迁移", TestAnnotationHudTextComposition);
+            Run("节点标注绑定文字组合", TestNodeAnnotationTextComposition);
+            Run("Excel 表格范围读取与样式保留", TestExcelTableRangeReading);
+            Run("图框布置设置归一化", TestFrameLayoutSettingsNormalization);
+            Run("简码识别容错解析与共享设置页", TestShortCodeRecognition);
+            Run("纵断面路径、高程与坡度计算", TestLongitudinalProfileCalculation);
             Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
@@ -74,6 +89,278 @@ namespace CDBox.CoreTests
             True(QuantityPipeAttributes.IsMainPipeKind("污水主管"), "主管应识别为主管");
             Equal(QuantityPipeAttributes.KindNodeWell, QuantityPipeAttributes.DefaultForKind("检查井").ObjectKind, "井类默认表");
             Equal(QuantityPipeAttributes.KindBranchPipe, QuantityPipeAttributes.DefaultForKind("支管").ObjectKind, "支管默认表");
+        }
+
+        private static void TestFrameLayoutSettingsNormalization()
+        {
+            var settings = new FrameLayoutSettings
+            {
+                NorthDirectionMode = "invalid",
+                NorthReferencePosition = "invalid",
+                ScaleReferencePosition = "BottomLeft",
+                NorthSize = -1,
+                ScaleText = " ",
+                ScaleTextHeight = 0,
+                ScaleColorIndex = 0,
+                FramesPerRow = 0,
+                HorizontalGap = -2,
+                VerticalGap = double.NaN,
+                TemplateViewMode = "invalid"
+            };
+            settings.Normalize();
+            Equal("Auto", settings.NorthDirectionMode,
+                "无效指北方向应回退为自动");
+            Equal("TopRight", settings.NorthReferencePosition,
+                "无效参考位置应回退到右上角");
+            Equal("BottomLeft", settings.ScaleReferencePosition,
+                "有效比例参考位置应保留");
+            Near(1.0, settings.NorthSize, 1e-9,
+                "指北针大小应限制为正值");
+            Equal("1:500", settings.ScaleText,
+                "空比例文字应使用默认值");
+            Near(0.1, settings.ScaleTextHeight, 1e-9,
+                "比例文字高度应限制为正值");
+            Equal((short)1, settings.ScaleColorIndex,
+                "无效颜色索引应回退到红色");
+            Equal(1, settings.FramesPerRow,
+                "每行图框数至少为一");
+            Near(0.0, settings.HorizontalGap, 1e-9,
+                "布框间距不得为负");
+            Near(10.0, settings.VerticalGap, 1e-9,
+                "非数值布框间距应使用默认值");
+            Equal("Double", settings.TemplateViewMode,
+                "无效模板视图应回退到双列");
+            settings.TemplateViewMode = "single";
+            settings.Normalize();
+            Equal("Single", settings.TemplateViewMode,
+                "有效单列模板视图应保留");
+        }
+
+        private static void TestShortCodeRecognition()
+        {
+            string data =
+                "1,道路起点,100,200,1\r\n"
+                + "2,连,101,201,2\r\n"
+                + "中文异常行，不足字段\r\n"
+                + "3,连,102,202,3\r\n"
+                + "4,检查井,103,203,4\r\n"
+                + "5,0连,104,204,5\r\n";
+            ShortCodeReadResult parsed =
+                ShortCodeRecognitionParser.ParseText(data);
+            Equal(5, parsed.Records.Count,
+                "中文代码不应妨碍有效坐标读取");
+            Equal(1, parsed.InvalidLineCount,
+                "异常行应单独跳过而不是终止文件");
+
+            string encodedPath = Path.Combine(Path.GetTempPath(),
+                "cdbox-shortcode-" + Guid.NewGuid().ToString("N") + ".dat");
+            string utf16Path = encodedPath + ".utf16.dat";
+            try
+            {
+                File.WriteAllText(encodedPath,
+                    "1,中文道路,100,200,1\r\n2,+,101,201,2",
+                    Encoding.GetEncoding(54936));
+                ShortCodeReadResult encoded =
+                    ShortCodeRecognitionParser.ReadFile(encodedPath);
+                Equal(2, encoded.Records.Count,
+                    "GB18030 中文简码文件应完整读取");
+                Equal("中文道路", encoded.Records[0].Code,
+                    "中文简码不应被损坏");
+                File.WriteAllText(utf16Path,
+                    "1,中文围墙,100,200,1\r\n2,+,101,201,2",
+                    new UnicodeEncoding(false, false, true));
+                ShortCodeReadResult utf16 =
+                    ShortCodeRecognitionParser.ReadFile(utf16Path);
+                Equal("中文围墙", utf16.Records[0].Code,
+                    "无 BOM 的 UTF-16 中文简码也应安全识别");
+            }
+            finally
+            {
+                if (File.Exists(encodedPath)) File.Delete(encodedPath);
+                if (File.Exists(utf16Path)) File.Delete(utf16Path);
+            }
+
+            ShortCodeReadResult cassExample =
+                ShortCodeRecognitionParser.ParseText(
+                    "4,X2,54116.1,31129.0,491.7\r\n"
+                    + "5,+,54128.0,31140.1,492.2\r\n"
+                    + "6,+,54136.8,31153.4,493.7\r\n"
+                    + "7,+,54143.5,31175.0,492.5\r\n"
+                    + "8,+,54151.9,31195.3,494.2\r\n"
+                    + "9,W0,54161.3,31214.6,494.8");
+            List<ShortCodePath> cassPaths =
+                ShortCodeRecognitionParser.BuildPaths(
+                    cassExample.Records,
+                    new ShortCodeRecognitionSettings());
+            Equal(1, cassPaths.Count,
+                "CASS 连续加号示例应生成一条路径");
+            Equal(5, cassPaths[0].Points.Count,
+                "CASS 默认应连接起始地物码点但不串入下一地物");
+
+            var settings = new ShortCodeRecognitionSettings
+            {
+                RecognitionSymbol = "连",
+                ConnectPreviousPoint = true,
+                ConnectNextPoint = true,
+                AutoClose = true
+            };
+            List<ShortCodePath> paths =
+                ShortCodeRecognitionParser.BuildPaths(
+                    parsed.Records, settings);
+            Equal(2, paths.Count,
+                "连续关系码与数字跳点关系码都应被识别");
+            Equal(4, paths[0].Points.Count,
+                "首尾相邻点选项应扩展连续关系码路径");
+            True(paths[0].Closed,
+                "自动闭合应应用于至少三个点的连续路径");
+            True(paths[1].IsJumpConnection,
+                "数字前缀关系码应建立跳点连接");
+            False(paths[1].Closed,
+                "两点跳线不应生成无意义闭合");
+
+            settings.RecognitionSymbol = "\r\n";
+            settings.Normalize();
+            Equal("+", settings.RecognitionSymbol,
+                "空白或换行符号应安全回退为加号");
+
+            string standalone =
+                CDBoxStudioShortCodeSettingsPage.BuildStandaloneDocument(
+                    new CDBoxStudioSettings());
+            string embedded =
+                CDBoxStudioShortCodeSettingsPage.BuildEmbeddedSection(
+                    new CDBoxStudioSettings());
+            Contains(standalone, "简码识别设置",
+                "独立设置页应使用统一页面");
+            Contains(embedded, "shortCodeSettingsFrame",
+                "内嵌设置页应复用同一页面文档");
+            Contains(standalone, "连接开头前一个点",
+                "设置页应提供开头前一点选项");
+            Contains(standalone, "连接结尾后一个点",
+                "设置页应提供结尾后一点选项");
+            Contains(standalone, "自动闭合",
+                "设置页应提供自动闭合选项");
+        }
+
+        private static void TestLongitudinalProfileCalculation()
+        {
+            var pipes = new List<LongitudinalProfilePipeData>
+            {
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "P2",
+                    StartNode = "W-52",
+                    EndNode = "W-53",
+                    Diameter = "DN200",
+                    PlanLength = 20.0,
+                    SelectionOrder = 1
+                },
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "P1",
+                    StartNode = "W-51",
+                    EndNode = "W-52",
+                    Diameter = "DN200",
+                    PlanLength = 16.59,
+                    SelectionOrder = 0
+                }
+            };
+            var wells = new List<LongitudinalProfileWellData>
+            {
+                new LongitudinalProfileWellData
+                {
+                    NodeNo = "W-51",
+                    GroundElevation = 1407.859,
+                    WellDepth = 0.868,
+                    WellSpec = "φ500",
+                    WellType = "检查井"
+                },
+                new LongitudinalProfileWellData
+                {
+                    NodeNo = "W-52",
+                    GroundElevation = 1407.404,
+                    WellDepth = 0.485,
+                    WellSpec = "φ500",
+                    WellType = "检查井"
+                },
+                new LongitudinalProfileWellData
+                {
+                    NodeNo = "W-53",
+                    GroundElevation = 1407.000,
+                    WellDepth = 0.800,
+                    WellSpec = "φ700",
+                    WellType = "沉泥井",
+                    SiltWellDeductDepth700 = 0.50
+                }
+            };
+            LongitudinalProfileBuildResult result =
+                LongitudinalProfileCalculator.Build(pipes, wells);
+            True(result.Success, result.Message);
+            Equal(3, result.Profile.Nodes.Count,
+                "两段管线应生成三个井节点");
+            Equal("W-51", result.Profile.Nodes[0].NodeNo,
+                "路径应按首选管线的端点排序");
+            Near(1406.991,
+                result.Profile.Nodes[0].DesignInvertElevation, 1e-9,
+                "设计管内底标高应为自然地面标高减井深");
+            Near(1406.919,
+                result.Profile.Nodes[1].DesignInvertElevation, 1e-9,
+                "终点设计管内底标高计算");
+            Near(4.340,
+                result.Profile.Spans[0].SlopePermille, 0.001,
+                "坡度应按两端管内底高差除平面距离计算为千分比");
+            Near(1406.700,
+                result.Profile.Nodes[2].DesignInvertElevation, 1e-9,
+                "700沉泥井设计管内底标高应增加0.50米扣减值");
+            Near(1.300, result.Profile.Nodes[2].PipeBottomDepth, 1e-9,
+                "沉泥井管内底埋深应在井深基础上增加扣减值");
+            Near(36.59, result.Profile.Nodes[2].CumulativeDistance, 1e-9,
+                "累计平面距离");
+
+            LongitudinalProfileBuildResult disconnected =
+                LongitudinalProfileCalculator.Build(new[]
+                {
+                    pipes[0],
+                    new LongitudinalProfilePipeData
+                    {
+                        StartNode = "X1",
+                        EndNode = "X2",
+                        PlanLength = 1,
+                        SelectionOrder = 2
+                    }
+                }, wells);
+            False(disconnected.Success, "不连通管线应被拒绝");
+
+            var settings = new LongitudinalProfileSettings
+            {
+                HeaderWidth = -1,
+                HorizontalScale = 0,
+                VerticalScale = double.NaN,
+                Rows = new List<LongitudinalProfileRowSettings>()
+            };
+            settings.Normalize();
+            Near(45.0, settings.HeaderWidth, 1e-9,
+                "表头宽度应回退默认值");
+            Equal(7, settings.Rows.Count,
+                "纵断面设置应始终保留七个数据栏");
+
+            string standalone =
+                CDBoxStudioLongitudinalProfileSettingsPage
+                    .BuildStandaloneDocument(new CDBoxStudioSettings());
+            string embedded =
+                CDBoxStudioLongitudinalProfileSettingsPage
+                    .BuildEmbeddedSection(new CDBoxStudioSettings());
+            Contains(standalone, "纵断面设置",
+                "独立纵断面设置页应使用统一WebView2页面");
+            Contains(standalone, "自然地面标高",
+                "设置页应包含纵断面数据栏");
+            Contains(standalone, "坐标网格",
+                "设置页应包含显示样式");
+            Contains(embedded, "longitudinalProfileSettingsFrame",
+                "内嵌页应复用同一纵断面设置文档");
+            False(standalone.Contains("预览框"),
+                "纵断面设置页不应保留预览框");
+            False(standalone.Contains("文件导入"),
+                "纵断面设置页不应保留文件导入");
         }
 
         private static void TestAnnotationHudTextComposition()
@@ -108,6 +395,44 @@ namespace CDBox.CoreTests
                 out user, out system);
             Equal("DN110 给水长度：", user, "管径与长度数值相同时应优先拆分末尾长度");
             Equal("110.00m", system, "末尾长度片段应保持完整");
+            Equal("开挖：长9.20m、宽1.50m、高2.00m",
+                PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
+                    "开挖：长12.50m、宽1.50m、高2.00m", "12.50m", "9.20m"),
+                "下侧注记中的派生长度应随源管线长度刷新");
+            Equal("开挖：长9.20m、宽12.50m、高2.00m",
+                PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
+                    "开挖：长12.50m、宽12.50m、高2.00m", "12.50", "9.20"),
+                "长度与宽度数值相同时只应更新长度字段");
+            Equal("宽12.50m；长9.20m",
+                PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
+                    "宽12.50m；长12.50m", "12.50", "9.20"),
+                "自定义下侧文字中长度字段不在首位时也应准确更新");
+        }
+
+        private static void TestSpecialObjectsSkipQualityCheck()
+        {
+            True(QuantityDashboardClassification.ShouldIncludeInQualityCheck(null),
+                "缺少属性时仍应进入数据质量检查");
+            True(QuantityDashboardClassification.ShouldIncludeInQualityCheck(
+                new QuantityPipeAttributes()), "普通属性对象应进入数据质量检查");
+            False(QuantityDashboardClassification.ShouldIncludeInQualityCheck(
+                new QuantityPipeAttributes { IsSpecialObject = true }),
+                "已勾选特殊对象的属性对象不应进入数据质量检查");
+        }
+
+        private static void TestNodeAnnotationTextComposition()
+        {
+            Dictionary<string, string> normal = NodeAnnotationTextComposer.Compose(
+                "J12", 2.345, 1.2, false);
+            Equal("J12", normal["NodeNo"], "节点编号应进入绑定文字");
+            Equal("井深:2.35m", normal["WellDepth"], "井深应固定保留两位小数");
+            Equal("井筒:1.20m", normal["ShaftLength"], "井筒应固定保留两位小数");
+            False(normal.ContainsKey("WellType"), "普通检查井不应增加沉泥井文字行");
+
+            Dictionary<string, string> silt = NodeAnnotationTextComposer.Compose(
+                string.Empty, 3.0, 2.0, true);
+            Equal("未编号", silt["NodeNo"], "空节点编号应使用统一占位文字");
+            Equal("沉泥井", silt["WellType"], "沉泥井绑定应包含井类型文字行");
         }
 
         private static void TestBuiltInUpdateSourcePriority()
@@ -166,6 +491,21 @@ namespace CDBox.CoreTests
             Contains(layerScript, "data-layer-color", "图层颜色应成为可点击入口");
             Contains(layerScript, "openLayerColorPicker", "图层管理器应打开统一颜色选择器");
             Contains(CDBoxStudioLayerManagerPage.BuildStyles(false), "lm-color-button", "图层颜色按钮样式应存在");
+
+            string pickerPage = CDBoxStudioColorPickerPage.BuildStandaloneDocument(
+                new CDBoxStudioSettings(), CDBoxColor.FromIndex(7),
+                new CDBoxStudioColorPickerOptions
+                {
+                    AllowByLayer = true,
+                    AllowByBlock = true,
+                    AllowTrueColor = true,
+                    AllowColorBook = true,
+                    AllowStandard = true
+                });
+            Contains(pickerPage, "confirmColorPicker", "颜色选择器应通过统一 WebView2 路由确认");
+            Contains(pickerPage, "browseCadColorBook", "颜色选择器应保留 AutoCAD 配色系统入口");
+            Contains(pickerPage, "CDBoxColorPickerFromCad", "颜色选择器应接收原生色册选择结果");
+            Contains(pickerPage, "data-theme=", "颜色选择器应使用 Studio 主题");
         }
 
         private static void TestStructuredLayerRecognition()
@@ -554,6 +894,25 @@ namespace CDBox.CoreTests
             Near(1.10, cushionChanged.Attributes.EndDepth, 1e-9, "修改结构层不得反向改变主管终点深度");
             Near(0.90, cushionChanged.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9, "垫层变化后应按既有平均深度重算未锁定层");
 
+            QuantityPipeAttributes undersizedPipeLayer = QuantityPipeAttributes.DefaultMainPipe;
+            undersizedPipeLayer.StartNode = "W1";
+            undersizedPipeLayer.EndNode = "W2";
+            undersizedPipeLayer.StartDepth = 1.00;
+            undersizedPipeLayer.EndDepth = 1.00;
+            undersizedPipeLayer.PipeOuterDiameter = 0.30;
+            List<QuantityStructureLayer> undersizedLayers = QuantityStructureLayer.Parse(
+                "中粗砂回填 0.10 管线层\n中粗砂垫层 0.10 锁定 垫层");
+            QuantityDependencyResult undersizedResult = QuantityDependencyService.NormalizeDraft(
+                undersizedPipeLayer,
+                undersizedLayers,
+                undersizedPipeLayer,
+                null,
+                null,
+                null,
+                "StructureLayers");
+            True(undersizedResult.Warnings.Exists(x => x.IndexOf("小于管道外径",
+                StringComparison.Ordinal) >= 0), "主管管线层输入高度小于外径时必须返回明确提示");
+
             QuantityPipeAttributes special = QuantityPipeAttributes.DefaultMainPipe;
             special.IsSpecialObject = true;
             special.StartDepth = 9.0;
@@ -725,7 +1084,7 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("3.2.0", StringComparison.Ordinal) >= 0, "页面应显示 3.2.0 身份");
+            True(standalone.IndexOf("3.3.0", StringComparison.Ordinal) >= 0, "页面应显示 3.3.0 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
@@ -743,6 +1102,12 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("oncompositionstart", StringComparison.Ordinal) >= 0, "中文输入法合成期间不应触发页面重绘");
             True(standalone.IndexOf("function fmtInput", StringComparison.Ordinal) >= 0, "界面数值应清除浮点尾差");
             True(standalone.IndexOf("function fmt2", StringComparison.Ordinal) >= 0, "平均深度与结构层应提供两位小数格式化");
+            True(standalone.IndexOf("function round2", StringComparison.Ordinal) >= 0
+                && standalone.IndexOf("+1e-9", StringComparison.Ordinal) >= 0,
+                "两位小数显示应先修正浮点尾差再四舍五入");
+            True(standalone.IndexOf("fmt2(c.cadLength", StringComparison.Ordinal) >= 0
+                && standalone.IndexOf("fmt2(c.realExcavationDepth", StringComparison.Ordinal) >= 0,
+                "所有固定两位数值显示应复用统一四舍五入格式");
             True(standalone.IndexOf("data-layer=\"role\"", StringComparison.Ordinal) >= 0, "结构层应使用统一层类型选择项");
             True(standalone.IndexOf(">一般层</option>", StringComparison.Ordinal) >= 0, "层类型应包含一般层");
             True(standalone.IndexOf(">垫层</option>", StringComparison.Ordinal) >= 0, "层类型应包含垫层");
@@ -804,6 +1169,11 @@ namespace CDBox.CoreTests
             True(script.IndexOf("recognizedParent", StringComparison.Ordinal) >= 0, "未写入属性时树应使用识别建议预览");
             True(script.IndexOf("confidencePercent", StringComparison.Ordinal) >= 0, "图层表应展示识别置信度");
             True(script.IndexOf(">应用识别结果</button>", StringComparison.Ordinal) >= 0, "识别写入按钮应明确为应用结果");
+            True(script.IndexOf(">图层预设</button>", StringComparison.Ordinal) >= 0, "图层管理器应提供多套预设入口");
+            True(script.IndexOf("openManualPresetDialog", StringComparison.Ordinal) >= 0, "图层预设应支持手工新增");
+            True(script.IndexOf("openDrawingPresetDialog", StringComparison.Ordinal) >= 0, "图层预设应支持保存当前图纸图层");
+            True(script.IndexOf("deleteLayerPreset", StringComparison.Ordinal) >= 0, "图层预设应支持删除自定义项");
+            True(styles.IndexOf(".lm-preset-form", StringComparison.Ordinal) >= 0, "图层预设应使用统一 WebView2 样式");
             True(styles.IndexOf(".lm-recognition-status", StringComparison.Ordinal) >= 0, "识别状态样式应存在");
             False(script.IndexOf("树状分类筛选、行内属性编辑", StringComparison.Ordinal) >= 0, "图层管理器不应显示冗余说明");
             False(script.IndexOf(">独立窗口<", StringComparison.Ordinal) >= 0, "内嵌图层管理器不应保留独立窗口按钮");
@@ -927,6 +1297,204 @@ namespace CDBox.CoreTests
                 True(failure is InvalidOperationException, "越界 ZIP 应被拒绝");
                 True(failure.Message.IndexOf("越界路径", StringComparison.Ordinal) >= 0, "错误应说明路径越界");
                 False(File.Exists(Path.Combine(root, "escaped.txt")), "不得在解压目录外创建文件");
+            }
+            finally
+            {
+                DeleteDirectory(root);
+            }
+        }
+
+        private static void TestExcelTableRangeReading()
+        {
+            var savedDialogSettings = new ExcelToCadDialogSettings
+            {
+                RangeMode = ExcelTableRangeMode.PrintArea,
+                OutputType = CadExcelTableOutputType.Block,
+                TextHeight = 3.25,
+                PreserveBackgroundColors = false,
+                PreserveTextColors = true,
+                PreserveMergedCells = false,
+                DrawGridLines = true,
+                GridLayerName = "EX_GRID",
+                ContentLayerName = "EX_TEXT",
+                EntityColorMode = ExcelCadEntityColorMode.ByLayer
+            };
+            string page = CDBoxStudioExcelToCadPage.BuildStandaloneDocument(
+                new CDBoxStudioSettings(), 2.5, savedDialogSettings,
+                new[] { "0", "EX_GRID", "EX_TEXT" });
+            Contains(page, "browseExcelWorkbook", "Excel 转 CAD 应通过 WebView2 路由选择文件");
+            Contains(page, "openExcelSelection", "Excel 转 CAD 应支持打开 Excel 并同步选区");
+            Contains(page, "pollExcelSelection", "Excel 转 CAD 应持续读取用户当前选择");
+            Contains(page, "value=\"exploded\"", "Excel 转 CAD 应提供分解线文字输出");
+            Contains(page, "value=\"table\"", "Excel 转 CAD 应提供原生 TABLE 输出");
+            Contains(page, "value=\"block\"", "Excel 转 CAD 应提供块输出");
+            Contains(page, "confirmSavedExcelFallback", "Excel 未保存状态失败时应在 WebView2 页面确认回退");
+            Contains(page, "saveExcelToCadPreferences", "Excel 转 CAD 应即时保存用户设置");
+            Contains(page, "value=\"block\" checked", "页面应恢复上次选择的块形式");
+            Contains(page, "value=\"print\" checked", "页面应恢复上次选择的数据范围");
+            Contains(page, "value=\"3.25\"", "页面应恢复上次使用的文字高度");
+            Contains(page, "实体图层", "表格设置应提供实体图层选项");
+            Contains(page, "id=\"gridLayer\"", "应能选择单元格线图层");
+            Contains(page, "id=\"contentLayer\"", "应能选择表格内容图层");
+            Contains(page, "value=\"EX_GRID\" selected",
+                "页面应恢复上次选择的单元格线图层");
+            Contains(page, "value=\"EX_TEXT\" selected",
+                "页面应恢复上次选择的表格内容图层");
+            Contains(page, "name=\"entityColor\" value=\"layer\" checked",
+                "页面应恢复上次选择的颜色随层模式");
+            Contains(page, "表格设置", "设置卡片应使用简洁标题");
+            Contains(page, ".ex-input-row input[type=text]", "当前选择输入框应使用完整行宽样式");
+            Contains(page, "input[type=radio]{position:absolute", "单选圆点应隐藏");
+            False(page.Contains("WebView2 统一界面"), "不应显示实现技术徽标");
+            False(page.Contains("复刻设置"), "不应继续显示旧设置标题");
+
+            string root = NewTemporaryDirectory("excel-to-cad");
+            string path = Path.Combine(root, "table.xlsx");
+            string legacyPath = Path.Combine(root, "legacy.xls");
+            try
+            {
+                using (var legacyWorkbook = new HSSFWorkbook())
+                {
+                    IFont defaultFont = legacyWorkbook.GetFontAt(0);
+                    defaultFont.FontName = "Arial";
+                    defaultFont.FontHeightInPoints = 12;
+                    ISheet legacySheet = legacyWorkbook.CreateSheet("Legacy");
+                    legacySheet.SetColumnWidth(0, 2698);
+                    IRow legacyTitle = legacySheet.CreateRow(0);
+                    legacyTitle.CreateCell(0).SetCellValue("旧版表格");
+                    legacySheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
+                    IRow legacyRow = legacySheet.CreateRow(1);
+                    legacyRow.CreateCell(0).SetCellValue(12.5);
+                    legacyRow.CreateCell(1).SetCellValue("正常读取");
+                    using (FileStream stream = File.Create(legacyPath))
+                        legacyWorkbook.Write(stream);
+                }
+                var legacyOptions = new ExcelToCadOptions
+                {
+                    FilePath = legacyPath,
+                    SheetName = "Legacy",
+                    RangeMode = ExcelTableRangeMode.UsedRange
+                };
+                ExcelTableModel legacy = ExcelTableReader.Read(legacyOptions);
+                Equal(2, legacy.RowCount, "旧版 XLS 应读取全部可见行");
+                Equal("旧版表格", legacy.GetCell(0, 0).Text,
+                    "旧版 XLS 不应因 HSSFRow.Hidden 未实现而失败");
+                Near(95.0, legacy.ColumnPixelWidths[0], 0.01,
+                    "Excel 列宽应按默认字体的实际数字宽度换算");
+
+                using (var workbook = new XSSFWorkbook())
+                {
+                    ISheet sheet = workbook.CreateSheet("Main");
+                    ICellStyle titleStyle = workbook.CreateCellStyle();
+                    titleStyle.Alignment = NPOI.SS.UserModel.HorizontalAlignment.Center;
+                    titleStyle.VerticalAlignment = NPOI.SS.UserModel.VerticalAlignment.Center;
+                    titleStyle.FillForegroundColor = IndexedColors.Yellow.Index;
+                    titleStyle.FillPattern = FillPattern.SolidForeground;
+                    IFont titleFont = workbook.CreateFont();
+                    titleFont.IsBold = true;
+                    titleStyle.SetFont(titleFont);
+
+                    IRow first = sheet.CreateRow(0);
+                    first.HeightInPoints = 24;
+                    ICell title = first.CreateCell(0);
+                    title.SetCellValue("测试表格");
+                    title.CellStyle = titleStyle;
+                    sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
+
+                    IRow second = sheet.CreateRow(1);
+                    second.CreateCell(0).SetCellValue(10);
+                    second.CreateCell(1).SetCellValue("甲");
+                    second.CreateCell(2).CellFormula = "A2+5";
+
+                    IRow third = sheet.CreateRow(2);
+                    third.HeightInPoints = 30;
+                    third.CreateCell(0).SetCellValue("尾行");
+                    third.CreateCell(1).SetCellValue("乙");
+                    third.CreateCell(2).SetCellValue(20);
+
+                    sheet.SetColumnWidth(0, 20 * 256);
+                    sheet.SetColumnWidth(1, 12 * 256);
+                    workbook.SetPrintArea(0, 1, 2, 1, 2);
+                    workbook.GetCreationHelper().CreateFormulaEvaluator().EvaluateAll();
+                    using (FileStream stream = File.Create(path)) workbook.Write(stream);
+                }
+
+                Equal("B2:D4", ExcelTableReader.NormalizeRangeAddress(
+                    "'Main'!$B$2:$D$4"), "选择区域地址应去除工作表名和绝对引用符");
+
+                using (FileStream stream = File.OpenRead(path))
+                using (var verificationWorkbook = new XSSFWorkbook(stream))
+                {
+                    ICell formulaCell = verificationWorkbook.GetSheet("Main")
+                        .GetRow(1).GetCell(2);
+                    Equal(CellType.Formula, formulaCell.CellType,
+                        "测试工作簿应保存公式单元格");
+                    CellValue evaluated = verificationWorkbook.GetCreationHelper()
+                        .CreateFormulaEvaluator().Evaluate(formulaCell);
+                    Equal(CellType.Numeric, evaluated.CellType,
+                        "NPOI 应计算简单公式");
+                    Near(15, evaluated.NumberValue, 0.000001,
+                        "NPOI 公式计算结果");
+                }
+
+                ExcelWorkbookInfo info = ExcelTableReader.Inspect(path);
+                Equal(1, info.Sheets.Count, "应读取工作表列表");
+                Equal("A1:C3", info.Sheets[0].UsedRange, "应识别实际使用区域");
+
+                var usedOptions = new ExcelToCadOptions
+                {
+                    FilePath = path,
+                    SheetName = "Main",
+                    RangeMode = ExcelTableRangeMode.UsedRange
+                };
+                ExcelTableModel used = ExcelTableReader.Read(usedOptions);
+                Equal(3, used.RowCount, "使用区域行数");
+                Equal(3, used.ColumnCount, "使用区域列数");
+                Equal(1, used.MergedRanges.Count, "合并单元格应保留");
+                Equal("测试表格", used.GetEffectiveCell(0, 1).Text,
+                    "合并区域应使用锚点文字");
+                True(used.GetCell(0, 0).Style.Bold, "粗体样式应保留");
+                True(used.GetCell(0, 0).Style.BackgroundColor != null,
+                    "背景色应保留");
+                Equal("15", used.GetCell(1, 2).Text, "公式应读取显示结果");
+                True(used.ColumnPixelWidths[0] > used.ColumnPixelWidths[1],
+                    "列宽比例应保留");
+                True(used.RowPixelHeights[2] > used.RowPixelHeights[1],
+                    "行高比例应保留");
+
+                var selectedOptions = new ExcelToCadOptions
+                {
+                    FilePath = path,
+                    SheetName = "Main",
+                    RangeMode = ExcelTableRangeMode.LiveSelection,
+                    SelectedRange = "$B$2:$C$3"
+                };
+                ExcelTableModel selected = ExcelTableReader.Read(selectedOptions);
+                Equal(2, selected.RowCount, "当前选择区域行数");
+                Equal(2, selected.ColumnCount, "当前选择区域列数");
+                Equal("甲", selected.GetCell(0, 0).Text, "当前选择区域起始单元格");
+                Equal("20", selected.GetCell(1, 1).Text, "当前选择区域结束单元格");
+
+                var printOptions = new ExcelToCadOptions
+                {
+                    FilePath = path,
+                    SheetName = "Main",
+                    RangeMode = ExcelTableRangeMode.PrintArea
+                };
+                ExcelTableModel printed = ExcelTableReader.Read(printOptions);
+                Equal("B2:C3", printed.SourceRange, "打印区域应被正确解析");
+                Equal(2, printed.RowCount, "打印区域行数");
+                Equal(2, printed.ColumnCount, "打印区域列数");
+
+                selectedOptions.SelectedRange = "A1:ZZ100";
+                Exception tooLarge = Capture(delegate
+                {
+                    ExcelTableReader.Read(selectedOptions);
+                });
+                True(tooLarge is InvalidOperationException,
+                    "超过上限的选择区域应被拒绝");
+                Contains(tooLarge.Message, "超过单次转换上限",
+                    "区域过大提示应说明转换上限");
             }
             finally
             {

@@ -14,6 +14,11 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Web.Extensions" />
+    <Content Include="$(NuGetPackageRoot)skiasharp\3.119.2\lib\net462\SkiaSharp.dll"
+             Link="SkiaSharp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>SkiaSharp.dll</TargetPath>
+    </Content>
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerModels.cs" Link="Source\LayerModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerRecognitionEngine.cs" Link="Source\LayerRecognitionEngine.cs" />
@@ -23,16 +28,28 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDependencyService.cs" Link="Source\QuantityDependencyService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\SectionDrawing\SectionDrawingModels.cs" Link="Source\SectionDrawingModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\FrameLayout\FrameLayoutSettings.cs" Link="Source\FrameLayoutSettings.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionSettings.cs" Link="Source\ShortCodeRecognitionSettings.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionParser.cs" Link="Source\ShortCodeRecognitionParser.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileModels.cs" Link="Source\LongitudinalProfileModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileSettings.cs" Link="Source\LongitudinalProfileSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\NodeAnnotation\NodeAnnotationTextComposer.cs" Link="Source\NodeAnnotationTextComposer.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableModels.cs" Link="Source\ExcelToCad\ExcelTableModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableReader.cs" Link="Source\ExcelToCad\ExcelTableReader.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardClassification.cs" Link="Source\QuantityDashboardClassification.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSource.cs" Link="Source\CDBoxStudioUpdateSource.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSourceCatalog.cs" Link="Source\CDBoxStudioUpdateSourceCatalog.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioAnnotationSettingsPage.cs" Link="Source\CDBoxStudioAnnotationSettingsPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioColorPickerPage.cs" Link="Source\CDBoxStudioColorPickerPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioExcelToCadPage.cs" Link="Source\CDBoxStudioExcelToCadPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLayerManagerPage.cs" Link="Source\CDBoxStudioLayerManagerPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioShortCodeSettingsPage.cs" Link="Source\CDBoxStudioShortCodeSettingsPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDefaultsPage.cs" Link="Source\CDBoxStudioQuantityDefaultsPage.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallException.cs" Link="Source\Updater\BundleInstallException.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallOutcome.cs" Link="Source\Updater\BundleInstallOutcome.cs" />

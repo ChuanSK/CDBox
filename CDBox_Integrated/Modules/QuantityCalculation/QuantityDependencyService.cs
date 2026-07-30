@@ -33,6 +33,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             QuantityPipeAttributes old = previous == null ? attrs.Clone() : previous.Clone();
             bool layersWereSubmitted = submittedLayers != null;
             List<QuantityStructureLayer> layers = CloneLayers(submittedLayers);
+            List<QuantityStructureLayer> submittedLayerSnapshot = CloneLayers(layers);
             if (!layersWereSubmitted && !string.IsNullOrWhiteSpace(attrs.BackfillStructure))
             {
                 layers = QuantityStructureLayer.Parse(attrs.BackfillStructure);
@@ -78,6 +79,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 RealExcavationDepth = nodeMode ? RoundForEditor(attrs.WellDepth + SumBelowWellLayers(layers)) : 0.0
             };
             Validate(result, nodeMode, branchMode, attrs.IsSpecialObject);
+            ValidateSubmittedPipeLayerHeights(result, submittedLayerSnapshot, nodeMode,
+                branchMode, changed);
             return result;
         }
 
@@ -255,8 +258,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 if (layer == null) continue;
                 if (layer.Height < 0) result.Warnings.Add((layer.Name ?? "结构层") + "计算结果为负值，请检查锁定层与总深度。");
-                if (!nodeMode && layer.IsPipeLayer && attrs.PipeOuterDiameter > 0 && layer.Height < attrs.PipeOuterDiameter)
-                    result.Warnings.Add((layer.Name ?? "管线层") + "厚度小于管道外径。");
+                if (!nodeMode && !branchMode && layer.IsPipeLayer && attrs.PipeOuterDiameter > 0
+                    && layer.Height + 0.0000001 < attrs.PipeOuterDiameter)
+                {
+                    result.Warnings.Add((layer.Name ?? "管线层") + "厚度 "
+                        + RoundForEditor(layer.Height).ToString("0.00")
+                        + " m 小于管道外径 "
+                        + RoundForEditor(attrs.PipeOuterDiameter).ToString("0.00")
+                        + " m，请调整结构层。");
+                }
             }
             if (!specialObject && nodeMode && attrs.WellDepth <= 0) result.Warnings.Add("井深无效。");
             if (!specialObject && !nodeMode && !branchMode)
@@ -264,6 +274,28 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (string.IsNullOrWhiteSpace(attrs.StartNode)) result.Warnings.Add("缺少起点井。");
                 if (string.IsNullOrWhiteSpace(attrs.EndNode)) result.Warnings.Add("缺少终点井。");
                 if (attrs.AverageDepth <= 0) result.Warnings.Add("平均深度无效。");
+            }
+        }
+
+        private static void ValidateSubmittedPipeLayerHeights(QuantityDependencyResult result,
+            IEnumerable<QuantityStructureLayer> submittedLayers, bool nodeMode, bool branchMode,
+            string changedField)
+        {
+            if (result == null || result.Attributes == null || nodeMode || branchMode) return;
+            if (!EqualsAny(changedField, "StructureLayers", "PipeOuterDiameter", "Diameter")) return;
+            double outerDiameter = result.Attributes.PipeOuterDiameter;
+            if (outerDiameter <= 0 || submittedLayers == null) return;
+
+            foreach (QuantityStructureLayer layer in submittedLayers)
+            {
+                if (layer == null || !layer.IsPipeLayer
+                    || layer.Height + 0.0000001 >= outerDiameter) continue;
+                string warning = (layer.Name ?? "管线层") + "输入厚度 "
+                    + RoundForEditor(layer.Height).ToString("0.00")
+                    + " m 小于管道外径 "
+                    + RoundForEditor(outerDiameter).ToString("0.00")
+                    + " m；系统已按平均深度重新分配，请检查结果。";
+                if (!result.Warnings.Contains(warning)) result.Warnings.Add(warning);
             }
         }
 

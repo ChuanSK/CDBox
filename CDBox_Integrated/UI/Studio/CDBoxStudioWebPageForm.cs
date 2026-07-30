@@ -42,6 +42,21 @@ namespace TCPipeAutoDraw.UI.Studio
         private WebView2 _webView;
         private bool _webViewReady;
         private bool _windowStateRestored;
+        private bool _hudMode;
+        private bool _hudAnimationsEnabled;
+        private bool _hudGlowEnabled;
+        private bool _hudHovered;
+        private bool _hudAllowImmediateClose;
+        private double _hudNormalOpacity = 0.68;
+        private double _hudHoverOpacity = 1.0;
+        private double _hudGlowIntensity = 0.28;
+        private Timer _hudAnimationTimer;
+        private DateTime _hudAnimationStartedUtc;
+        private Rectangle _hudAnimationFrom;
+        private Rectangle _hudAnimationTo;
+        private Rectangle _hudTargetBounds;
+        private Size _hudMinimumSize;
+        private bool _hudClosingAnimation;
 
         public CDBoxStudioWebPageForm(string title, Func<string> htmlFactory, Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> routeHandler)
             : this(title, htmlFactory, routeHandler, DefaultChromeBackColor, title)
@@ -81,6 +96,21 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioLogger.Info("独立 WebView2 页面宿主已创建：" + _baseTitle);
         }
 
+        public void EnableHudPresentation(CDBoxStudioSettings settings)
+        {
+            settings = settings ?? new CDBoxStudioSettings();
+            settings.Normalize();
+            _hudMode = true;
+            _hudAnimationsEnabled = settings.AnimationsEnabled;
+            _hudGlowEnabled = settings.AnnotationHudGlowEnabled;
+            _hudNormalOpacity = settings.AnnotationHudNormalOpacity;
+            _hudHoverOpacity = settings.AnnotationHudHoverOpacity;
+            _hudGlowIntensity = settings.AnnotationHudGlowIntensity;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Opacity = _hudNormalOpacity;
+        }
+
         protected override CreateParams CreateParams
         {
             get
@@ -98,14 +128,29 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxWindowStateStore.Restore(this, _windowStateKey);
                 _windowStateRestored = true;
             }
+            if (_hudMode) PrepareHudOpenAnimation();
             base.OnShown(e);
             ApplyRoundedRegion();
             UpdateResizeGrips();
+            if (_hudMode) BeginHudOpenAnimation();
             await InitializeWebViewAsync();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_hudMode && _hudAnimationsEnabled && !_hudAllowImmediateClose
+                && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                BeginHudCloseAnimation();
+                return;
+            }
+            base.OnFormClosing(e);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            StopHudAnimation();
             CDBoxWindowStateStore.Save(this, _windowStateKey);
             base.OnFormClosed(e);
         }
@@ -120,7 +165,14 @@ namespace TCPipeAutoDraw.UI.Studio
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            using (Pen pen = new Pen(Color.FromArgb(216, 231, 245), 1F))
+            int glowAlpha = _hudGlowEnabled
+                ? Math.Max(40, Math.Min(255,
+                    Convert.ToInt32(80 + 175 * _hudGlowIntensity)))
+                : 216;
+            Color borderColor = _hudMode && _hudHovered
+                ? Color.FromArgb(glowAlpha, 115, 169, 245)
+                : Color.FromArgb(216, 231, 245);
+            using (Pen pen = new Pen(borderColor, _hudMode && _hudHovered ? 1.5F : 1F))
             {
                 Rectangle rect = ClientRectangle;
                 rect.Width -= 1;
@@ -157,6 +209,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _webView = new WebView2();
             _webView.Dock = DockStyle.Fill;
             _webView.DefaultBackgroundColor = _chromeBackColor;
+            _webView.MouseEnter += delegate { SetHudHover(true); };
+            _webView.MouseLeave += delegate { SetHudHover(false); };
             _contentPanel.Controls.Add(_webView);
 
             BuildTitleBarControls();
@@ -165,6 +219,133 @@ namespace TCPipeAutoDraw.UI.Studio
 
             BuildNativeResizeGrips();
             UpdateResizeGrips();
+            _rootPanel.MouseEnter += delegate { SetHudHover(true); };
+            _rootPanel.MouseLeave += delegate { SetHudHover(false); };
+            _titleBar.MouseEnter += delegate { SetHudHover(true); };
+            _titleBar.MouseLeave += delegate { SetHudHover(false); };
+        }
+
+        private void SetHudHover(bool hovered)
+        {
+            if (!_hudMode || _hudClosingAnimation) return;
+            _hudHovered = hovered;
+            if (_hudAnimationTimer == null)
+                Opacity = hovered ? _hudHoverOpacity : _hudNormalOpacity;
+            Invalidate();
+        }
+
+        private void PrepareHudOpenAnimation()
+        {
+            _hudTargetBounds = Bounds;
+            if (!_hudAnimationsEnabled)
+            {
+                Opacity = _hudNormalOpacity;
+                return;
+            }
+            _hudMinimumSize = MinimumSize;
+            MinimumSize = Size.Empty;
+            Point cursor = Cursor.Position;
+            int startWidth = Math.Max(36, Convert.ToInt32(
+                _hudTargetBounds.Width * 0.08));
+            int startHeight = Math.Max(28, Convert.ToInt32(
+                _hudTargetBounds.Height * 0.08));
+            _hudAnimationFrom = new Rectangle(
+                cursor.X - startWidth / 2, cursor.Y - startHeight / 2,
+                startWidth, startHeight);
+            _hudAnimationTo = _hudTargetBounds;
+            Bounds = _hudAnimationFrom;
+            Opacity = 0.05;
+        }
+
+        private void BeginHudOpenAnimation()
+        {
+            if (!_hudAnimationsEnabled) return;
+            StartHudAnimation(false);
+        }
+
+        private void BeginHudCloseAnimation()
+        {
+            if (_hudClosingAnimation) return;
+            if (_hudAnimationTimer != null)
+            {
+                StopHudAnimation();
+                Bounds = _hudTargetBounds;
+                MinimumSize = _hudMinimumSize;
+                Opacity = _hudHovered ? _hudHoverOpacity : _hudNormalOpacity;
+            }
+            _hudClosingAnimation = true;
+            _hudTargetBounds = Bounds;
+            _hudMinimumSize = MinimumSize;
+            MinimumSize = Size.Empty;
+            Point cursor = Cursor.Position;
+            int endWidth = Math.Max(36, Convert.ToInt32(Bounds.Width * 0.08));
+            int endHeight = Math.Max(28, Convert.ToInt32(Bounds.Height * 0.08));
+            _hudAnimationFrom = Bounds;
+            _hudAnimationTo = new Rectangle(
+                cursor.X - endWidth / 2, cursor.Y - endHeight / 2,
+                endWidth, endHeight);
+            StartHudAnimation(true);
+        }
+
+        private void StartHudAnimation(bool closing)
+        {
+            StopHudAnimation();
+            _hudClosingAnimation = closing;
+            _hudAnimationStartedUtc = DateTime.UtcNow;
+            _hudAnimationTimer = new Timer { Interval = 15 };
+            _hudAnimationTimer.Tick += HudAnimationTick;
+            _hudAnimationTimer.Start();
+        }
+
+        private void HudAnimationTick(object sender, EventArgs e)
+        {
+            const double duration = 180.0;
+            double raw = (DateTime.UtcNow - _hudAnimationStartedUtc)
+                .TotalMilliseconds / duration;
+            double progress = Math.Max(0.0, Math.Min(1.0, raw));
+            double eased = 1.0 - Math.Pow(1.0 - progress, 3.0);
+            Bounds = Interpolate(_hudAnimationFrom, _hudAnimationTo, eased);
+            double targetOpacity = _hudClosingAnimation ? 0.05
+                : (_hudHovered ? _hudHoverOpacity : _hudNormalOpacity);
+            Opacity = _hudClosingAnimation
+                ? _hudNormalOpacity + (targetOpacity - _hudNormalOpacity) * eased
+                : 0.05 + (targetOpacity - 0.05) * eased;
+            if (progress < 1.0) return;
+
+            bool closing = _hudClosingAnimation;
+            StopHudAnimation();
+            MinimumSize = _hudMinimumSize;
+            if (closing)
+            {
+                _hudAllowImmediateClose = true;
+                Bounds = _hudTargetBounds;
+                Close();
+                return;
+            }
+            Bounds = _hudTargetBounds;
+            Opacity = _hudHovered ? _hudHoverOpacity : _hudNormalOpacity;
+            Invalidate();
+        }
+
+        private void StopHudAnimation()
+        {
+            if (_hudAnimationTimer == null) return;
+            _hudAnimationTimer.Stop();
+            _hudAnimationTimer.Tick -= HudAnimationTick;
+            _hudAnimationTimer.Dispose();
+            _hudAnimationTimer = null;
+        }
+
+        private static Rectangle Interpolate(Rectangle from, Rectangle to,
+            double progress)
+        {
+            return new Rectangle(
+                Convert.ToInt32(from.X + (to.X - from.X) * progress),
+                Convert.ToInt32(from.Y + (to.Y - from.Y) * progress),
+                Math.Max(1, Convert.ToInt32(
+                    from.Width + (to.Width - from.Width) * progress)),
+                Math.Max(1, Convert.ToInt32(
+                    from.Height + (to.Height - from.Height) * progress)));
         }
 
         private void BuildTitleBarControls()

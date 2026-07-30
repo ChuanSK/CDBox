@@ -28,7 +28,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (context.cachedSnapshot != null)
             {
                 context.cachedSnapshot.status.fromCache = true;
-                context.cachedSnapshot.status.message = "上次统计结果，正在重新计算……";
+                context.cachedSnapshot.status.message = "上次统计结果 · 点击“刷新统计”后读取当前图纸";
             }
             return context;
         }
@@ -392,6 +392,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 QuantityPipeSelectionInfo info;
                 infos.TryGetValue(detail.handle ?? string.Empty, out info);
                 QuantityPipeAttributes attrs = info == null ? null : info.Attributes;
+                if (!QuantityDashboardClassification.ShouldIncludeInQualityCheck(attrs))
+                    continue;
                 if (attrs != null)
                 {
                     Check(detail, snapshot, "missingParent", "缺少父属性", string.IsNullOrWhiteSpace(attrs.LayerParentGroup), "warning");

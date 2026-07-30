@@ -82,12 +82,12 @@ namespace TCPipeAutoDraw.UI.Controls
 
         private void OpenPicker(object sender, RoutedEventArgs e)
         {
-            var dialog = new ColorPickerWindow(_selectedColor, AllowByLayer, AllowByBlock,
-                AllowTrueColor, AllowColorBook, AllowCDBoxStandard);
             Window owner = Window.GetWindow(this);
-            if (owner != null && owner != dialog) dialog.Owner = owner;
-            if (dialog.ShowDialog() != true) return;
-            _selectedColor = dialog.SelectedColor;
+            CDBoxColor selected;
+            if (!ColorPickerWindow.TryPick(_selectedColor, out selected, AllowByLayer,
+                AllowByBlock, AllowTrueColor, AllowColorBook, AllowCDBoxStandard,
+                owner)) return;
+            _selectedColor = selected;
             UpdateContent();
             EventHandler handler = SelectedColorChanged;
             if (handler != null) handler(this, EventArgs.Empty);

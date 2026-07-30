@@ -97,6 +97,9 @@ namespace TCPipeAutoDraw.UI.Studio
                 .Distinct(StringComparer.CurrentCultureIgnoreCase)
                 .OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
+            envelope.presets = LayerPresetStore.LoadAll()
+                .Select(ToStudioPreset)
+                .ToList();
 
             return envelope;
         }
@@ -253,10 +256,48 @@ namespace TCPipeAutoDraw.UI.Studio
             return FromOperation("autoRecognize", layers, operation);
         }
 
-        public static CDBoxStudioLayerActionResult CreateDefaultPipeLayers()
+        public static CDBoxStudioLayerActionResult CreateDefaultPipeLayers(string payload)
         {
-            LayerOperationResult operation = LayerManagerService.CreateDefaultPipeLayers(GetActiveDocument());
-            return FromOperation("createDefaultPipeLayers", LayerManagerService.DefaultPipeLayers.ToList(), operation);
+            CDBoxStudioLayerPresetRequest request = Deserialize<CDBoxStudioLayerPresetRequest>(payload)
+                ?? new CDBoxStudioLayerPresetRequest();
+            LayerPresetDefinition preset = LayerPresetStore.Find(request.id);
+            if (preset == null) throw new InvalidOperationException("所选图层预设不存在或已被删除。");
+            LayerOperationResult operation = LayerManagerService.CreatePipeLayers(
+                GetActiveDocument(), preset.Layers);
+            operation.Message = "已应用预设“" + preset.Name + "”。\n" + operation.Message;
+            return FromOperation("createDefaultPipeLayers", preset.Layers, operation);
+        }
+
+        public static CDBoxStudioLayerActionResult SaveLayerPreset(string payload)
+        {
+            CDBoxStudioLayerPresetRequest request = Deserialize<CDBoxStudioLayerPresetRequest>(payload)
+                ?? new CDBoxStudioLayerPresetRequest();
+            LayerPresetDefinition preset = LayerPresetStore.SaveCustom(
+                request.name, NormalizeLayerNames(request.layers));
+            return new CDBoxStudioLayerActionResult
+            {
+                success = true,
+                action = "saveLayerPreset",
+                successCount = 1,
+                layers = new List<string>(preset.Layers),
+                message = "图层预设“" + preset.Name + "”已保存，共 "
+                    + preset.Layers.Count + " 个图层。"
+            };
+        }
+
+        public static CDBoxStudioLayerActionResult DeleteLayerPreset(string payload)
+        {
+            CDBoxStudioLayerPresetRequest request = Deserialize<CDBoxStudioLayerPresetRequest>(payload)
+                ?? new CDBoxStudioLayerPresetRequest();
+            bool deleted = LayerPresetStore.DeleteCustom(request.id);
+            return new CDBoxStudioLayerActionResult
+            {
+                success = deleted,
+                action = "deleteLayerPreset",
+                successCount = deleted ? 1 : 0,
+                skipCount = deleted ? 0 : 1,
+                message = deleted ? "自定义图层预设已删除。" : "未找到可删除的自定义预设。"
+            };
         }
 
         public static string Serialize(object value)
@@ -290,6 +331,19 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             string text = string.Join("、", tags ?? Enumerable.Empty<string>());
             return LayerMetadata.ParseTags(text);
+        }
+
+        private static CDBoxStudioLayerPreset ToStudioPreset(LayerPresetDefinition preset)
+        {
+            preset = preset ?? new LayerPresetDefinition();
+            return new CDBoxStudioLayerPreset
+            {
+                id = preset.Id ?? string.Empty,
+                name = preset.Name ?? string.Empty,
+                description = preset.Description ?? string.Empty,
+                isBuiltIn = preset.IsBuiltIn,
+                layers = new List<string>(preset.Layers ?? new List<string>())
+            };
         }
 
         private static bool MetadataEquals(LayerMetadata a, LayerMetadata b)

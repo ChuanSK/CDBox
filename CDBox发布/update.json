@@ -1,34 +1,33 @@
 {
-  "channel": "studio-preview",
-  "latestVersion": "CDBox-Studio-Preview-3.1.1",
-  "versionCode": 30101,
-  "title": "CDBox Studio Preview 3.1.1",
-  "releaseDate": "2026-07-20",
-  "mandatory": false,
-  "package": {
-    "fileName": "CDBox.Studio.Preview.3.1.1.zip",
-    "size": 7092919,
-    "sha256": "D17DD9680C610CF6833D0CD06067FBD57C01F5CD4243020093C0255A0CAA8E61",
-    "urls": [
-      {
-        "name": "Gitee",
-        "url": "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.1.1.zip"
-      },
-      {
-        "name": "GitCode",
-        "url": "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.1.1.zip"
-      },
-      {
-        "name": "GitHub备用",
-        "url": "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.1.1/CDBox.Studio.Preview.3.1.1.zip"
-      }
-    ]
-  },
-  "notes": [
-    "统一精简 Studio 内嵌与独立界面，完善设置与交互。",
-    "重构标注浮窗、引线绑定与自动刷新，修复 AutoCAD 致命错误和图形恢复问题。",
-    "完善工程量属性、特殊对象、结构层与批量写入逻辑。",
-    "新增断面比例与绑定服务，完善断面生成流程。",
-    "补充核心回归测试与开发文档。"
-  ]
+    "channel":  "studio-preview",
+    "latestVersion":  "CDBox-Studio-Preview-3.3.0",
+    "versionCode":  30300,
+    "title":  "CDBox Studio Preview 3.3.0",
+    "releaseDate":  "2026-07-30",
+    "mandatory":  false,
+    "package":  {
+                    "fileName":  "CDBox.Studio.Preview.3.3.0.zip",
+                    "size":  7574778,
+                    "sha256":  "26BA2E1A79A11116F5953FF0B4BBD1DFF1AFC614EAE7528863EDE8D586555B9A",
+                    "urls":  [
+                                 {
+                                     "name":  "Gitee",
+                                     "url":  "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.3.0.zip"
+                                 },
+                                 {
+                                     "name":  "GitCode",
+                                     "url":  "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.3.0.zip"
+                                 },
+                                 {
+                                     "name":  "GitHub备用",
+                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.3.0/CDBox.Studio.Preview.3.3.0.zip"
+                                 }
+                             ]
+                },
+    "notes":  [
+                  "新增自定义图框、裁图与纵断面生成，并完善锁定图层和模板导入。",
+                  "新增 Excel 转 CAD、简码识别及统一 WebView2 设置界面。",
+                  "完善标注浮窗、重叠对象选择、节点绑定和属性变化后的注记同步。",
+                  "优化工程量明细导出、属性编辑、图层预设及三源更新检查。"
+              ]
 }

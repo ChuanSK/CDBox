@@ -41,7 +41,13 @@ namespace TCPipeAutoDraw.UI.Studio
                     result = AutoRecognizeResult(request.Argument);
                     return true;
                 case "createdefaultpipelayers":
-                    result = CreateDefaultLayersResult();
+                    result = CreateDefaultLayersResult(request.Argument);
+                    return true;
+                case "savelayerpreset":
+                    result = SaveLayerPresetResult(request.Argument);
+                    return true;
+                case "deletelayerpreset":
+                    result = DeleteLayerPresetResult(request.Argument);
                     return true;
                 case "openattributerecognition":
                     result = OpenRecognitionResult();
@@ -214,12 +220,12 @@ namespace TCPipeAutoDraw.UI.Studio
             return result;
         }
 
-        private static CDBoxStudioRouteResult CreateDefaultLayersResult()
+        private static CDBoxStudioRouteResult CreateDefaultLayersResult(string payload)
         {
             var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
             try
             {
-                CDBoxStudioLayerActionResult action = CDBoxStudioLayerManagerApi.CreateDefaultPipeLayers();
+                CDBoxStudioLayerActionResult action = CDBoxStudioLayerManagerApi.CreateDefaultPipeLayers(payload);
                 string envelope = CDBoxStudioLayerManagerApi.BuildEnvelopeJson(false);
                 result.ExecuteScript = "window.CDBoxLayerManagerRefreshResult && window.CDBoxLayerManagerRefreshResult(" + CDBoxStudioLayerManagerApi.Serialize(action) + "," + envelope + ");";
                 result.ToastKind = action.failCount > 0 ? "warning" : "success";
@@ -231,6 +237,51 @@ namespace TCPipeAutoDraw.UI.Studio
                 result.ToastKind = "error";
                 result.ToastMessage = "创建管线默认层失败：" + ex.Message;
                 CDBoxStudioLogger.Error("创建管线默认层失败。", ex);
+            }
+            return result;
+        }
+
+        private static CDBoxStudioRouteResult SaveLayerPresetResult(string payload)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioLayerActionResult action =
+                    CDBoxStudioLayerManagerApi.SaveLayerPreset(payload);
+                string envelope = CDBoxStudioLayerManagerApi.BuildEnvelopeJson(false);
+                result.ExecuteScript = "window.CDBoxLayerManagerRefreshResult && window.CDBoxLayerManagerRefreshResult("
+                    + CDBoxStudioLayerManagerApi.Serialize(action) + "," + envelope + ");";
+                result.ToastMessage = action.message;
+                CDBoxStudioLogger.Info(action.message);
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "保存图层预设失败：" + ex.Message;
+                CDBoxStudioLogger.Error("保存图层预设失败。", ex);
+            }
+            return result;
+        }
+
+        private static CDBoxStudioRouteResult DeleteLayerPresetResult(string payload)
+        {
+            var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
+            try
+            {
+                CDBoxStudioLayerActionResult action =
+                    CDBoxStudioLayerManagerApi.DeleteLayerPreset(payload);
+                string envelope = CDBoxStudioLayerManagerApi.BuildEnvelopeJson(false);
+                result.ExecuteScript = "window.CDBoxLayerManagerRefreshResult && window.CDBoxLayerManagerRefreshResult("
+                    + CDBoxStudioLayerManagerApi.Serialize(action) + "," + envelope + ");";
+                result.ToastKind = action.success ? "success" : "warning";
+                result.ToastMessage = action.message;
+                CDBoxStudioLogger.Info(action.message);
+            }
+            catch (Exception ex)
+            {
+                result.ToastKind = "error";
+                result.ToastMessage = "删除图层预设失败：" + ex.Message;
+                CDBoxStudioLogger.Error("删除图层预设失败。", ex);
             }
             return result;
         }

@@ -35,7 +35,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             }
 
             ObjectId textStyleId = ResolveTextStyleId(doc, options.AnnotationFontName);
-            var jig = new NodeAnnotationPreviewJig(candidates, options, textStyleId);
+            var jig = new NodeAnnotationPreviewJig(doc.Database, candidates, options, textStyleId);
             PromptResult dragResult = doc.Editor.Drag(jig);
             if (dragResult.Status != PromptStatus.OK)
             {
@@ -455,15 +455,28 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (candidate == null) return lines;
 
             string nodeNo = CleanNodeNoForAnnotation(candidate.NodeNo);
-            if (string.IsNullOrWhiteSpace(nodeNo)) nodeNo = "未编号";
-
-            // 按示例图二排列：节点编号、井深、井筒；仅沉泥井追加“沉泥井”。
-            // 深度固定保留两位小数，英文冒号后不加空格。
-            lines.Add(new NodeAnnotationLine(nodeNo, options.NodeNoColorIndex));
-            lines.Add(new NodeAnnotationLine("井深:" + FormatMeter(candidate.WellDepth, 2), options.TextColorIndex));
-            lines.Add(new NodeAnnotationLine("井筒:" + FormatMeter(candidate.ShaftLength, 2), options.TextColorIndex));
-            if (IsSiltWell(candidate)) lines.Add(new NodeAnnotationLine("沉泥井", options.TextColorIndex));
+            Dictionary<string, string> text = NodeAnnotationTextComposer.Compose(nodeNo,
+                candidate.WellDepth, candidate.ShaftLength, IsSiltWell(candidate));
+            lines.Add(new NodeAnnotationLine(text["NodeNo"], options.NodeNoColorIndex));
+            lines.Add(new NodeAnnotationLine(text["WellDepth"], options.TextColorIndex));
+            lines.Add(new NodeAnnotationLine(text["ShaftLength"], options.TextColorIndex));
+            string wellType;
+            if (text.TryGetValue("WellType", out wellType))
+                lines.Add(new NodeAnnotationLine(wellType, options.TextColorIndex));
             return lines;
+        }
+
+        internal static Dictionary<string, string> BuildBoundAnnotationTexts(
+            QuantityPipeAttributes attributes)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (attributes == null) return result;
+            string nodeNo = CleanNodeNoForAnnotation(attributes.NodeNo);
+            Dictionary<string, string> values = NodeAnnotationTextComposer.Compose(nodeNo,
+                attributes.WellDepth, attributes.ShaftLength,
+                IsSiltWellType(attributes.WellType));
+            foreach (KeyValuePair<string, string> pair in values) result[pair.Key] = pair.Value;
+            return result;
         }
 
         private static bool IsSiltWell(NodeAnnotationCandidate candidate)
@@ -816,14 +829,6 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
-        private static string FormatMeter(double value, int decimalPlaces)
-        {
-            if (decimalPlaces < 0) decimalPlaces = 0;
-            if (decimalPlaces > 6) decimalPlaces = 6;
-            string format = decimalPlaces == 0 ? "0" : "0." + new string('0', decimalPlaces);
-            return value.ToString(format, CultureInfo.InvariantCulture) + "m";
-        }
-
         private static string NormalizeDbTextString(string text)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
@@ -877,14 +882,18 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
 
         private sealed class NodeAnnotationPreviewJig : DrawJig
         {
+            private readonly Database _database;
             private readonly List<NodeAnnotationCandidate> _candidates;
             private readonly NodeAnnotationOptions _options;
             private readonly ObjectId _textStyleId;
             private Point3d _annotationPoint;
             private NodeAnnotationCandidate _selectedCandidate;
 
-            public NodeAnnotationPreviewJig(List<NodeAnnotationCandidate> candidates, NodeAnnotationOptions options, ObjectId textStyleId)
+            public NodeAnnotationPreviewJig(Database database,
+                List<NodeAnnotationCandidate> candidates, NodeAnnotationOptions options,
+                ObjectId textStyleId)
             {
+                _database = database;
                 _candidates = candidates ?? new List<NodeAnnotationCandidate>();
                 _options = NormalizeOptions(options);
                 _textStyleId = textStyleId;
@@ -932,7 +941,8 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
                 for (int i = 0; i < lines.Count; i++)
                 {
                     Point3d pos = new Point3d(_annotationPoint.X, _annotationPoint.Y - spacing * i, _annotationPoint.Z);
-                    DrawPreviewText(draw, pos, lines[i].Text, _options.TextHeight, lines[i].ColorIndex, _textStyleId);
+                    DrawPreviewText(draw, _database, pos, lines[i].Text,
+                        _options.TextHeight, lines[i].ColorIndex, _textStyleId);
                 }
 
                 using (var leader = new Autodesk.AutoCAD.DatabaseServices.Polyline())
@@ -946,13 +956,16 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
                 return true;
             }
 
-            private static void DrawPreviewText(WorldDraw draw, Point3d position, string text, double textHeight, short colorIndex, ObjectId textStyleId)
+            private static void DrawPreviewText(WorldDraw draw, Database database,
+                Point3d position, string text, double textHeight, short colorIndex,
+                ObjectId textStyleId)
             {
                 if (draw == null || draw.Geometry == null || string.IsNullOrWhiteSpace(text)) return;
                 try
                 {
                     using (var dbText = new DBText())
                     {
+                        if (database != null) dbText.SetDatabaseDefaults(database);
                         dbText.Height = textHeight <= 0 ? 1.0 : textHeight;
                         dbText.TextString = NormalizeDbTextString(text);
                         dbText.ColorIndex = colorIndex <= 0 ? (short)7 : colorIndex;
@@ -961,6 +974,10 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
                         dbText.Position = position;
                         dbText.AlignmentPoint = position;
                         if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
+                        if (database != null)
+                        {
+                            try { dbText.AdjustAlignment(database); } catch { }
+                        }
                         draw.Geometry.Draw(dbText);
                     }
                 }
@@ -968,10 +985,28 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
                 {
                     try
                     {
-                        draw.Geometry.Text(position, Vector3d.ZAxis, Vector3d.XAxis, textHeight <= 0 ? 1.0 : textHeight, 1.0, 0.0, NormalizeDbTextString(text));
+                        double height = textHeight <= 0 ? 1.0 : textHeight;
+                        string normalized = NormalizeDbTextString(text);
+                        double width = EstimatePreviewTextWidth(normalized, height);
+                        Point3d fallback = position
+                            - Vector3d.XAxis.MultiplyBy(width * 0.5)
+                            - Vector3d.YAxis.MultiplyBy(height * 0.35);
+                        draw.Geometry.Text(fallback, Vector3d.ZAxis, Vector3d.XAxis,
+                            height, 1.0, 0.0, normalized);
                     }
                     catch { }
                 }
+            }
+
+            private static double EstimatePreviewTextWidth(string text, double height)
+            {
+                double units = 0.0;
+                string value = text ?? string.Empty;
+                for (int i = 0; i < value.Length; i++)
+                {
+                    units += value[i] <= 0x7f ? 0.62 : 1.0;
+                }
+                return Math.Max(height, units * height);
             }
         }
     }

@@ -6,6 +6,8 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.Modules.NodeAnnotation;
+using TCPipeAutoDraw.Modules.QuantityCalculation;
 
 namespace TCPipeAutoDraw.Modules.AnnotationHud
 {
@@ -67,6 +69,195 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     });
                 }
             }
+        }
+
+        internal static bool RefreshNodeAnnotationsForSourceHandles(Document doc,
+            IEnumerable<string> sourceHandles)
+        {
+            if (doc == null || sourceHandles == null) return false;
+            var dirty = new HashSet<string>(sourceHandles.Where(x => !string.IsNullOrWhiteSpace(x)),
+                StringComparer.OrdinalIgnoreCase);
+            if (dirty.Count == 0) return false;
+            bool changed = false;
+
+            using (DocumentLock docLock = doc.LockDocument())
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                var groups = new Dictionary<string, List<Member>>(StringComparer.OrdinalIgnoreCase);
+                foreach (ObjectId id in EnumerateCurrentSpace(doc.Database, tr))
+                {
+                    Entity entity;
+                    try { entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity; }
+                    catch { continue; }
+                    SimpleMetadata metadata;
+                    if (entity == null || !TryReadMetadata(tr, entity, out metadata)
+                        || !string.Equals(metadata.Kind, KindNode, StringComparison.OrdinalIgnoreCase)
+                        || !dirty.Contains(metadata.SourceHandle)) continue;
+                    List<Member> members;
+                    if (!groups.TryGetValue(metadata.AnnotationId, out members))
+                    {
+                        members = new List<Member>();
+                        groups[metadata.AnnotationId] = members;
+                    }
+                    members.Add(new Member { ObjectId = id, Entity = entity, Metadata = metadata });
+                }
+
+                foreach (KeyValuePair<string, List<Member>> pair in groups)
+                {
+                    List<Member> members = pair.Value;
+                    if (members == null || members.Count == 0) continue;
+                    string sourceHandle = members[0].Metadata.SourceHandle;
+                    ObjectId sourceId = ResolveHandle(doc.Database, sourceHandle);
+                    QuantityPipeAttributes attributes;
+                    if (sourceId.IsNull || !QuantityPipeAttributeService.TryReadSavedAttributes(
+                        doc.Database, tr, sourceId, out attributes)
+                        || attributes == null
+                        || !QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind)) continue;
+
+                    Dictionary<string, string> desired =
+                        NodeAnnotationService.BuildBoundAnnotationTexts(attributes);
+                    if (desired.Count == 0) continue;
+                    var existingRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < members.Count; i++)
+                    {
+                        Member member = members[i];
+                        string role = member.Metadata.Role ?? string.Empty;
+                        existingRoles.Add(role);
+                        DBText text = tr.GetObject(member.ObjectId, OpenMode.ForWrite, false) as DBText;
+                        if (text == null) continue;
+                        string value;
+                        if (desired.TryGetValue(role, out value))
+                        {
+                            if (!string.Equals(text.TextString, value, StringComparison.Ordinal))
+                            {
+                                text.TextString = value ?? string.Empty;
+                                try { text.AdjustAlignment(doc.Database); } catch { }
+                                changed = true;
+                            }
+                        }
+                        else if (string.Equals(role, "WellType", StringComparison.OrdinalIgnoreCase))
+                        {
+                            text.Erase();
+                            changed = true;
+                        }
+                    }
+
+                    string wellTypeText;
+                    if (desired.TryGetValue("WellType", out wellTypeText)
+                        && !existingRoles.Contains("WellType"))
+                    {
+                        changed = CreateMissingNodeText(doc.Database, tr, members,
+                            pair.Key, sourceHandle, "WellType", wellTypeText) || changed;
+                    }
+                }
+                tr.Commit();
+            }
+
+            if (changed)
+            {
+                try { doc.Editor.Regen(); } catch { }
+            }
+            return changed;
+        }
+
+        internal static void RepairClonedAnnotations(Database db, Transaction tr,
+            IDictionary<ObjectId, ObjectId> cloneMap,
+            IDictionary<string, ObjectId> clonesByOriginalHandle,
+            bool isCrossDatabase)
+        {
+            if (db == null || tr == null || cloneMap == null || cloneMap.Count == 0) return;
+            var clonedHandlesByOriginal = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+            if (clonesByOriginalHandle != null)
+            {
+                foreach (KeyValuePair<string, ObjectId> pair in clonesByOriginalHandle)
+                {
+                    if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value.IsNull) continue;
+                    try
+                    {
+                        Entity clone = tr.GetObject(pair.Value, OpenMode.ForRead, false) as Entity;
+                        if (clone != null)
+                            clonedHandlesByOriginal[pair.Key] = clone.Handle.ToString();
+                    }
+                    catch { }
+                }
+            }
+
+            var annotationIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<ObjectId, ObjectId> pair in cloneMap)
+            {
+                if (pair.Value.IsNull) continue;
+                Entity clone;
+                try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
+                catch { continue; }
+                SimpleMetadata metadata;
+                if (clone == null || !TryReadMetadata(tr, clone, out metadata)) continue;
+                string newAnnotationId;
+                if (!annotationIds.TryGetValue(metadata.AnnotationId, out newAnnotationId))
+                {
+                    newAnnotationId = Guid.NewGuid().ToString("D");
+                    annotationIds[metadata.AnnotationId] = newAnnotationId;
+                }
+                string clonedSourceHandle;
+                if (clonedHandlesByOriginal.TryGetValue(metadata.SourceHandle,
+                    out clonedSourceHandle)) metadata.SourceHandle = clonedSourceHandle;
+                else if (isCrossDatabase) metadata.SourceHandle = string.Empty;
+                metadata.AnnotationId = newAnnotationId;
+                try { WriteMetadata(tr, clone, metadata); } catch { }
+            }
+        }
+
+        private static bool CreateMissingNodeText(Database db, Transaction tr,
+            IList<Member> members, string annotationId, string sourceHandle,
+            string role, string value)
+        {
+            if (db == null || tr == null || members == null || members.Count == 0) return false;
+            List<Member> textMembers = members.Where(x => x != null && x.Entity is DBText)
+                .OrderBy(x => NodeRoleOrder(x.Metadata.Role)).ToList();
+            if (textMembers.Count == 0) return false;
+            DBText first = textMembers[0].Entity as DBText;
+            if (first == null) return false;
+            DBText colorSource = textMembers.Count > 1 ? textMembers[1].Entity as DBText : first;
+            Point3d basePoint = GetTextAnchor(first);
+            double spacing = Math.Max(first.Height * NodeAnnotationOptions.Default.LineSpacingFactor,
+                first.Height);
+            if (textMembers.Count > 1)
+            {
+                int firstOrder = NodeRoleOrder(textMembers[0].Metadata.Role);
+                int secondOrder = NodeRoleOrder(textMembers[1].Metadata.Role);
+                int orderDistance = Math.Max(1, Math.Abs(secondOrder - firstOrder));
+                double measured = Math.Abs(GetTextAnchor((DBText)textMembers[1].Entity).Y
+                    - basePoint.Y) / orderDistance;
+                if (measured > 0.000001) spacing = measured;
+            }
+            Point3d position = new Point3d(basePoint.X,
+                basePoint.Y - spacing * NodeRoleOrder(role), basePoint.Z);
+            BlockTableRecord owner = tr.GetObject(first.OwnerId, OpenMode.ForWrite, false)
+                as BlockTableRecord;
+            if (owner == null) return false;
+
+            var text = new DBText();
+            text.SetDatabaseDefaults(db);
+            text.TextString = value ?? string.Empty;
+            text.Height = first.Height;
+            text.TextStyleId = first.TextStyleId;
+            text.LayerId = first.LayerId;
+            text.Color = colorSource == null ? first.Color : colorSource.Color;
+            text.HorizontalMode = TextHorizontalMode.TextCenter;
+            text.VerticalMode = TextVerticalMode.TextVerticalMid;
+            text.Position = position;
+            text.AlignmentPoint = position;
+            owner.AppendEntity(text);
+            tr.AddNewlyCreatedDBObject(text, true);
+            try { text.AdjustAlignment(db); } catch { }
+            WriteMetadata(tr, text, new SimpleMetadata
+            {
+                Kind = KindNode,
+                AnnotationId = annotationId,
+                Role = role,
+                SourceHandle = sourceHandle
+            });
+            return true;
         }
 
         public static bool TryResolveAnnotationObject(Document doc, IEnumerable<ObjectId> selectedIds,

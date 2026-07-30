@@ -46,7 +46,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
 
         public static string BuildComponentScript()
         {
-            return Encoding.UTF8.GetString(Convert.FromBase64String(ComponentScriptBase64))
+            string script = Encoding.UTF8.GetString(Convert.FromBase64String(ComponentScriptBase64))
                 .Replace("<p>当前工程量快速估算台</p>", string.Empty)
                 .Replace("<p class=\"qd-note\">当前结果为基于图纸现有属性的工程量参考估算，用于阶段预算和施工调整，不作为最终结算依据。</p>", string.Empty)
                 .Replace("<p>适合截图、复制或导出给甲方作为阶段预算参考。</p>", string.Empty)
@@ -74,6 +74,72 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
                 .Replace(
                     "if(this.expandedCard==='pipe')rows=",
                     "if(this.expandedCard==='road')rows=[['路面机械切缝',s.summary.roadCuttingLength,'m'],['路面破碎',s.summary.roadBreakingArea,'㎡'],['拆除路面弃置',s.summary.roadWasteVolume,'m³']];else if(this.expandedCard==='disposal')rows=[['余土及道渣弃置（外运）',s.summary.earthworkOutVolume,'m³']];else if(this.expandedCard==='pipe')rows=");
+
+            // 工程量统计需要遍历图纸并复用正式计算逻辑，不能在误点页面时自动占用 CAD
+            // 主线程。这里保留轻量上下文和最近缓存的即时显示，首次完整统计改由用户点击
+            // “刷新统计”明确触发；完成过一次手动统计后，实时模式才允许响应后续脏标记。
+            return script + @"
+(function(api){
+  if(!api||!api.create||api.__cdboxLazyQuantity)return;
+  var originalCreate=api.create;
+  api.create=function(options){
+    var page=originalCreate(options);
+    page.hasCalculatedInSession=false;
+    page.renderIdle=function(){
+      var content=this.$('[data-role=""content""]');
+      if(!content)return;
+      content.innerHTML='<div class=""qd-loading qd-idle""><strong>工程量尚未读取</strong><span>为避免误打开时卡住 CAD，当前仅载入图纸信息。需要统计时请点击上方“刷新统计”。</span><button class=""qd-btn primary"" data-action=""refresh"">读取并统计工程量</button></div>';
+      this.setProgress(0,'等待手动统计');
+    };
+    page.receiveContext=function(ctx){
+      this.context=ctx||{};
+      this.loaded=true;
+      this.loading=false;
+      if(ctx&&ctx.request){
+        this.request=JSON.parse(JSON.stringify(ctx.request));
+        this.request.liveMode=this.request.liveMode!==false;
+      }
+      this.renderContext();
+      if(ctx&&ctx.cachedSnapshot){
+        this.snapshot=ctx.cachedSnapshot;
+        this.render();
+        this.setProgress(0,'显示上次结果 · 点击刷新统计');
+      }else{
+        this.snapshot=null;
+        this.renderIdle();
+      }
+    };
+    var originalReceiveSnapshot=page.receiveSnapshot;
+    page.receiveSnapshot=function(data){
+      this.hasCalculatedInSession=true;
+      return originalReceiveSnapshot.call(this,data);
+    };
+    page.onEvent=function(data){
+      data=data||{};
+      if(data.type==='documentActivated'&&this.follow){
+        this.request.documentId=data.documentId||'';
+        this.request.scopeType='whole';
+        this.request.regionId='';
+        this.needsRefresh=true;
+        if(this.active)this.loadContextAndRefresh();
+        return;
+      }
+      if(data.type==='dirty'){
+        this.needsRefresh=true;
+        var progress=this.$('[data-role=""progress-text""]');
+        if(progress)progress.textContent=this.hasCalculatedInSession?'数据已变化，等待刷新':'数据已变化 · 点击刷新统计';
+        return;
+      }
+      if(data.type==='refreshRequested'&&this.request.liveMode!==false){
+        this.needsRefresh=true;
+        if(this.active&&this.hasCalculatedInSession)this.refresh(false);
+      }
+    };
+    return page;
+  };
+  api.__cdboxLazyQuantity=true;
+})(window.CDBoxQuantityDashboardPage);
+";
         }
 
         private static string NormalizeTheme(string theme)

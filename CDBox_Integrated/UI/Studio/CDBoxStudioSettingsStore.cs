@@ -49,6 +49,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 bool glowEnabled;
                 if (bool.TryParse((string)root.Element("AnnotationHudGlowEnabled"), out glowEnabled))
                     settings.AnnotationHudGlowEnabled = glowEnabled;
+                bool doubleClickOpenEnabled;
+                if (bool.TryParse((string)root.Element("DoubleClickOpenEnabled"),
+                    out doubleClickOpenEnabled))
+                    settings.DoubleClickOpenEnabled = doubleClickOpenEnabled;
 
                 settings.Normalize();
                 TCPipeAutoDraw.Core.Colors.CDBoxColorService.OutputMode = settings.ColorOutputMode;
@@ -75,7 +79,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioLogger.EnsureLogDirectory();
 
                 var root = new XElement("CDBoxStudioSettings",
-                    new XAttribute("Version", "4"),
+                    new XAttribute("Version", "5"),
                     new XElement("Theme", settings.Theme),
                     new XElement("AnimationsEnabled", settings.AnimationsEnabled),
                     new XElement("AnnotationHudNormalOpacity",
@@ -85,6 +89,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     new XElement("AnnotationHudGlowEnabled", settings.AnnotationHudGlowEnabled),
                     new XElement("AnnotationHudGlowIntensity",
                         settings.AnnotationHudGlowIntensity.ToString("0.##", CultureInfo.InvariantCulture)),
+                    new XElement("DoubleClickOpenEnabled", settings.DoubleClickOpenEnabled),
                     new XElement("ColorOutputMode", settings.ColorOutputMode.ToString()),
                     new XElement("UpdateChannel", settings.UpdateChannel));
 

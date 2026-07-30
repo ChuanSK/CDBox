@@ -17,5 +17,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             return diameter + material;
         }
+
+        public static bool ShouldIncludeInQualityCheck(QuantityPipeAttributes attributes)
+        {
+            return attributes == null || !attributes.IsSpecialObject;
+        }
     }
 }

@@ -20,6 +20,7 @@ using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.Modules.SectionDrawing;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
+using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.UI;
 using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -90,8 +91,8 @@ namespace TCPipeAutoDraw.Commands
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
-            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-9", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 30200, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.3.0", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 30300, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -445,7 +446,7 @@ namespace TCPipeAutoDraw.Commands
 
         private IList<ITCModule> CreateDefaultModules()
         {
-            return TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, ShowNodeAnnotationSettings, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport);
+            return TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, ShowNodeAnnotationSettings, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport, ShowExcelToCad);
         }
 
         [CommandMethod("TCP_LAYERS", CommandFlags.Modal)]
@@ -613,6 +614,18 @@ namespace TCPipeAutoDraw.Commands
         public void GenerateQuantityCalculationReportByShortName()
         {
             RunQuantityCalculationReport();
+        }
+
+        [CommandMethod("CDEXCEL", CommandFlags.Modal)]
+        public void ShowExcelToCadByEnglishName()
+        {
+            ShowExcelToCad();
+        }
+
+        [CommandMethod("GU_XL", CommandFlags.Modal)]
+        public void ShowExcelToCadByLegacyName()
+        {
+            ShowExcelToCad();
         }
 
         [CommandMethod("CDQBOARD", CommandFlags.Modal)]
@@ -912,7 +925,7 @@ namespace TCPipeAutoDraw.Commands
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "矩形裁图布框", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("未找到当前图纸。", "布置裁图区域", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -922,8 +935,8 @@ namespace TCPipeAutoDraw.Commands
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\n[矩形裁图布框] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "矩形裁图布框失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                doc.Editor.WriteMessage("\n[布置裁图区域] 失败：" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "布置裁图区域失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1031,6 +1044,12 @@ namespace TCPipeAutoDraw.Commands
                 doc.Editor.WriteMessage("\n[属性默认表] 打开失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "属性默认表打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ShowExcelToCad()
+        {
+            ExcelToCadCommandService.Run(AcadApp.DocumentManager.MdiActiveDocument,
+                new AcadMainWindow());
         }
 
         private void RunQuantityCalculationReport()

@@ -173,6 +173,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 settings.AnnotationHudHoverOpacity = source.AnnotationHudHoverOpacity;
                 settings.AnnotationHudGlowEnabled = source.AnnotationHudGlowEnabled;
                 settings.AnnotationHudGlowIntensity = source.AnnotationHudGlowIntensity;
+                settings.DoubleClickOpenEnabled = source.DoubleClickOpenEnabled;
                 settings.ColorOutputMode = source.ColorOutputMode;
                 settings.UpdateChannel = source.UpdateChannel;
             }

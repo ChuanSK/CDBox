@@ -14,10 +14,10 @@ namespace TCPipeAutoDraw.UI.Studio
 {
     internal static class CDBoxStudioUpdateService
     {
-        public static readonly string CurrentVersion = ReadInformationalVersion("3.2.0");
-        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30200);
-        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.2.0");
-        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.2.0");
+        public static readonly string CurrentVersion = ReadInformationalVersion("3.3.0");
+        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30300);
+        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.3.0");
+        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.3.0");
         public static readonly string DefaultChannel = ReadAssemblyMetadata("CDBoxUpdateChannel", "studio-preview");
         public const string DefaultUpdateSourceName = "Gitee";
         public const string GiteeUpdateSourceUrl = CDBoxStudioUpdateSourceCatalog.GiteeManifestUrl;

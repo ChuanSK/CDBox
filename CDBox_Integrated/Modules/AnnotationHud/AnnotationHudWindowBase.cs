@@ -182,6 +182,20 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
             DialogResult = accepted;
         }
 
+        protected void CompleteDialogAnimated(bool accepted)
+        {
+            if (!IsVisible)
+            {
+                CompleteDialog(accepted);
+                return;
+            }
+            BeginCloseAnimation(false, delegate
+            {
+                _allowImmediateClose = true;
+                DialogResult = accepted;
+            });
+        }
+
         protected static SolidColorBrush Brush(string hex)
         {
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
@@ -209,6 +223,11 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
 
         private void BeginCloseAnimation(bool closeWindow)
         {
+            BeginCloseAnimation(closeWindow, null);
+        }
+
+        private void BeginCloseAnimation(bool closeWindow, Action completed)
+        {
             if (_closeAnimationInProgress || !IsVisible) return;
             if (!_animationActive) CaptureRestingPosition();
             _animationRoot.BorderBrush = _normalBorderBrush;
@@ -217,6 +236,13 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
             _animationRoot.IsHitTestVisible = false;
             _popupAnimation.Close(_animationOrigin, delegate
             {
+                if (completed != null)
+                {
+                    _closeAnimationInProgress = false;
+                    _animationActive = false;
+                    completed();
+                    return;
+                }
                 if (closeWindow)
                 {
                     _allowImmediateClose = true;

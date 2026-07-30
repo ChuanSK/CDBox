@@ -536,15 +536,21 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         public static LayerOperationResult CreateDefaultPipeLayers(Document doc)
         {
-            LayerOperationResult result = CreateLayers(doc, DefaultPipeLayers, 7);
+            return CreatePipeLayers(doc, DefaultPipeLayers);
+        }
+
+        public static LayerOperationResult CreatePipeLayers(Document doc, IEnumerable<string> layerNames)
+        {
+            List<string> layers = NormalizeLayerNames(layerNames);
+            LayerOperationResult result = CreateLayers(doc, layers, 7);
             try
             {
-                LayerOperationResult metadataResult = AutoInferLayerMetadata(doc, DefaultPipeLayers, true);
-                result.Message += "\n默认图层属性：" + metadataResult.Message;
+                LayerOperationResult metadataResult = AutoInferLayerMetadata(doc, layers, true);
+                result.Message += "\n预设图层属性：" + metadataResult.Message;
             }
             catch
             {
-                result.Message += "\n默认图层已创建，但自动写入父属性/标签失败。";
+                result.Message += "\n预设图层已创建，但自动写入父属性/标签失败。";
             }
             return result;
         }

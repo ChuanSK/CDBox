@@ -106,5 +106,52 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             if (index < 0) return source;
             return source.Remove(index, token.Length).TrimEnd();
         }
+
+        public static string ReplaceDerivedLengthToken(string text, string oldToken,
+            string newToken)
+        {
+            string source = text ?? string.Empty;
+            string oldValue = (oldToken ?? string.Empty).Trim();
+            string newValue = (newToken ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(newValue)) return source;
+
+            string oldNumber = ExtractNumber(oldValue);
+            string newNumber = ExtractNumber(newValue);
+            if (string.IsNullOrEmpty(newNumber)) return source;
+
+            string numberPattern = string.IsNullOrEmpty(oldNumber)
+                ? @"[-+]?[0-9]+(?:[\.,][0-9]+)?"
+                : Regex.Escape(oldNumber).Replace("\\.", "[\\.,]");
+            Match labelled = Regex.Match(source,
+                @"((?:\u957F|Length)\s*[:\uFF1A]?\s*)" + numberPattern,
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+            if (labelled.Success)
+            {
+                int numberIndex = labelled.Index + labelled.Groups[1].Length;
+                int numberLength = labelled.Length - labelled.Groups[1].Length;
+                return source.Remove(numberIndex, numberLength).Insert(numberIndex, newNumber);
+            }
+
+            if (!string.IsNullOrEmpty(oldValue))
+            {
+                int exactIndex = source.IndexOf(oldValue, StringComparison.OrdinalIgnoreCase);
+                if (exactIndex >= 0)
+                    return source.Remove(exactIndex, oldValue.Length).Insert(exactIndex, newValue);
+            }
+
+            if (string.IsNullOrEmpty(oldNumber)) return source;
+            Match fallback = Regex.Match(source, Regex.Escape(oldNumber).Replace("\\.", "[\\.,]"),
+                RegexOptions.CultureInvariant);
+            return fallback.Success
+                ? source.Remove(fallback.Index, fallback.Length).Insert(fallback.Index, newNumber)
+                : source;
+        }
+
+        private static string ExtractNumber(string token)
+        {
+            Match match = Regex.Match(token ?? string.Empty,
+                @"[-+]?[0-9]+(?:[\.,][0-9]+)?", RegexOptions.CultureInvariant);
+            return match.Success ? match.Value : string.Empty;
+        }
     }
 }

@@ -11,6 +11,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public string UserText { get; set; }
         public string SystemLengthText { get; set; }
         public string BottomText { get; set; }
+        public string SourceLayer { get; set; }
+        public string SourceParent { get; set; }
+        public string SourceClass { get; set; }
+        public string SourceTags { get; set; }
         public bool IsQuantityPipe { get; set; }
 
         public PipeLengthAnnotationBindingContent()
@@ -19,6 +23,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             UserText = string.Empty;
             SystemLengthText = string.Empty;
             BottomText = string.Empty;
+            SourceLayer = string.Empty;
+            SourceParent = string.Empty;
+            SourceClass = string.Empty;
+            SourceTags = string.Empty;
         }
     }
 

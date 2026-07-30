@@ -53,7 +53,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             if (sessionCandidates.Count == 0) return null;
             if (sessionCandidates.Count == 1) return sessionCandidates[0];
-            var window = new OverlappingPipeSelectionWindow(sessionCandidates);
+            Point? animationOrigin = ResolveAnimationOrigin(doc, sessionCandidates[0]);
+            var window = new OverlappingPipeSelectionWindow(sessionCandidates, animationOrigin);
             CDBoxStudioSettings settings = CDBoxStudioSettingsStore.Load();
             window.ApplyAppearance(settings.AnnotationHudNormalOpacity,
                 settings.AnnotationHudHoverOpacity, settings.AnnotationHudGlowEnabled,
@@ -65,6 +66,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 Highlight(doc, activeTransaction, highlighted, false);
                 highlighted = e.Candidate.ObjectId;
                 Highlight(doc, activeTransaction, highlighted, true);
+                Point? selectedOrigin = ResolveAnimationOrigin(doc, e.Candidate);
+                if (selectedOrigin.HasValue) window.SetAnimationOrigin(selectedOrigin.Value);
             };
             try
             {
@@ -133,6 +136,16 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch { }
         }
+
+        private static Point? ResolveAnimationOrigin(Document doc, PipeSelectionCandidate candidate)
+        {
+            if (doc != null && candidate != null)
+            {
+                try { return doc.Editor.PointToScreen(candidate.AnchorPoint, 0); }
+                catch { }
+            }
+            return null;
+        }
     }
 
     internal sealed class PipeSelectionCandidateEventArgs : EventArgs
@@ -146,6 +159,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         private readonly IList<PipeSelectionCandidate> _candidates;
         private readonly List<Border> _rows = new List<Border>();
         private int _selectedIndex;
+        private readonly Point? _openingAnimationOrigin;
         private bool _mouseConfirmEnabled;
         private DateTime _openedAtUtc;
         private DispatcherTimer _mouseReleaseTimer;
@@ -153,10 +167,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public event EventHandler<PipeSelectionCandidateEventArgs> SelectionChanged;
         public PipeSelectionCandidate SelectedCandidate { get; private set; }
 
-        public OverlappingPipeSelectionWindow(IList<PipeSelectionCandidate> candidates)
+        public OverlappingPipeSelectionWindow(IList<PipeSelectionCandidate> candidates,
+            Point? openingAnimationOrigin)
             : base("重叠管线选择", 380)
         {
             _candidates = candidates ?? new List<PipeSelectionCandidate>();
+            _openingAnimationOrigin = openingAnimationOrigin;
             _selectedIndex = -1;
             SelectedCandidate = null;
             MaxHeight = 560;
@@ -260,8 +276,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         }, Dispatcher);
                     _mouseReleaseTimer.Start();
                 }
-                PlaceNearCursor();
                 SelectIndex(0, true);
+                Point origin = _openingAnimationOrigin ?? GetCursorScreenPosition();
+                ShowAnimated(origin, null, null);
                 Activate();
                 Focus();
             };
@@ -274,7 +291,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         protected override void OnEscapePressed()
         {
-            CompleteDialog(false);
+            CompleteDialogAnimated(false);
         }
 
         private void KeyDownHandler(object sender, KeyEventArgs e)
@@ -322,20 +339,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (_candidates.Count == 0) return;
             SelectedCandidate = _candidates[_selectedIndex];
-            CompleteDialog(true);
-        }
-
-        private void PlaceNearCursor()
-        {
-            DpiScale dpi = VisualTreeHelper.GetDpi(this);
-            double sx = dpi.DpiScaleX <= 0.0 ? 1.0 : dpi.DpiScaleX;
-            double sy = dpi.DpiScaleY <= 0.0 ? 1.0 : dpi.DpiScaleY;
-            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
-            double width = ActualWidth > 1.0 ? ActualWidth : Width;
-            double height = ActualHeight > 1.0 ? ActualHeight : 320.0;
-            System.Drawing.Rectangle work = System.Windows.Forms.Screen.FromPoint(cursor).WorkingArea;
-            Left = Math.Max(work.Left / sx, Math.Min(cursor.X / sx + 18.0, work.Right / sx - width));
-            Top = Math.Max(work.Top / sy, Math.Min(cursor.Y / sy + 18.0, work.Bottom / sy - height));
+            CompleteDialogAnimated(true);
         }
     }
 }
