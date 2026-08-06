@@ -48,7 +48,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 document.Database, settings.HeaderTextStyleName);
             var jig = new LongitudinalProfilePlacementJig(profile,
                 settings, layout, textStyleId);
-            PromptResult prompt = document.Editor.Drag(jig);
+            PromptResult prompt = document.Editor.DragWithHud(jig,
+                "请选择纵断面图左下角插入点");
             if (prompt.Status != PromptStatus.OK)
             {
                 return new LongitudinalProfileDrawingResult
@@ -146,7 +147,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 layout.TableBottom, layout.HeaderRight, layout.TableTop,
                 settings.LayerName, headerStyle, result);
             DrawRectangle(db, tr, origin, layout.DataLeft,
-                layout.TableBottom, layout.PlotRight, layout.TableTop,
+                layout.TableBottom, layout.DataRight, layout.TableTop,
                 settings.LayerName, rowStyle, result);
 
             foreach (LongitudinalProfileRowLayout row in layout.Rows)
@@ -157,7 +158,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                         P(origin, layout.HeaderRight, row.Bottom),
                         settings.LayerName, rowStyle, result);
                     AddLine(db, tr, P(origin, layout.DataLeft, row.Bottom),
-                        P(origin, layout.PlotRight, row.Bottom),
+                        P(origin, layout.DataRight, row.Bottom),
                         settings.LayerName, rowStyle, result);
                 }
                 TextHorizontalMode headerMode =
@@ -168,36 +169,25 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     StringComparison.CurrentCultureIgnoreCase) >= 0)
                 {
                     headerMode = TextHorizontalMode.TextLeft;
-                    headerX = layout.HeaderLeft + 2.0;
+                    headerX = layout.HeaderLeft + layout.Scale(4.0);
                 }
                 else if (settings.HeaderTextAlignment.IndexOf("右",
                     StringComparison.CurrentCultureIgnoreCase) >= 0)
                 {
                     headerMode = TextHorizontalMode.TextRight;
-                    headerX = layout.HeaderRight - 2.0;
+                    headerX = layout.HeaderRight - layout.Scale(4.0);
                 }
                 AddText(db, tr, P(origin, headerX, row.Center),
                     row.Settings.Name,
-                    Math.Min(settings.HeaderTextHeight,
-                        row.Settings.Height * 0.65),
+                    Math.Min(layout.Scale(settings.HeaderTextHeight),
+                        (row.Top - row.Bottom) * 0.65),
                     settings.HeaderTextColorIndex,
                     headerTextStyle, 0.0, settings.LayerName, result,
                     headerMode);
             }
 
-            foreach (LongitudinalProfileNodeData node in profile.Nodes)
-            {
-                double x = layout.X(node.CumulativeDistance);
-                AddLine(db, tr, P(origin, x, layout.TableBottom),
-                    P(origin, x, layout.TableTop), settings.LayerName,
-                    rowStyle, result);
-            }
-
             string elevationFormat =
                 "F" + settings.ElevationDecimals.ToString(
-                    CultureInfo.InvariantCulture);
-            string valueFormat =
-                "F" + settings.ValueDecimals.ToString(
                     CultureInfo.InvariantCulture);
             DrawNodeValues(db, tr, profile, settings, layout, origin,
                 layout.Row("GroundElevation"),
@@ -209,20 +199,26 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     elevationFormat, CultureInfo.InvariantCulture), result);
             DrawNodeValues(db, tr, profile, settings, layout, origin,
                 layout.Row("PipeBottomDepth"),
-                node => node.PipeBottomDepth.ToString(valueFormat,
-                    CultureInfo.InvariantCulture), result);
+                node => FormatTrimmed(node.PipeBottomDepth,
+                    settings.ValueDecimals), result);
             DrawNodeValues(db, tr, profile, settings, layout, origin,
                 layout.Row("WellDepth"),
-                node => node.WellDepth.ToString(valueFormat,
-                    CultureInfo.InvariantCulture), result);
+                node => FormatTrimmed(node.WellDepth,
+                    settings.ValueDecimals), result);
 
             LongitudinalProfileRowLayout pipeRow =
                 layout.Row("DiameterSlope");
             LongitudinalProfileRowLayout distanceRow =
                 layout.Row("PlanDistance");
-            string slopeFormat =
-                "F" + settings.SlopeDecimals.ToString(
-                    CultureInfo.InvariantCulture);
+            LongitudinalProfileRowLayout foundationRow =
+                layout.Row("PipeFoundation");
+            foreach (LongitudinalProfileNodeData node in profile.Nodes)
+            {
+                double nodeX = layout.X(node.CumulativeDistance);
+                AddLine(db, tr, P(origin, nodeX, distanceRow.Bottom),
+                    P(origin, nodeX, pipeRow.Top), settings.LayerName,
+                    rowStyle, result);
+            }
             for (int i = 0; i < profile.Spans.Count; i++)
             {
                 LongitudinalProfileSpanData span = profile.Spans[i];
@@ -230,35 +226,41 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     profile.Nodes[i].CumulativeDistance);
                 double x2 = layout.X(
                     profile.Nodes[i + 1].CumulativeDistance);
-                double x = (x1 + x2) / 2.0;
-                double textHeight =
-                    Math.Min(pipeRow.Settings.TextHeight,
-                        Math.Max(1.0, (x2 - x1) / 8.0));
+                double width = Math.Max(0.01, x2 - x1);
+                double textHeight = layout.Scale(
+                    pipeRow.Settings.TextHeight);
                 string diameter = string.IsNullOrWhiteSpace(span.Diameter)
                     ? "DN" : span.Diameter;
-                AddText(db, tr, P(origin, x,
-                        pipeRow.Center + textHeight * 0.65),
+                AddLine(db, tr, P(origin, x1, pipeRow.Top),
+                    P(origin, x2, pipeRow.Bottom), settings.LayerName,
+                    rowStyle, result);
+                AddText(db, tr, P(origin, x1 + width * 0.25,
+                        pipeRow.Center),
                     diameter, textHeight, settings.HeaderTextColorIndex,
                     ResolveTextStyle(db,
                         pipeRow.Settings.TextStyleName, tr),
                     0.0, settings.LayerName, result);
-                AddText(db, tr, P(origin, x,
-                        pipeRow.Center - textHeight * 0.65),
-                    "i=" + Math.Abs(span.SlopePermille).ToString(
-                        slopeFormat, CultureInfo.InvariantCulture) + "‰",
+                AddText(db, tr, P(origin, x1 + width * 0.75,
+                        pipeRow.Center),
+                    "i=" + FormatTrimmed(Math.Abs(span.SlopePercent),
+                        settings.SlopeDecimals),
                     textHeight, settings.HeaderTextColorIndex,
                     ResolveTextStyle(db,
                         pipeRow.Settings.TextStyleName, tr),
                     0.0, settings.LayerName, result);
-                AddText(db, tr, P(origin, x, distanceRow.Center),
-                    "L=" + span.PlanLength.ToString(valueFormat,
-                        CultureInfo.InvariantCulture),
-                    distanceRow.Settings.TextHeight,
+                AddText(db, tr, P(origin, (x1 + x2) / 2.0,
+                        distanceRow.Center),
+                    "L=" + FormatTrimmed(span.PlanLength,
+                        settings.ValueDecimals),
+                    layout.Scale(distanceRow.Settings.TextHeight),
                     settings.HeaderTextColorIndex,
                     ResolveTextStyle(db,
                         distanceRow.Settings.TextStyleName, tr),
                     0.0, settings.LayerName, result);
             }
+
+            DrawFoundationValues(db, tr, profile, settings, layout,
+                origin, foundationRow, rowStyle, result);
 
             LongitudinalProfileRowLayout numberRow =
                 layout.Row("WellNumber");
@@ -268,7 +270,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 AddText(db, tr, P(origin,
                         layout.X(node.CumulativeDistance),
                         numberRow.Center),
-                    node.NodeNo, numberRow.Settings.TextHeight,
+                    node.NodeNo, layout.Scale(numberRow.Settings.TextHeight),
                     settings.HeaderTextColorIndex,
                     ResolveTextStyle(db,
                         numberRow.Settings.TextStyleName, tr),
@@ -291,9 +293,52 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             {
                 AddText(db, tr,
                     P(origin, layout.X(node.CumulativeDistance), row.Center),
-                    value(node), row.Settings.TextHeight,
+                    value(node), layout.Scale(row.Settings.TextHeight),
                     settings.HeaderTextColorIndex, textStyle,
                     Math.PI / 2.0, settings.LayerName, result);
+            }
+        }
+
+        private static void DrawFoundationValues(
+            Database db, Transaction tr,
+            LongitudinalProfileData profile,
+            LongitudinalProfileSettings settings,
+            LongitudinalProfileLayout layout, Point3d origin,
+            LongitudinalProfileRowLayout row,
+            LongitudinalProfileEntityStyle rowStyle,
+            LongitudinalProfileDrawingResult result)
+        {
+            if (profile.Spans.Count == 0) return;
+            ObjectId textStyle = ResolveTextStyle(db,
+                row.Settings.TextStyleName, tr);
+            int start = 0;
+            while (start < profile.Spans.Count)
+            {
+                string value = CleanLabel(profile.Spans[start].Foundation);
+                int end = start + 1;
+                while (end < profile.Spans.Count
+                    && string.Equals(value,
+                        CleanLabel(profile.Spans[end].Foundation),
+                        StringComparison.CurrentCultureIgnoreCase))
+                    end++;
+                double x1 = layout.X(
+                    profile.Nodes[start].CumulativeDistance);
+                double x2 = layout.X(
+                    profile.Nodes[end].CumulativeDistance);
+                AddLine(db, tr, P(origin, x1, row.Bottom),
+                    P(origin, x1, row.Top), settings.LayerName,
+                    rowStyle, result);
+                if (end == profile.Spans.Count)
+                    AddLine(db, tr, P(origin, x2, row.Bottom),
+                        P(origin, x2, row.Top), settings.LayerName,
+                        rowStyle, result);
+                if (value.Length > 0)
+                    AddText(db, tr, P(origin, (x1 + x2) / 2.0,
+                            row.Center), value,
+                        layout.Scale(row.Settings.TextHeight),
+                        settings.HeaderTextColorIndex, textStyle, 0.0,
+                        settings.LayerName, result);
+                start = end;
             }
         }
 
@@ -316,25 +361,35 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 && guard++ < 1000)
             {
                 double y = layout.Y(elevation);
-                AddLine(db, tr, P(origin, layout.PlotLeft, y),
-                    P(origin, layout.PlotRight, y),
-                    settings.LayerName, gridStyle, result);
+                if (y > layout.ChartBottom + 1e-8
+                    && y < layout.ChartTop - 1e-8)
+                    AddLine(db, tr, P(origin, layout.PlotLeft, y),
+                        P(origin, layout.PlotRight, y),
+                        settings.LayerName, gridStyle, result);
                 AddText(db, tr, P(origin,
-                        layout.StaffLeft - settings.HeaderChartGap,
+                        layout.StaffLeft
+                            - layout.Scale(settings.HeaderChartGap),
                         y),
                     elevation.ToString(
                         "F" + settings.ElevationDecimals,
                         CultureInfo.InvariantCulture),
-                    2.1, 7, textStyle, 0.0, settings.LayerName, result,
+                    layout.Scale(2.5), 7, textStyle, 0.0,
+                    settings.LayerName, result,
                     TextHorizontalMode.TextRight);
                 elevation += settings.ElevationGridInterval;
             }
+            AddText(db, tr, P(origin,
+                    layout.StaffLeft
+                        - layout.Scale(settings.HeaderChartGap) * 0.3,
+                    layout.ChartTop + layout.Scale(1.25)),
+                "高程(米)", layout.Scale(2.5), 7, textStyle, 0.0,
+                settings.LayerName, result, TextHorizontalMode.TextRight);
 
-            double totalDistance =
-                profile.Nodes.Last().CumulativeDistance;
-            double distance = 0.0;
+            double plotDistance = (layout.PlotRight - layout.PlotLeft)
+                / layout.HorizontalFactor;
+            double distance = settings.HorizontalGridInterval;
             guard = 0;
-            while (distance <= totalDistance + 1e-8
+            while (distance < plotDistance - 1e-8
                 && guard++ < 10000)
             {
                 double x = layout.X(distance);
@@ -342,13 +397,6 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     P(origin, x, layout.ChartTop), settings.LayerName,
                     gridStyle, result);
                 distance += settings.HorizontalGridInterval;
-            }
-            if (Math.Abs(layout.X(totalDistance) - layout.PlotRight) > 1e-7)
-            {
-                AddLine(db, tr,
-                    P(origin, layout.PlotRight, layout.ChartBottom),
-                    P(origin, layout.PlotRight, layout.ChartTop),
-                    settings.LayerName, gridStyle, result);
             }
 
             DrawElevationStaff(db, tr, settings, layout, origin, result);
@@ -395,36 +443,13 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             LongitudinalProfileDrawingResult result)
         {
             var ground = new List<Point3d>();
-            var invert = new List<Point3d>();
             foreach (LongitudinalProfileNodeData node in profile.Nodes)
             {
                 double x = layout.X(node.CumulativeDistance);
                 ground.Add(P(origin, x, layout.Y(node.GroundElevation)));
-                invert.Add(P(origin, x,
-                    layout.Y(node.DesignInvertElevation)));
-                AddLine(db, tr, P(origin, x, layout.ChartBottom),
-                    P(origin, x,
-                        layout.Y(node.DesignInvertElevation)),
-                    settings.LayerName, null, result, GuideColor,
-                    "DASHED");
-                AddLine(db, tr,
-                    P(origin, x,
-                        layout.Y(node.DesignInvertElevation)),
-                    P(origin, x, layout.Y(node.GroundElevation)),
-                    settings.LayerName, null, result, GroundColor);
-                AddSquare(db, tr,
-                    P(origin, x,
-                        layout.Y(node.DesignInvertElevation)),
-                    1.5, settings.LayerName, GroundColor, result);
-                AddText(db, tr,
-                    P(origin, x, layout.ChartTop + 3.0),
-                    node.NodeNo, 2.5, 7, textStyle, 0.0,
-                    settings.LayerName, result);
             }
             AddPolyline(db, tr, ground, settings.LayerName,
                 GroundColor, result);
-            AddPolyline(db, tr, invert, settings.LayerName,
-                PipeColor, result);
 
             for (int i = 0; i < profile.Spans.Count; i++)
             {
@@ -432,13 +457,106 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 LongitudinalProfileNodeData from = profile.Nodes[i];
                 LongitudinalProfileNodeData to = profile.Nodes[i + 1];
                 double diameter = Math.Max(0.01, span.OuterDiameter);
+                double fromX = layout.X(from.CumulativeDistance) + 0.5;
+                double toX = layout.X(to.CumulativeDistance) - 0.5;
+                if (toX <= fromX + 1e-8)
+                {
+                    fromX = layout.X(from.CumulativeDistance);
+                    toX = layout.X(to.CumulativeDistance);
+                }
                 AddLine(db, tr,
-                    P(origin, layout.X(from.CumulativeDistance),
+                    P(origin, fromX,
+                        layout.Y(from.DesignInvertElevation)),
+                    P(origin, toX,
+                        layout.Y(to.DesignInvertElevation)),
+                    settings.LayerName, null, result, PipeColor);
+                AddLine(db, tr,
+                    P(origin, fromX,
                         layout.Y(from.DesignInvertElevation + diameter)),
-                    P(origin, layout.X(to.CumulativeDistance),
+                    P(origin, toX,
                         layout.Y(to.DesignInvertElevation + diameter)),
                     settings.LayerName, null, result, PipeColor);
             }
+
+            for (int i = 0; i < profile.Nodes.Count; i++)
+                DrawProfileNode(db, tr, profile, settings, layout,
+                    origin, textStyle, result, i);
+        }
+
+        private static void DrawProfileNode(
+            Database db, Transaction tr,
+            LongitudinalProfileData profile,
+            LongitudinalProfileSettings settings,
+            LongitudinalProfileLayout layout, Point3d origin,
+            ObjectId textStyle,
+            LongitudinalProfileDrawingResult result, int index)
+        {
+            LongitudinalProfileNodeData node = profile.Nodes[index];
+            LongitudinalProfileSpanData incoming = index > 0
+                ? profile.Spans[index - 1] : null;
+            LongitudinalProfileSpanData outgoing =
+                index < profile.Spans.Count ? profile.Spans[index] : null;
+            double x = layout.X(node.CumulativeDistance);
+            double groundY = layout.Y(node.GroundElevation);
+            double wellBottomY = layout.Y(
+                node.GroundElevation - node.WellDepth);
+
+            AddLine(db, tr, P(origin, x, layout.ChartBottom),
+                P(origin, x, groundY), settings.LayerName, null, result,
+                GuideColor, "DASHED");
+            AddLine(db, tr, P(origin, x - 0.5, groundY),
+                P(origin, x + 0.5, groundY), settings.LayerName,
+                null, result, GroundColor);
+            DrawWellSide(db, tr, settings, layout, origin, result,
+                x - 0.5, groundY, wellBottomY, node, incoming);
+            DrawWellSide(db, tr, settings, layout, origin, result,
+                x + 0.5, groundY, wellBottomY, node, outgoing);
+            AddLine(db, tr, P(origin, x - 0.5, wellBottomY),
+                P(origin, x + 0.5, wellBottomY), settings.LayerName,
+                null, result, GroundColor);
+
+            double labelY = layout.ChartTop + 5.0;
+            AddLine(db, tr, P(origin, x, groundY),
+                P(origin, x, labelY), settings.LayerName, null, result,
+                GroundColor);
+            double labelWidth = Math.Max(3.0,
+                CleanLabel(node.NodeNo).Length * 0.72);
+            AddLine(db, tr, P(origin, x, labelY),
+                P(origin, x + labelWidth, labelY), settings.LayerName,
+                null, result, GroundColor);
+            AddText(db, tr, P(origin, x + 0.5, labelY + 0.4),
+                node.NodeNo, layout.Scale(2.5), 7, textStyle, 0.0,
+                settings.LayerName, result, TextHorizontalMode.TextLeft);
+        }
+
+        private static void DrawWellSide(
+            Database db, Transaction tr,
+            LongitudinalProfileSettings settings,
+            LongitudinalProfileLayout layout, Point3d origin,
+            LongitudinalProfileDrawingResult result,
+            double x, double groundY, double wellBottomY,
+            LongitudinalProfileNodeData node,
+            LongitudinalProfileSpanData adjacent)
+        {
+            if (adjacent == null)
+            {
+                AddLine(db, tr, P(origin, x, groundY),
+                    P(origin, x, wellBottomY), settings.LayerName,
+                    null, result, GroundColor);
+                return;
+            }
+
+            double invertY = layout.Y(node.DesignInvertElevation);
+            double topY = layout.Y(node.DesignInvertElevation
+                + Math.Max(0.01, adjacent.OuterDiameter));
+            if (groundY > topY + 1e-8)
+                AddLine(db, tr, P(origin, x, groundY),
+                    P(origin, x, topY), settings.LayerName,
+                    null, result, GroundColor);
+            if (invertY > wellBottomY + 1e-8)
+                AddLine(db, tr, P(origin, x, invertY),
+                    P(origin, x, wellBottomY), settings.LayerName,
+                    null, result, GroundColor);
         }
 
         private static void DrawScaleMark(
@@ -448,24 +566,60 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             ObjectId textStyle,
             LongitudinalProfileDrawingResult result)
         {
-            double x = layout.HeaderLeft + 2.0;
-            double y = layout.TableTop + 12.0;
+            double x = layout.HeaderLeft;
+            double y = layout.TableTop + 2.5;
+            double axis = 3.75;
+            double wing = 0.55;
             AddLine(db, tr, P(origin, x, y),
-                P(origin, x + 10.0, y), settings.LayerName,
+                P(origin, x + axis, y), settings.LayerName,
                 null, result, ScaleColor);
             AddLine(db, tr, P(origin, x, y),
-                P(origin, x, y + 10.0), settings.LayerName,
+                P(origin, x, y + axis), settings.LayerName,
                 null, result, 6);
-            AddText(db, tr, P(origin, x + 5.0, y - 2.0),
-                "横 1:" + settings.HorizontalScale.ToString("0",
+            AddLine(db, tr, P(origin, x + axis, y),
+                P(origin, x + axis - wing, y + wing * 0.45),
+                settings.LayerName, null, result, ScaleColor);
+            AddLine(db, tr, P(origin, x + axis, y),
+                P(origin, x + axis - wing, y - wing * 0.45),
+                settings.LayerName, null, result, ScaleColor);
+            AddLine(db, tr, P(origin, x, y + axis),
+                P(origin, x - wing * 0.45, y + axis - wing),
+                settings.LayerName, null, result, 6);
+            AddLine(db, tr, P(origin, x, y + axis),
+                P(origin, x + wing * 0.45, y + axis - wing),
+                settings.LayerName, null, result, 6);
+            AddText(db, tr, P(origin, x + axis / 2.0, y + 0.4),
+                "横 1 : " + settings.HorizontalScale.ToString("0",
                     CultureInfo.InvariantCulture),
-                1.8, ScaleColor, textStyle, 0.0,
+                layout.Scale(2.5), ScaleColor, textStyle, 0.0,
                 settings.LayerName, result);
-            AddText(db, tr, P(origin, x - 2.0, y + 5.0),
-                "纵 1:" + settings.VerticalScale.ToString("0",
+            AddText(db, tr, P(origin, x + 0.4, y + axis / 2.0),
+                "纵 1 : " + settings.VerticalScale.ToString("0",
                     CultureInfo.InvariantCulture),
-                1.8, 6, textStyle, Math.PI / 2.0,
+                layout.Scale(2.5), 6, textStyle, Math.PI / 2.0,
                 settings.LayerName, result);
+
+            AddText(db, tr, P(origin,
+                    (layout.PlotLeft + layout.DataRight) / 2.0,
+                    layout.TableBottom - 2.5),
+                "污水管纵断面图", layout.Scale(2.0), 1,
+                textStyle, 0.0, settings.LayerName, result);
+        }
+
+        private static string FormatTrimmed(double value, int decimals)
+        {
+            decimals = Math.Max(0, Math.Min(6, decimals));
+            if (Math.Abs(value) < Math.Pow(10.0, -decimals) * 0.5)
+                value = 0.0;
+            string text = value.ToString("F" + decimals,
+                CultureInfo.InvariantCulture);
+            return decimals <= 0 ? text
+                : text.TrimEnd('0').TrimEnd('.');
+        }
+
+        private static string CleanLabel(string value)
+        {
+            return (value ?? string.Empty).Trim();
         }
 
         private static Point3d P(Point3d origin, double x, double y)
@@ -688,8 +842,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
 
         protected override SamplerStatus Sampler(JigPrompts prompts)
         {
-            var options = new JigPromptPointOptions(
-                "\n请选择纵断面图左下角插入点：")
+            var options = new JigPromptPointOptions("\n ")
             {
                 UserInputControls =
                     UserInputControls.Accept3dCoordinates
@@ -707,22 +860,23 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         protected override bool WorldDraw(WorldDraw draw)
         {
             if (draw == null || draw.Geometry == null) return true;
-            DrawRectangle(draw, 0, 0, _settings.HeaderWidth,
+            DrawRectangle(draw, 0, 0, _layout.HeaderRight,
                 _layout.TableTop);
             DrawRectangle(draw, _layout.DataLeft, 0,
-                _layout.PlotRight, _layout.TableTop);
+                _layout.DataRight, _layout.TableTop);
             DrawRectangle(draw, _layout.PlotLeft, _layout.ChartBottom,
                 _layout.PlotRight, _layout.ChartTop);
             foreach (LongitudinalProfileRowLayout row in _layout.Rows)
             {
                 DrawLine(draw, 0, row.Bottom,
-                    _settings.HeaderWidth, row.Bottom);
+                    _layout.HeaderRight, row.Bottom);
                 DrawLine(draw, _layout.DataLeft, row.Bottom,
-                    _layout.PlotRight, row.Bottom);
+                    _layout.DataRight, row.Bottom);
                 DrawText(draw, new Point3d(
-                        _position.X + _settings.HeaderWidth / 2.0,
+                        _position.X + _layout.HeaderRight / 2.0,
                         _position.Y + row.Center, _position.Z),
-                    row.Settings.Name, row.Settings.TextHeight);
+                    row.Settings.Name,
+                    _layout.Scale(row.Settings.TextHeight));
             }
             var ground = new Point3dCollection();
             var invert = new Point3dCollection();
@@ -738,6 +892,12 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             }
             draw.Geometry.Polyline(ground, Vector3d.ZAxis, IntPtr.Zero);
             draw.Geometry.Polyline(invert, Vector3d.ZAxis, IntPtr.Zero);
+            foreach (LongitudinalProfileNodeData node in _profile.Nodes)
+            {
+                double x = _layout.X(node.CumulativeDistance);
+                DrawLine(draw, x, _layout.ChartBottom, x,
+                    _layout.Y(node.GroundElevation));
+            }
             return true;
         }
 

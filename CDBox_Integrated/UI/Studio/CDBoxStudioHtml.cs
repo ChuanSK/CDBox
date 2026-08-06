@@ -190,7 +190,7 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("<div class=\"hud-control\"><strong>双击快捷打开</strong><label class=\"switch\"><input id=\"doubleClickOpenToggle\" type=\"checkbox\"");
             if (settings.DoubleClickOpenEnabled) page.Append(" checked");
             page.Append("/><span></span><em>双击打开标注浮窗和属性编辑器</em></label></div>");
-            page.Append("</div><p class=\"hud-hint\">外观设置统一应用于标注与重叠对象选择浮窗。透明度 0% 对应安全最低透明度，100% 为完全不透明；保存后立即应用。</p></article>");
+            page.Append("</div><p class=\"hud-hint\">外观设置统一应用于标注、对象选择、通知和操作提示浮窗。透明度 0% 对应安全最低透明度，100% 为完全不透明；保存后立即应用。</p></article>");
 
             page.Append("<article class=\"setting-card wide\"><div class=\"settings-subhead\"><h3>安装与本地更新</h3><strong>").Append(CDBoxInstaller.IsInstalled() ? "已安装" : "未安装").Append("</strong></div>");
             page.Append("<div class=\"install-paths\"><label>CAD 目录<code>").Append(Html(CDBoxInstaller.GetCadDirectory())).Append("</code></label><label>安装目录<code>").Append(Html(CDBoxInstaller.GetInstallRoot())).Append("</code></label></div>");

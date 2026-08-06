@@ -20,6 +20,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public double StaffLeft { get; set; }
         public double StaffRight { get; set; }
         public double PlotLeft { get; set; }
+        public double DataRight { get; set; }
         public double PlotRight { get; set; }
         public double TableBottom { get; set; }
         public double TableTop { get; set; }
@@ -29,6 +30,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public double TopElevation { get; set; }
         public double HorizontalFactor { get; set; }
         public double VerticalFactor { get; set; }
+        public double OutputScale { get; set; }
         public List<LongitudinalProfileRowLayout> Rows { get; set; }
 
         public double Width { get { return PlotRight - HeaderLeft; } }
@@ -50,6 +52,11 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 + (elevation - DatumElevation) * VerticalFactor;
         }
 
+        public double Scale(double value)
+        {
+            return value * OutputScale;
+        }
+
         public LongitudinalProfileRowLayout Row(string key)
         {
             return Rows.First(x => string.Equals(x.Settings.Key, key,
@@ -59,6 +66,13 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
 
     internal static class LongitudinalProfileLayoutCalculator
     {
+        // 管立得纵断面样式中的尺寸、行高和文字高度最终按 0.5
+        // 落入模型空间。保留同一换算后，横向 1:1000、纵向 1:100
+        // 分别对应 0.5 和 5.0 的坐标换算。
+        internal const double ReferenceOutputScale = 0.5;
+        internal const double ChartGap = 5.0;
+        internal const double ElevationStaffWidth = 2.0;
+
         public static LongitudinalProfileLayout Calculate(
             LongitudinalProfileData profile,
             LongitudinalProfileSettings sourceSettings)
@@ -74,14 +88,22 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             var layout = new LongitudinalProfileLayout
             {
                 HeaderLeft = 0.0,
-                HeaderRight = settings.HeaderWidth,
-                DataLeft = settings.HeaderWidth + settings.HeaderChartGap,
+                HeaderRight =
+                    settings.HeaderWidth * ReferenceOutputScale,
                 TableBottom = 0.0,
-                HorizontalFactor = 1000.0 / settings.HorizontalScale,
+                HorizontalFactor = 1000.0 / settings.HorizontalScale
+                    * ReferenceOutputScale,
                 VerticalFactor = 1000.0 / settings.VerticalScale
+                    * ReferenceOutputScale,
+                OutputScale = ReferenceOutputScale
             };
+            // 参考样式在表头栏与数据栏之间保留半个栏间距：
+            // 表头右边界 22.5，数据表及坐标网格从 25.0 开始。
+            layout.DataLeft = layout.HeaderRight
+                + settings.HeaderChartGap * ReferenceOutputScale;
 
-            double totalRows = settings.Rows.Sum(x => x.Height);
+            double totalRows = settings.Rows.Sum(x => x.Height)
+                * ReferenceOutputScale;
             layout.TableTop = totalRows;
             double top = totalRows;
             foreach (LongitudinalProfileRowSettings row in settings.Rows)
@@ -89,21 +111,25 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 layout.Rows.Add(new LongitudinalProfileRowLayout
                 {
                     Settings = row,
-                    Bottom = top - row.Height,
+                    Bottom = top - row.Height * ReferenceOutputScale,
                     Top = top
                 });
-                top -= row.Height;
+                top -= row.Height * ReferenceOutputScale;
             }
 
-            layout.ChartBottom =
-                layout.TableTop + settings.HeaderChartGap;
+            layout.ChartBottom = layout.TableTop + ChartGap;
             double min = profile.Nodes.Min(x =>
-                Math.Min(x.DesignInvertElevation, x.GroundElevation));
+                Math.Min(x.GroundElevation - x.WellDepth,
+                    Math.Min(x.DesignInvertElevation,
+                        x.GroundElevation)));
             double max = profile.Nodes.Max(x =>
                 Math.Max(x.DesignInvertElevation, x.GroundElevation));
             double interval = settings.ElevationGridInterval;
+            // 管立得自动范围在最低井底以下留两份间距，
+            // 在最高自然地面以上留一份间距。
             layout.DatumElevation = Math.Floor(
-                (min - settings.ElevationPadding) / interval) * interval;
+                (min - settings.ElevationPadding * 2.0) / interval)
+                * interval;
             layout.TopElevation = Math.Ceiling(
                 (max + settings.ElevationPadding) / interval) * interval;
             if (layout.TopElevation <= layout.DatumElevation)
@@ -113,12 +139,16 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 + (layout.TopElevation - layout.DatumElevation)
                 * layout.VerticalFactor;
 
-            layout.StaffLeft = layout.DataLeft;
-            layout.StaffRight = layout.StaffLeft + 4.0;
-            layout.PlotLeft = layout.StaffRight + 4.0;
+            layout.StaffRight = layout.HeaderRight;
+            layout.StaffLeft = layout.StaffRight - ElevationStaffWidth;
+            layout.PlotLeft = layout.DataLeft;
             double distance = profile.Nodes.Max(x => x.CumulativeDistance);
-            double plotWidth = Math.Max(15.0,
-                distance * layout.HorizontalFactor);
+            layout.DataRight = layout.X(distance);
+            double horizontalInterval = settings.HorizontalGridInterval;
+            double roundedDistance = Math.Ceiling(
+                Math.Max(distance, horizontalInterval) / horizontalInterval)
+                * horizontalInterval;
+            double plotWidth = roundedDistance * layout.HorizontalFactor;
             layout.PlotRight = layout.PlotLeft + plotWidth;
             return layout;
         }

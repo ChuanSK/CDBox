@@ -368,8 +368,8 @@ namespace TCPipeAutoDraw.UI
             AddCommandItem(section, "▧ 断面图生成", "CDSEC");
             AddCommandItem(section, "▦ 批量断面生成", "PLDM");
             AddSeparator(section);
-            AddCommandItem(section, "▥ 纵断面生成", "CDZDM");
-            AddCommandItem(section, "⚙ 纵断面设置", "CDZDMSZ");
+            AddCommandItem(section, "▥ 纵断面生成", "ZDM");
+            AddCommandItem(section, "⚙ 纵断面设置", "ZDMSZ");
 
             object pipeAttribute = AddSubMenu(topMenu, "◇ 管线属性", "CDBox_PipeAttribute");
             AddCommandItem(pipeAttribute, "✎ 属性编辑器", "SX");

@@ -270,7 +270,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch (Exception ex)
             {
-                doc.Editor.WriteMessage("\n[CDBox 标注浮窗] 打开失败：" + ex.Message);
+                doc.Editor.WriteHudMessage("\n[CDBox 标注浮窗] 打开失败：" + ex.Message);
             }
         }
 

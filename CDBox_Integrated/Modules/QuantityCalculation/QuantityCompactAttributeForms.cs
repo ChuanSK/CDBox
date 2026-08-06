@@ -217,13 +217,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 _fields.FillAttributes(_attributes, false);
                 _attributes.ObjectKind = QuantityPipeAttributes.KindMainPipe;
 
-                Hide();
+                FormWindowState previousState = WindowState;
+                WindowState = FormWindowState.Minimized;
+                System.Windows.Forms.Application.DoEvents();
                 try
                 {
                     _attributes = QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(_doc, _objectId, _attributes, forStart);
                 }
                 finally
                 {
+                    WindowState = previousState == FormWindowState.Minimized
+                        ? FormWindowState.Normal
+                        : previousState;
                     Show();
                     Activate();
                 }

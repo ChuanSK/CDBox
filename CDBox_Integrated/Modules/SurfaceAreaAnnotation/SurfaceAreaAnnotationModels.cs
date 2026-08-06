@@ -25,7 +25,12 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         /// <summary>
         /// 自动调用 CASS surfacearea 命令计算，然后读取 CASS 输出结果并自动注记。
         /// </summary>
-        CassCommand = 2
+        CassCommand = 2,
+
+        /// <summary>
+        /// 直接计算闭合边界的平面面积并注记，不调用 CASS。
+        /// </summary>
+        PlanArea = 3
     }
 
     public sealed class SurfaceAreaAnnotationOptions
@@ -36,7 +41,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         public string AnnotationTemplate { get; set; }
 
         /// <summary>
-        /// 计算方式。正式版固定为自动调用 CASS surfacearea。
+        /// 计算方式：CASS 表面积或闭合边界平面面积。
         /// </summary>
         public SurfaceAreaCalculationMode CalculationMode { get; set; }
 
@@ -144,7 +149,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         {
             if (!Success) return "\n[表面积标注] " + Message;
 
-            string modeText = PlanAreaFallback ? "平面面积标注" : "CASS surfacearea";
+            bool isPlanArea = PlanAreaFallback || CalculationMode == SurfaceAreaCalculationMode.PlanArea;
+            string modeText = isPlanArea ? "面积标注" : "CASS surfacearea";
 
             if (AsyncStarted)
             {
@@ -155,8 +161,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 + "；边界图层：" + BoundaryLayerName
                 + "；注记图层：" + AnnotationLayerName
                 + "；字体样式：" + AnnotationFontName
-                + (PlanAreaFallback ? "；面积：" : "；表面积：") + SurfaceArea.ToString("0.###") + "㎡"
-                + "；平面面积：" + PlanArea.ToString("0.###") + "㎡";
+                + (isPlanArea ? "；面积：" : "；表面积：") + SurfaceArea.ToString("0.###") + "㎡"
+                + (isPlanArea ? string.Empty : "；平面面积：" + PlanArea.ToString("0.###") + "㎡");
 
             if (PlanAreaFallback)
             {

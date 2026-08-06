@@ -915,7 +915,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                var options = new JigPromptPointOptions("\n指定节点标注文字位置（预览自动吸附最近井对象）");
+                var options = new JigPromptPointOptions("\n指定节点标注文字位置（预览自动吸附最近井对象）：");
                 options.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
                 PromptPointResult result = prompts.AcquirePoint(options);
                 if (result.Status != PromptStatus.OK) return SamplerStatus.Cancel;

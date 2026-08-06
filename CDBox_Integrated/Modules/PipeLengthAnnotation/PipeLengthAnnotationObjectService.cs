@@ -36,7 +36,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             var memberIds = new List<ObjectId>();
             memberIds.Add(result.AnnotationObjectId);
-            if (!result.BottomAnnotationObjectId.IsNull) memberIds.Add(result.BottomAnnotationObjectId);
+            List<ObjectId> bottomIds = GetResultBottomTextIds(result);
+            memberIds.AddRange(bottomIds);
             if (!result.LeaderObjectId.IsNull) memberIds.Add(result.LeaderObjectId);
 
             ObjectId groupId = CreateNativeGroup(db, tr, groupName, annotationId, memberIds);
@@ -47,9 +48,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             result.AnnotationGroupObjectId = groupId;
 
             WriteAnnotationMetadata(tr, result.AnnotationObjectId, result, "MainText");
-            if (!result.BottomAnnotationObjectId.IsNull)
+            for (int i = 0; i < bottomIds.Count; i++)
             {
-                WriteAnnotationMetadata(tr, result.BottomAnnotationObjectId, result, "SecondaryText");
+                WriteAnnotationMetadata(tr, bottomIds[i], result,
+                    GetSecondaryAnnotationPart(i));
             }
 
             if (!result.LeaderObjectId.IsNull)
@@ -64,7 +66,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Editor ed = doc.Editor;
 
             var options = new PromptEntityOptions("\n选择需要整体移动的 CDBox 管线长度标注：");
-            PromptEntityResult selected = ed.GetEntity(options);
+            PromptEntityResult selected = ed.GetHudEntity(options);
             if (selected.Status != PromptStatus.OK) return;
 
             AnnotationMetadata selectedMetadata;
@@ -73,7 +75,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 Entity entity = read.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Entity;
                 if (entity == null || !TryReadAnnotationMetadata(read, entity, out selectedMetadata))
                 {
-                    ed.WriteMessage("\n[CDBox 标注整体移动] 所选对象不是已对象化的管线长度标注。 ");
+                    ed.WriteHudMessage("\n[CDBox 标注整体移动] 所选对象不是已对象化的管线长度标注。 ");
                     return;
                 }
                 read.Commit();
@@ -82,14 +84,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             var destinationOptions = new PromptPointOptions("\n指定标注新位置：");
             destinationOptions.UseBasePoint = true;
             destinationOptions.BasePoint = selected.PickedPoint;
-            PromptPointResult destination = ed.GetPoint(destinationOptions);
+            PromptPointResult destination = ed.GetHudPoint(destinationOptions);
             if (destination.Status != PromptStatus.OK) return;
 
             Vector3d displacement = destination.Value - selected.PickedPoint;
             displacement = new Vector3d(displacement.X, displacement.Y, 0.0);
             if (displacement.Length < 0.0000001)
             {
-                ed.WriteMessage("\n[CDBox 标注整体移动] 位置未变化。 ");
+                ed.WriteHudMessage("\n[CDBox 标注整体移动] 位置未变化。 ");
                 return;
             }
 
@@ -100,7 +102,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, selectedMetadata.AnnotationId);
                 if (members.Count == 0)
                 {
-                    ed.WriteMessage("\n[CDBox 标注整体移动] 未找到同一标注的组成对象。 ");
+                    ed.WriteHudMessage("\n[CDBox 标注整体移动] 未找到同一标注的组成对象。 ");
                     return;
                 }
 
@@ -126,7 +128,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
 
             ed.Regen();
-            ed.WriteMessage("\n[CDBox 标注整体移动] 已移动 " + movedCount.ToString(CultureInfo.InvariantCulture)
+            ed.WriteHudMessage("\n[CDBox 标注整体移动] 已移动 " + movedCount.ToString(CultureInfo.InvariantCulture)
                 + " 个组成对象；源管线引线锚点保持不变。 ");
         }
 
@@ -135,7 +137,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             if (doc == null) return;
             Editor ed = doc.Editor;
             var options = new PromptEntityOptions("\n选择需要诊断的 CDBox 管线或管线长度标注：");
-            PromptEntityResult selected = ed.GetEntity(options);
+            PromptEntityResult selected = ed.GetHudEntity(options);
             if (selected.Status != PromptStatus.OK) return;
 
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
@@ -143,14 +145,14 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 Entity entity = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Entity;
                 if (entity == null)
                 {
-                    ed.WriteMessage("\n[CDBox 关联诊断] 无法读取所选对象。 ");
+                    ed.WriteHudMessage("\n[CDBox 关联诊断] 无法读取所选对象。 ");
                     return;
                 }
 
                 AnnotationMetadata annotation;
                 if (TryReadAnnotationMetadata(tr, entity, out annotation))
                 {
-                    ed.WriteMessage(BuildAnnotationDiagnostic(doc.Database, tr, annotation));
+                    ed.WriteHudMessage(BuildAnnotationDiagnostic(doc.Database, tr, annotation));
                     tr.Commit();
                     return;
                 }
@@ -158,12 +160,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 ObjectIdentity identity;
                 if (TryReadObjectIdentity(tr, entity, out identity))
                 {
-                    ed.WriteMessage(BuildSourceDiagnostic(doc.Database, tr, selected.ObjectId, identity));
+                    ed.WriteHudMessage(BuildSourceDiagnostic(doc.Database, tr, selected.ObjectId, identity));
                     tr.Commit();
                     return;
                 }
 
-                ed.WriteMessage("\n[CDBox 关联诊断] 所选对象没有阶段 B 对象身份或标注元数据。 ");
+                ed.WriteHudMessage("\n[CDBox 关联诊断] 所选对象没有阶段 B 对象身份或标注元数据。 ");
                 tr.Commit();
             }
         }
@@ -288,8 +290,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 double centerX = (join.X + far.X) / 2.0;
                 double lineY = (join.Y + far.Y) / 2.0;
                 double gap = Math.Max(movedText.Height * 0.22, 0.05);
-                Point3d expected = string.Equals(movedMetadata.AnnotationPart, "SecondaryText", StringComparison.OrdinalIgnoreCase)
-                    ? new Point3d(centerX, lineY - gap - movedText.Height, movedText.Position.Z)
+                int secondaryIndex = GetSecondaryAnnotationIndex(movedMetadata.AnnotationPart);
+                double lineSpacing = Math.Max(movedText.Height * 1.45, movedText.Height + 0.05);
+                Point3d expected = secondaryIndex >= 0
+                    ? new Point3d(centerX, lineY - gap - movedText.Height
+                        - secondaryIndex * lineSpacing, movedText.Position.Z)
                     : new Point3d(centerX, lineY + gap, movedText.Position.Z);
                 Point3d actual = GetTextAnchor(movedText);
                 Vector3d offset = actual - expected;
@@ -306,7 +311,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     if (member.ObjectId == movedTextId) continue;
                     if (!string.Equals(member.Metadata.AnnotationPart, "MainText", StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(member.Metadata.AnnotationPart, "SecondaryText", StringComparison.OrdinalIgnoreCase)) continue;
+                        && !IsSecondaryAnnotationPart(member.Metadata.AnnotationPart)) continue;
                     DBText text = tr.GetObject(member.ObjectId, OpenMode.ForWrite, false) as DBText;
                     if (text != null) text.TransformBy(Matrix3d.Displacement(offset));
                 }
@@ -399,20 +404,20 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 }
                 catch (Exception ex)
                 {
-                    doc.Editor.WriteMessage("\n[CDBox 标注绑定] 内容刷新失败：" + ex.Message);
+                    doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] 内容刷新失败：" + ex.Message);
                 }
             }
             doc.Editor.Regen();
             PipeLengthAnnotationInteractionService.RefreshCard(doc, leaderId);
             if (!completed)
             {
-                doc.Editor.WriteMessage("\n[CDBox 标注绑定] "
+                doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] "
                     + (string.IsNullOrWhiteSpace(statusMessage) ? "绑定点未命中管线，已恢复原位置。" : statusMessage));
             }
         }
 
         internal static void ApplyExistingPlacement(Document doc, string annotationId, Point3d topTextPoint,
-            Point3d bottomTextPoint, Point3d leaderJoin, Point3d farEnd, ObjectId refreshObjectId)
+            IList<Point3d> bottomTextPoints, Point3d leaderJoin, Point3d farEnd, ObjectId refreshObjectId)
         {
             if (doc == null || !IsGuid(annotationId)) return;
             using (DocumentLock docLock = doc.LockDocument())
@@ -420,17 +425,22 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, annotationId);
                 AnnotationMember topMember = FindMember(members, "MainText");
-                AnnotationMember bottomMember = FindMember(members, "SecondaryText");
+                List<AnnotationMember> bottomMembers = FindSecondaryMembers(members);
                 AnnotationMember leaderMember = FindMember(members, "LeaderLine");
                 if (topMember == null || leaderMember == null) return;
 
                 DBText top = tr.GetObject(topMember.ObjectId, OpenMode.ForWrite, false) as DBText;
-                DBText bottom = bottomMember == null ? null : tr.GetObject(bottomMember.ObjectId, OpenMode.ForWrite, false) as DBText;
                 Polyline leader = tr.GetObject(leaderMember.ObjectId, OpenMode.ForWrite, false) as Polyline;
                 if (top == null || leader == null || leader.NumberOfVertices < 2) return;
 
                 MoveTextToAnchor(top, topTextPoint);
-                if (bottom != null) MoveTextToAnchor(bottom, bottomTextPoint);
+                for (int i = 0; i < bottomMembers.Count && bottomTextPoints != null
+                    && i < bottomTextPoints.Count; i++)
+                {
+                    DBText bottom = tr.GetObject(bottomMembers[i].ObjectId,
+                        OpenMode.ForWrite, false) as DBText;
+                    if (bottom != null) MoveTextToAnchor(bottom, bottomTextPoints[i]);
+                }
                 while (leader.NumberOfVertices > 3) leader.RemoveVertexAt(leader.NumberOfVertices - 1);
                 leader.SetPointAt(1, new Point2d(leaderJoin.X, leaderJoin.Y));
                 if (leader.NumberOfVertices == 2)
@@ -489,16 +499,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
                 List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, selectedMetadata.AnnotationId);
                 DBText topText = null;
-                DBText bottomText = null;
+                var bottomTexts = new List<DBText>();
                 Entity leader = null;
                 foreach (AnnotationMember member in members)
                 {
                     Entity entity = tr.GetObject(member.ObjectId, OpenMode.ForRead, false) as Entity;
                     if (entity == null) continue;
                     if (string.Equals(member.Metadata.AnnotationPart, "MainText", StringComparison.OrdinalIgnoreCase)) topText = entity as DBText;
-                    else if (string.Equals(member.Metadata.AnnotationPart, "SecondaryText", StringComparison.OrdinalIgnoreCase)) bottomText = entity as DBText;
+                    else if (IsSecondaryAnnotationPart(member.Metadata.AnnotationPart))
+                    {
+                        DBText secondary = entity as DBText;
+                        if (secondary != null) bottomTexts.Add(secondary);
+                    }
                     else if (string.Equals(member.Metadata.AnnotationPart, "LeaderLine", StringComparison.OrdinalIgnoreCase)) leader = entity;
                 }
+                bottomTexts.Sort(delegate(DBText left, DBText right)
+                {
+                    return GetTextAnchor(right).Y.CompareTo(GetTextAnchor(left).Y);
+                });
                 if (topText == null) return null;
 
                 var model = new PipeLengthAnnotationEditModel
@@ -506,8 +524,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     SelectedObjectId = selectedObjectId,
                     AnnotationId = selectedMetadata.AnnotationId,
                     TopText = topText.TextString ?? string.Empty,
-                    BottomText = bottomText == null ? string.Empty : bottomText.TextString ?? string.Empty,
-                    HasBottomAnnotation = bottomText != null,
+                    BottomText = JoinBottomTextLines(bottomTexts),
+                    HasBottomAnnotation = bottomTexts.Count > 0,
                     TextStyleName = ReadTextStyleName(tr, topText.TextStyleId),
                     TextHeight = topText.Height,
                     LayerName = topText.Layer,
@@ -608,7 +626,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, model.AnnotationId);
                 AnnotationMember topMember = FindMember(members, "MainText");
-                AnnotationMember bottomMember = FindMember(members, "SecondaryText");
                 AnnotationMember leaderMember = FindMember(members, "LeaderLine");
                 if (topMember == null) throw new InvalidOperationException("标注主文字已丢失。 ");
                 selectedId = topMember.ObjectId;
@@ -642,35 +659,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 ApplyEntityLayerAndColor(topText, model.LayerName, model.TextColor, model.TextColorIndex);
                 try { topText.AdjustAlignment(doc.Database); } catch { }
 
-                DBText bottomText = bottomMember == null ? null : tr.GetObject(bottomMember.ObjectId, OpenMode.ForWrite, false) as DBText;
-                if (string.IsNullOrWhiteSpace(model.BottomText))
-                {
-                    if (bottomText != null)
-                    {
-                        RemoveFromNativeGroup(doc.Database, tr, bottomMember.Metadata.GroupName, bottomMember.ObjectId);
-                        bottomText.Erase();
-                    }
-                    bottomText = null;
-                }
-                else
-                {
-                    if (bottomText == null)
-                    {
-                        bottomText = CreateBottomText(doc.Database, tr, topText, leaderMember, members, model);
-                    }
-                    bottomText.TextString = model.BottomText.Trim();
-                    bottomText.Height = model.TextHeight;
-                    if (!textStyleId.IsNull) bottomText.TextStyleId = textStyleId;
-                    ApplyEntityLayerAndColor(bottomText, model.LayerName, model.TextColor, model.TextColorIndex);
-                    try { bottomText.AdjustAlignment(doc.Database); } catch { }
-                }
+                List<DBText> bottomTexts = SynchronizeBottomTexts(doc.Database, tr,
+                    topText, leaderMember, members, model, textStyleId);
 
                 Entity leader = leaderMember == null ? null : tr.GetObject(leaderMember.ObjectId, OpenMode.ForWrite, false) as Entity;
                 ApplyLineAppearance(doc.Database, tr, leader, model);
                 if (leader != null)
                 {
-                    AlignTextsToUnifiedLeader(leader as Polyline, topText, bottomText, model.TextHeight);
-                    ResizeUnifiedLeaderLanding(leader as Polyline, topText, bottomText, model.TextHeight);
+                    AlignTextsToUnifiedLeader(leader as Polyline, topText, bottomTexts, model.TextHeight);
+                    ResizeUnifiedLeaderLanding(leader as Polyline, topText, bottomTexts, model.TextHeight);
                 }
 
                 foreach (AnnotationMember member in members)
@@ -915,7 +912,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     List<AnnotationMember> members = FindAnnotationMembers(doc.Database, tr, annotationId);
                     AnnotationMember topMember = FindMember(members, "MainText");
-                    AnnotationMember bottomMember = FindMember(members, "SecondaryText");
                     AnnotationMember leaderMember = FindMember(members, "LeaderLine");
                     if (topMember == null) continue;
                     Entity source = FindSourceObject(doc.Database, tr, topMember.Metadata.SourceObjectId,
@@ -937,8 +933,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     else
                     {
                         DBText top = tr.GetObject(topMember.ObjectId, OpenMode.ForWrite, false) as DBText;
-                        DBText bottom = bottomMember == null ? null
-                            : tr.GetObject(bottomMember.ObjectId, OpenMode.ForWrite, false) as DBText;
+                        List<DBText> bottomTexts = OpenSecondaryTexts(tr, members, OpenMode.ForWrite);
                         Polyline leader = leaderMember == null ? null
                             : tr.GetObject(leaderMember.ObjectId, OpenMode.ForWrite, false) as Polyline;
                         Point3d fallback = leader != null && leader.NumberOfVertices > 0
@@ -964,32 +959,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                             try { top.AdjustAlignment(doc.Database); } catch { }
                         }
                         string nextBottomText = content == null
-                            ? (bottom == null ? string.Empty
+                            ? (bottomTexts.Count == 0 ? string.Empty
                                 : PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
-                                    bottom.TextString, previousSystemLength, systemLength))
+                                    JoinBottomTextLines(bottomTexts), previousSystemLength, systemLength))
                             : (content.BottomText ?? string.Empty);
-                        if (bottom != null && string.IsNullOrWhiteSpace(nextBottomText))
-                        {
-                            RemoveFromNativeGroup(doc.Database, tr, bottomMember.Metadata.GroupName,
-                                bottomMember.ObjectId);
-                            bottom.Erase();
-                            bottom = null;
-                        }
-                        else if (bottom != null)
-                        {
-                            bottom.TextString = nextBottomText.Trim();
-                            try { bottom.AdjustAlignment(doc.Database); } catch { }
-                        }
-                        else if (top != null && !string.IsNullOrWhiteSpace(nextBottomText))
+                        if (top != null)
                         {
                             var editModel = new PipeLengthAnnotationEditModel
                             {
                                 BottomText = nextBottomText.Trim(),
                                 TextHeight = top.Height,
-                                TextColor = CDBoxColorService.FromCadColor(top.Color)
+                                TextColor = CDBoxColorService.FromCadColor(top.Color),
+                                TextColorIndex = NormalizeColorIndex(top.ColorIndex),
+                                LayerName = top.Layer
                             };
-                            bottom = CreateBottomText(doc.Database, tr, top, leaderMember, members,
-                                editModel);
+                            bottomTexts = SynchronizeBottomTexts(doc.Database, tr, top,
+                                leaderMember, members, editModel, top.TextStyleId);
+                            foreach (DBText bottom in bottomTexts)
+                            {
                             Dictionary<string, string> bottomValues;
                             if (bottom != null && TryReadRecord(tr, bottom,
                                 AnnotationSourceXrecordName, out bottomValues))
@@ -1008,14 +995,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                                 WriteRecord(tr, bottom, AnnotationSourceXrecordName,
                                     BuildRecordValues(bottomValues));
                             }
+                            }
                         }
                         if (leader != null && leader.NumberOfVertices > 0)
                         {
                             leader.SetPointAt(0, new Point2d(anchor.X, anchor.Y));
                             if (top != null)
                             {
-                                AlignTextsToUnifiedLeader(leader, top, bottom, top.Height);
-                                ResizeUnifiedLeaderLanding(leader, top, bottom, top.Height);
+                                AlignTextsToUnifiedLeader(leader, top, bottomTexts, top.Height);
+                                ResizeUnifiedLeaderLanding(leader, top, bottomTexts, top.Height);
                             }
                         }
                         foreach (AnnotationMember member in members)
@@ -1135,6 +1123,94 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return null;
         }
 
+        private static List<AnnotationMember> FindSecondaryMembers(
+            IList<AnnotationMember> members)
+        {
+            var result = new List<AnnotationMember>();
+            if (members == null) return result;
+            foreach (AnnotationMember member in members)
+            {
+                if (member != null && member.Metadata != null
+                    && IsSecondaryAnnotationPart(member.Metadata.AnnotationPart))
+                    result.Add(member);
+            }
+            result.Sort(delegate(AnnotationMember left, AnnotationMember right)
+            {
+                return GetSecondaryAnnotationIndex(left.Metadata.AnnotationPart)
+                    .CompareTo(GetSecondaryAnnotationIndex(right.Metadata.AnnotationPart));
+            });
+            return result;
+        }
+
+        private static List<DBText> OpenSecondaryTexts(Transaction tr,
+            IList<AnnotationMember> members, OpenMode mode)
+        {
+            var result = new List<DBText>();
+            foreach (AnnotationMember member in FindSecondaryMembers(members))
+            {
+                DBText text = tr.GetObject(member.ObjectId, mode, false) as DBText;
+                if (text != null && !text.IsErased) result.Add(text);
+            }
+            return result;
+        }
+
+        internal static bool IsSecondaryAnnotationPart(string part)
+        {
+            if (string.IsNullOrWhiteSpace(part)) return false;
+            return string.Equals(part, "SecondaryText",
+                       StringComparison.OrdinalIgnoreCase)
+                || part.StartsWith("SecondaryText:",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetSecondaryAnnotationIndex(string part)
+        {
+            if (!IsSecondaryAnnotationPart(part)) return -1;
+            int separator = part.IndexOf(':');
+            if (separator < 0) return 0;
+            int oneBased;
+            if (!int.TryParse(part.Substring(separator + 1),
+                NumberStyles.Integer, CultureInfo.InvariantCulture,
+                out oneBased)) return 0;
+            return Math.Max(0, oneBased - 1);
+        }
+
+        private static string GetSecondaryAnnotationPart(int zeroBasedIndex)
+        {
+            return zeroBasedIndex <= 0 ? "SecondaryText"
+                : "SecondaryText:" + (zeroBasedIndex + 1)
+                    .ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static List<ObjectId> GetResultBottomTextIds(
+            PipeLengthAnnotationResult result)
+        {
+            var ids = new List<ObjectId>();
+            if (result == null) return ids;
+            if (result.BottomAnnotationObjectIds != null)
+            {
+                foreach (ObjectId id in result.BottomAnnotationObjectIds)
+                    if (!id.IsNull && !ids.Contains(id)) ids.Add(id);
+            }
+            if (!result.BottomAnnotationObjectId.IsNull
+                && !ids.Contains(result.BottomAnnotationObjectId))
+                ids.Insert(0, result.BottomAnnotationObjectId);
+            return ids;
+        }
+
+        private static string JoinBottomTextLines(IList<DBText> texts)
+        {
+            if (texts == null || texts.Count == 0) return string.Empty;
+            var lines = new List<string>();
+            foreach (DBText text in texts)
+            {
+                if (text == null || text.IsErased) continue;
+                string line = (text.TextString ?? string.Empty).Trim();
+                if (line.Length > 0) lines.Add(line);
+            }
+            return string.Join(Environment.NewLine, lines.ToArray());
+        }
+
         private static Entity FindSourceObject(Database db, Transaction tr, string sourceObjectId, string sourceHandle)
         {
             Entity identityMatch = null;
@@ -1249,8 +1325,55 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             entity.LineWeight = model.LineWeight;
         }
 
+        private static List<DBText> SynchronizeBottomTexts(Database db,
+            Transaction tr, DBText topText, AnnotationMember leaderMember,
+            IList<AnnotationMember> members, PipeLengthAnnotationEditModel model,
+            ObjectId textStyleId)
+        {
+            var result = new List<DBText>();
+            List<string> lines = PipeLengthAnnotationService.SplitBottomAnnotationLines(
+                model == null ? string.Empty : model.BottomText);
+            List<AnnotationMember> existing = FindSecondaryMembers(members);
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                string part = GetSecondaryAnnotationPart(i);
+                DBText text = i < existing.Count
+                    ? tr.GetObject(existing[i].ObjectId, OpenMode.ForWrite, false) as DBText
+                    : CreateBottomText(db, tr, topText, leaderMember, members,
+                        model, lines[i], part);
+                if (text == null) continue;
+                text.TextString = lines[i];
+                text.Height = model.TextHeight;
+                if (!textStyleId.IsNull) text.TextStyleId = textStyleId;
+                ApplyEntityLayerAndColor(text, model.LayerName,
+                    model.TextColor, model.TextColorIndex);
+                Dictionary<string, string> values;
+                if (TryReadRecord(tr, text, AnnotationSourceXrecordName, out values))
+                {
+                    values["AnnotationPart"] = part;
+                    WriteRecord(tr, text, AnnotationSourceXrecordName,
+                        BuildRecordValues(values));
+                }
+                try { text.AdjustAlignment(db); } catch { }
+                result.Add(text);
+            }
+
+            for (int i = lines.Count; i < existing.Count; i++)
+            {
+                DBText extra = tr.GetObject(existing[i].ObjectId,
+                    OpenMode.ForWrite, false) as DBText;
+                if (extra == null || extra.IsErased) continue;
+                RemoveFromNativeGroup(db, tr, existing[i].Metadata.GroupName,
+                    existing[i].ObjectId);
+                extra.Erase();
+            }
+            return result;
+        }
+
         private static DBText CreateBottomText(Database db, Transaction tr, DBText topText, AnnotationMember leaderMember,
-            IList<AnnotationMember> members, PipeLengthAnnotationEditModel model)
+            IList<AnnotationMember> members, PipeLengthAnnotationEditModel model,
+            string lineText, string annotationPart)
         {
             BlockTableRecord owner = tr.GetObject(topText.OwnerId, OpenMode.ForWrite, false) as BlockTableRecord;
             if (owner == null) throw new InvalidOperationException("无法创建下侧文字。 ");
@@ -1276,7 +1399,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             bottom.Position = point;
             bottom.AlignmentPoint = point;
             bottom.Height = model.TextHeight;
-            bottom.TextString = model.BottomText.Trim();
+            bottom.TextString = lineText;
             bottom.TextStyleId = topText.TextStyleId;
             bottom.LayerId = topText.LayerId;
             CDBoxColor bottomColor = CDBoxColorService.PrepareForWrite(
@@ -1291,7 +1414,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Dictionary<string, string> values;
             if (topMember != null && TryReadRecord(tr, topText, AnnotationSourceXrecordName, out values))
             {
-                values["AnnotationPart"] = "SecondaryText";
+                values["AnnotationPart"] = annotationPart;
                 values["ContentMode"] = "ManualOverride";
                 WriteRecord(tr, bottom, AnnotationSourceXrecordName, BuildRecordValues(values));
                 AppendToNativeGroup(db, tr, topMember.Metadata.GroupName, id);
@@ -1299,14 +1422,18 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return bottom;
         }
 
-        private static void ResizeUnifiedLeaderLanding(Polyline leader, DBText topText, DBText bottomText, double textHeight)
+        private static void ResizeUnifiedLeaderLanding(Polyline leader, DBText topText, IList<DBText> bottomTexts, double textHeight)
         {
             if (leader == null || leader.NumberOfVertices < 3 || topText == null) return;
             Point3d first = leader.GetPoint3dAt(1);
             Point3d last = leader.GetPoint3dAt(leader.NumberOfVertices - 1);
             double centerX = (first.X + last.X) / 2.0;
             double width = EstimateEntityWidth(topText, textHeight);
-            if (bottomText != null) width = Math.Max(width, EstimateEntityWidth(bottomText, textHeight));
+            if (bottomTexts != null)
+            {
+                foreach (DBText bottomText in bottomTexts)
+                    width = Math.Max(width, EstimateEntityWidth(bottomText, textHeight));
+            }
             width += Math.Max(textHeight * 0.24, 0.06);
             bool joinOnRight = first.X >= last.X;
             Point2d left = new Point2d(centerX - width / 2.0, first.Y);
@@ -1315,7 +1442,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             leader.SetPointAt(leader.NumberOfVertices - 1, joinOnRight ? left : right);
         }
 
-        private static void AlignTextsToUnifiedLeader(Polyline leader, DBText topText, DBText bottomText, double textHeight)
+        private static void AlignTextsToUnifiedLeader(Polyline leader, DBText topText, IList<DBText> bottomTexts, double textHeight)
         {
             if (leader == null || leader.NumberOfVertices < 3 || topText == null) return;
             Point3d join = leader.GetPoint3dAt(1);
@@ -1324,9 +1451,18 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             double lineY = (join.Y + far.Y) / 2.0;
             double gap = Math.Max(textHeight * 0.22, 0.05);
             MoveTextToAnchor(topText, new Point3d(centerX, lineY + gap, GetTextAnchor(topText).Z));
-            if (bottomText != null)
+            if (bottomTexts != null)
             {
-                MoveTextToAnchor(bottomText, new Point3d(centerX, lineY - gap - textHeight, GetTextAnchor(bottomText).Z));
+                double lineSpacing = Math.Max(textHeight * 1.45,
+                    textHeight + 0.05);
+                for (int i = 0; i < bottomTexts.Count; i++)
+                {
+                    DBText bottomText = bottomTexts[i];
+                    if (bottomText == null) continue;
+                    MoveTextToAnchor(bottomText, new Point3d(centerX,
+                        lineY - gap - textHeight - i * lineSpacing,
+                        GetTextAnchor(bottomText).Z));
+                }
             }
         }
 
@@ -1933,10 +2069,17 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             int secondaryTextCount = 0;
             int leaderCount = 0;
             var groupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var secondaryParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool duplicateSecondaryPart = false;
             foreach (AnnotationMember member in members)
             {
                 if (string.Equals(member.Metadata.AnnotationPart, "MainText", StringComparison.OrdinalIgnoreCase)) mainTextCount++;
-                else if (string.Equals(member.Metadata.AnnotationPart, "SecondaryText", StringComparison.OrdinalIgnoreCase)) secondaryTextCount++;
+                else if (IsSecondaryAnnotationPart(member.Metadata.AnnotationPart))
+                {
+                    secondaryTextCount++;
+                    if (!secondaryParts.Add(member.Metadata.AnnotationPart ?? string.Empty))
+                        duplicateSecondaryPart = true;
+                }
                 else if (string.Equals(member.Metadata.AnnotationPart, "LeaderLine", StringComparison.OrdinalIgnoreCase)) leaderCount++;
                 if (!string.IsNullOrWhiteSpace(member.Metadata.GroupName)) groupNames.Add(member.Metadata.GroupName);
             }
@@ -1975,7 +2118,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             var issues = new List<string>();
             if (mainTextCount != 1) issues.Add("主文字数量应为 1，当前为 " + mainTextCount.ToString(CultureInfo.InvariantCulture));
-            if (secondaryTextCount > 1) issues.Add("次文字重复");
+            if (duplicateSecondaryPart) issues.Add("下侧文字行序号重复");
             if (leaderCount > 1) issues.Add("引线重复");
             if (sourceCount == 0) issues.Add("关联源管线不存在或身份丢失");
             if (sourceCount > 1) issues.Add("源管线 CDBoxObjectId 重复");

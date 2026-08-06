@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -13,9 +14,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
 {
     public sealed class LongitudinalProfileCommands
     {
-        [CommandMethod("CDPROFILE", CommandFlags.Modal
-            | CommandFlags.UsePickSet)]
-        [CommandMethod("CDZDM", CommandFlags.Modal
+        [CommandMethod("ZDM", CommandFlags.Modal
             | CommandFlags.UsePickSet)]
         public void Generate()
         {
@@ -25,88 +24,86 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             Editor editor = document.Editor;
             try
             {
-                PromptSelectionResult selection =
-                    editor.GetSelection(new PromptSelectionOptions
-                    {
-                        MessageForAdding =
-                            "\n请选择一条或多条连续主管管线：",
-                        MessageForRemoval =
-                            "\n移除不参与纵断面的对象："
-                    });
-                if (selection.Status != PromptStatus.OK
-                    || selection.Value == null
-                    || selection.Value.Count == 0)
+                QuantityPipeAttributes startNode =
+                    QuantityPipeAttributeService.SelectNodeWithPreview(
+                        document, true);
+                if (startNode == null) return;
+                QuantityPipeAttributes endNode =
+                    QuantityPipeAttributeService.SelectNodeWithPreview(
+                        document, false);
+                if (endNode == null) return;
+                string startNo = (startNode.NodeNo ?? string.Empty).Trim();
+                string endNo = (endNode.NodeNo ?? string.Empty).Trim();
+                if (startNo.Length == 0 || endNo.Length == 0)
+                {
+                    editor.WriteHudMessage(
+                        "\n[纵断面] 起点节点或终点节点缺少井编号。");
                     return;
+                }
+                if (string.Equals(startNo, endNo,
+                    StringComparison.CurrentCultureIgnoreCase))
+                {
+                    editor.WriteHudMessage(
+                        "\n[纵断面] 起点节点和终点节点不能相同。");
+                    return;
+                }
 
                 var pipes =
                     new List<LongitudinalProfilePipeData>();
-                int order = 0;
-                foreach (SelectedObject selected in selection.Value)
-                {
-                    if (selected == null || selected.ObjectId.IsNull)
-                        continue;
-                    QuantityPipeSelectionInfo info =
-                        QuantityPipeAttributeService.ReadPipe(
-                            document, selected.ObjectId);
-                    if (info == null || !info.HasSavedAttributes
-                        || info.Attributes == null
-                        || !QuantityPipeAttributes.IsMainPipeKind(
-                            info.Attributes.ObjectKind)
-                        || info.CadLength <= 0)
-                        continue;
-                    pipes.Add(new LongitudinalProfilePipeData
-                    {
-                        SourceId = info.HandleText,
-                        StartNode = info.Attributes.StartNode,
-                        EndNode = info.Attributes.EndNode,
-                        Diameter = info.Attributes.Diameter,
-                        OuterDiameter =
-                            info.Attributes.PipeOuterDiameter,
-                        PlanLength =
-                            info.Attributes.EffectiveLength(info.CadLength),
-                        SelectionOrder = order++
-                    });
-                }
-                if (pipes.Count == 0)
-                {
-                    editor.WriteMessage(
-                        "\n[纵断面] 所选对象中没有已保存工程量属性的主管管线。");
-                    return;
-                }
-
                 var wells =
                     new List<LongitudinalProfileWellData>();
+                int order = 0;
                 foreach (ObjectId id in
                     QuantityPipeAttributeService
                         .FindObjectsWithSavedAttributes(document))
                 {
                     QuantityPipeSelectionInfo info =
-                        QuantityPipeAttributeService.ReadPipe(document, id);
-                    if (info == null || info.Attributes == null
-                        || !QuantityPipeAttributes.IsNodeKind(
-                            info.Attributes.ObjectKind))
+                        QuantityPipeAttributeService.ReadPipe(
+                            document, id);
+                    if (info == null || info.Attributes == null)
                         continue;
                     QuantityPipeAttributes attrs = info.Attributes;
-                    wells.Add(new LongitudinalProfileWellData
+                    if (QuantityPipeAttributes.IsMainPipeKind(
+                            attrs.ObjectKind)
+                        && info.HasSavedAttributes
+                        && info.CadLength > 0)
                     {
-                        SourceId = info.HandleText,
-                        NodeNo = attrs.NodeNo,
-                        WellSpec = attrs.WellSpec,
-                        WellType = attrs.WellType,
-                        GroundElevation = attrs.GroundElevation,
-                        WellDepth = attrs.WellDepth,
-                        SiltWellDeductDepth500 =
-                            attrs.SiltWellDeductDepth500,
-                        SiltWellDeductDepth700 =
-                            attrs.SiltWellDeductDepth700
-                    });
+                        pipes.Add(new LongitudinalProfilePipeData
+                        {
+                            SourceId = info.HandleText,
+                            StartNode = attrs.StartNode,
+                            EndNode = attrs.EndNode,
+                            Diameter = attrs.Diameter,
+                            Foundation = ResolveFoundation(attrs),
+                            OuterDiameter = attrs.PipeOuterDiameter,
+                            PlanLength = info.CadLength,
+                            SelectionOrder = order++
+                        });
+                    }
+                    else if (QuantityPipeAttributes.IsNodeKind(
+                        attrs.ObjectKind))
+                    {
+                        wells.Add(new LongitudinalProfileWellData
+                        {
+                            SourceId = info.HandleText,
+                            NodeNo = attrs.NodeNo,
+                            WellSpec = attrs.WellSpec,
+                            WellType = attrs.WellType,
+                            GroundElevation = attrs.GroundElevation,
+                            WellDepth = attrs.WellDepth,
+                            SiltWellDeductDepth500 =
+                                attrs.SiltWellDeductDepth500,
+                            SiltWellDeductDepth700 =
+                                attrs.SiltWellDeductDepth700
+                        });
+                    }
                 }
 
                 LongitudinalProfileBuildResult built =
-                    LongitudinalProfileCalculator.Build(pipes, wells);
+                    LongitudinalProfileCalculator.BuildBetweenNodes(
+                        pipes, wells, startNo, endNo);
                 if (!built.Success)
                 {
-                    editor.WriteMessage("\n[纵断面] " + built.Message);
                     CDBoxMessageBox.Show(new AcadMainWindow(),
                         built.Message, "纵断面生成",
                         System.Windows.Forms.MessageBoxButtons.OK,
@@ -115,24 +112,23 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 }
 
                 LongitudinalProfileDrawingResult drawn =
-                    LongitudinalProfileDrawingService
+                    LongitudinalProfileReferenceDrawingService
                         .SelectPositionAndDraw(document, built.Profile,
                             LongitudinalProfileSettingsStore.Load());
-                editor.WriteMessage("\n[纵断面] " + drawn.Message
+                editor.WriteHudMessage("\n[纵断面] " + drawn.Message
                     + (drawn.Success
                         ? " 生成对象：" + drawn.EntityCount + " 个。"
                         : string.Empty));
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage(
+                editor.WriteHudMessage(
                     "\n[纵断面] 生成失败，图纸未写入不完整结果："
                     + ex.Message);
             }
         }
 
-        [CommandMethod("CDPROFILESET", CommandFlags.Modal)]
-        [CommandMethod("CDZDMSZ", CommandFlags.Modal)]
+        [CommandMethod("ZDMSZ", CommandFlags.Modal)]
         public void OpenSettings()
         {
             try
@@ -147,6 +143,22 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Warning);
             }
+        }
+
+        private static string ResolveFoundation(
+            QuantityPipeAttributes attributes)
+        {
+            if (attributes == null) return string.Empty;
+            string[] names = QuantityStructureLayer
+                .Parse(attributes.BackfillStructure)
+                .Where(layer => layer != null && layer.IsCushionLayer)
+                .Select(layer => (layer.Name ?? string.Empty).Trim())
+                .Where(name => name.Length > 0)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            return names.Length > 0
+                ? string.Join("、", names)
+                : string.Empty;
         }
     }
 }

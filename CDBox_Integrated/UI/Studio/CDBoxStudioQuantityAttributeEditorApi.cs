@@ -99,10 +99,18 @@ namespace TCPipeAutoDraw.UI.Studio
         public static CDBoxStudioQuantityAttributeEditorContext SelectNode(string payload)
         {
             CDBoxStudioQuantityAttributeEditorRequest request = Required(payload);
-            return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
+            FormWindowState? previousState = CDBoxStudioQuantityAttributeEditorWindow.MinimizeForCadSelection();
+            try
             {
-                return QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(doc, id, attrs, request.forStart);
-            }, request.forStart ? "已更新起点井。" : "已更新终点井。");
+                return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
+                {
+                    return QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(doc, id, attrs, request.forStart);
+                }, request.forStart ? "已更新起点井。" : "已更新终点井。");
+            }
+            finally
+            {
+                CDBoxStudioQuantityAttributeEditorWindow.RestoreAfterCadSelection(previousState);
+            }
         }
 
         public static void OpenLegacy(string payload)

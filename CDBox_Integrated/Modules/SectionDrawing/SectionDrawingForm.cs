@@ -6,6 +6,7 @@ using System.IO;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 
 namespace TCPipeAutoDraw.Modules.SectionDrawing
 {
@@ -1197,7 +1198,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (wasVisible) Hide();
 
                 SectionDrawingResult result = SectionDrawingService.SelectPositionAndDraw(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                 //WriteLog(result.Message + " " + result.ToEditorMessage().Trim(), !result.Success);
 
                 if (result.Success)
@@ -1208,7 +1209,6 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[断面图生成] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "断面图生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

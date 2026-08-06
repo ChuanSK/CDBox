@@ -50,6 +50,12 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     options.AnnotationTemplate = text;
                 }
 
+                SurfaceAreaCalculationMode calculationMode;
+                if (TryGetCalculationMode(values, "CalculationMode", out calculationMode))
+                {
+                    options.CalculationMode = calculationMode;
+                }
+
                 if (TryGetString(values, "CassSurfaceLogPath", out text))
                 {
                     options.CassSurfaceLogPath = text ?? string.Empty;
@@ -82,7 +88,6 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     options.AnnotationLayerName = text;
                 }
 
-                options.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
                 options.UseBoundaryLayerForAnnotation = false;
                 options.DrawLeader = true;
             }
@@ -121,6 +126,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
             lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
             lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
+            lines.Add("CalculationMode=" + Escape(options.CalculationMode.ToString()));
             lines.Add("CassSurfaceLogPath=" + Escape(options.CassSurfaceLogPath ?? string.Empty));
             lines.Add("DeleteCassGeneratedObjects=" + Escape(options.DeleteCassGeneratedObjects ? "true" : "false"));
             lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
@@ -193,6 +199,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             string text;
             return TryGetString(values, key, out text)
                 && Enum.TryParse<AnnotationLayerMode>(text, true, out mode);
+        }
+
+        private static bool TryGetCalculationMode(Dictionary<string, string> values, string key, out SurfaceAreaCalculationMode mode)
+        {
+            mode = SurfaceAreaCalculationMode.CassCommand;
+            string text;
+            if (!TryGetString(values, key, out text)
+                || !Enum.TryParse<SurfaceAreaCalculationMode>(text, true, out mode)) return false;
+            return mode == SurfaceAreaCalculationMode.CassCommand
+                || mode == SurfaceAreaCalculationMode.PlanArea;
         }
 
         private static string Escape(string value)

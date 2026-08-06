@@ -35,16 +35,16 @@ namespace TCPipeAutoDraw.UI.Studio
             }
 
             AddCommand(actions, "cmd:PLDM", "批量生成断面", "断面", string.Empty, "PLDM", string.Empty);
-            AddCommand(actions, "cmd:CDZDM", "纵断面生成", "断面",
-                "选择一条或多条由井节点连接的主管管线，生成纵断面图。",
-                "CDZDM", "CDZDM");
+            AddCommand(actions, "cmd:ZDM", "纵断面生成", "断面",
+                "选择起点和终点井节点，生成两点间连通管线的纵断面图。",
+                "ZDM", "ZDM");
             actions.Add(new CDBoxStudioAction(
                 "module:longitudinal-profile-settings",
                 "纵断面设置",
                 "断面",
                 "设置纵断面表头、比例、数据栏和显示样式。",
-                "CDZDMSZ",
-                "CDZDMSZ",
+                "ZDMSZ",
+                "ZDMSZ",
                 CDBoxStudioActionKind.Module,
                 true,
                 true,

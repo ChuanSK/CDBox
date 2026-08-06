@@ -65,7 +65,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
 
             var pointOpt = new PromptPointOptions("\n请选择生成断面图左下角插入点：");
-            PromptPointResult pointRes = ed.GetPoint(pointOpt);
+            PromptPointResult pointRes = ed.GetHudPoint(pointOpt);
             if (pointRes.Status != PromptStatus.OK)
             {
                 return new SectionBatchDrawingResult
@@ -229,7 +229,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             selOpt.MessageForAdding = "\n请选择需要批量生成断面图的管线区域对象：";
             selOpt.MessageForRemoval = "\n移除对象：";
             selOpt.AllowDuplicates = false;
-            PromptSelectionResult res = ed.GetSelection(selOpt);
+            PromptSelectionResult res = ed.GetHudSelection(selOpt);
             if (res.Status != PromptStatus.OK || res.Value == null) return ids;
 
             foreach (SelectedObject selected in res.Value)

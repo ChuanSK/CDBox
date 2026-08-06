@@ -63,10 +63,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
 
         protected override SamplerStatus Sampler(JigPrompts prompts)
         {
-            JigPromptPointOptions options = new JigPromptPointOptions(_stage
-                == PlacementStage.Center
-                    ? "\n指定裁图矩形中心点："
-                    : "\n指定矩形水平方向，移动鼠标调整旋转角度：");
+            JigPromptPointOptions options =
+                new JigPromptPointOptions("\n ");
             options.UserInputControls = UserInputControls.Accept3dCoordinates
                 | UserInputControls.NoZeroResponseAccepted;
             if (_stage == PlacementStage.Rotation)

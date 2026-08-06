@@ -60,7 +60,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             HeaderWidth = 45.0;
             HeaderChartGap = 5.0;
             HeaderTextHeight = 6.0;
-            HeaderTextStyleName = "Standard";
+            HeaderTextStyleName = "宋体";
             HeaderTextColorIndex = 7;
             HeaderTextAlignment = "中间对齐";
             HorizontalScale = 1000.0;
@@ -92,7 +92,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             HeaderWidth = Positive(HeaderWidth, 45.0);
             HeaderChartGap = NonNegative(HeaderChartGap, 5.0);
             HeaderTextHeight = Positive(HeaderTextHeight, 6.0);
-            HeaderTextStyleName = Clean(HeaderTextStyleName, "Standard");
+            HeaderTextStyleName = Clean(HeaderTextStyleName, "宋体");
             HeaderTextColorIndex = Color(HeaderTextColorIndex, 7);
             HeaderTextAlignment = Clean(HeaderTextAlignment, "中间对齐");
             HorizontalScale = Positive(HorizontalScale, 1000.0);
@@ -181,6 +181,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 Row("WellDepth", "井深", 10.0),
                 Row("DiameterSlope", "管径及坡度", 10.0),
                 Row("PlanDistance", "平面距离", 10.0),
+                Row("PipeFoundation", "管道基础", 10.0),
                 Row("WellNumber", "井编号", 10.0)
             };
         }
@@ -204,7 +205,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 Name = name,
                 Height = height,
                 TextHeight = 2.5,
-                TextStyleName = "Standard"
+                TextStyleName = "宋体"
             };
         }
 
@@ -278,6 +279,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     if (!File.Exists(SettingsPath)) return settings;
                     XElement root = XDocument.Load(SettingsPath).Root;
                     if (root == null) return settings;
+                    int version = AttrInteger(root, "Version", 1);
                     settings.HeaderWidth = Number(root, "HeaderWidth",
                         settings.HeaderWidth);
                     settings.HeaderChartGap = Number(root, "HeaderChartGap",
@@ -347,6 +349,12 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                                     Attr(x, "LineWeight", "ByBlock")
                             }).ToList();
                     }
+
+                    // 第一阶段近似样式保存过 Version 1/2 配置；这些旧值
+                    // 会把网格间距、字体和表头尺寸带回近似版本。Version 3
+                    // 起统一迁移到“纵断面参考.dwg”的精确基准。
+                    if (version < 3)
+                        settings = new LongitudinalProfileSettings();
                 }
                 catch
                 {
@@ -368,7 +376,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 if (!string.IsNullOrWhiteSpace(folder))
                     Directory.CreateDirectory(folder);
                 XElement root = new XElement("LongitudinalProfileSettings",
-                    new XAttribute("Version", "1"),
+                    new XAttribute("Version", "3"),
                     Element("HeaderWidth", settings.HeaderWidth),
                     Element("HeaderChartGap", settings.HeaderChartGap),
                     Element("HeaderTextHeight", settings.HeaderTextHeight),

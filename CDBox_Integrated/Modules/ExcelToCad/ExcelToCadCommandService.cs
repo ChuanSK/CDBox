@@ -48,7 +48,7 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
                 + model.MergedRanges.Count + " 个）";
             var pointOptions = new PromptPointOptions(
                 "\n指定 Excel 表格左上角插入点 " + summary + "：");
-            PromptPointResult point = document.Editor.GetPoint(pointOptions);
+            PromptPointResult point = document.Editor.GetHudPoint(pointOptions);
             if (point.Status != PromptStatus.OK)
             {
                 message = "已取消指定表格插入点。";
@@ -60,7 +60,7 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
                 ExcelToCadInsertResult result = ExcelToCadService.Insert(document, model,
                     options, point.Value);
                 message = result.Message;
-                document.Editor.WriteMessage("\n[Excel 转 CAD 表格] " + result.Message
+                document.Editor.WriteHudMessage("\n[Excel 转 CAD 表格] " + result.Message
                     + " 来源：" + summary + "。");
                 if (!result.ObjectId.IsNull)
                 {
@@ -72,7 +72,6 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
             catch (Exception ex)
             {
                 message = ex.Message;
-                document.Editor.WriteMessage("\n[Excel 转 CAD 表格] 生成失败：" + ex.Message);
                 CDBoxStudioLogger.Error("Excel 转 CAD 表格生成失败。来源："
                     + summary, ex);
                 CDBoxMessageBox.Show(owner, ex.Message, "Excel 转 CAD 表格失败",

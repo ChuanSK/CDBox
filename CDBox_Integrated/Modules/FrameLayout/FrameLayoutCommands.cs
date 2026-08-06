@@ -33,12 +33,12 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 if (string.IsNullOrWhiteSpace(paperSize)) return;
                 string templateName = BuildDefaultTemplateName(paperSize);
 
-                PromptPointResult first = editor.GetPoint(
+                PromptPointResult first = editor.GetHudPoint(
                     "\n选择图框内裁图区域的第一个角点：");
                 if (first.Status != PromptStatus.OK) return;
                 PromptCornerOptions cornerOptions = new PromptCornerOptions(
                     "\n选择裁图区域的对角点：", first.Value);
-                PromptPointResult second = editor.GetCorner(cornerOptions);
+                PromptPointResult second = editor.GetHudCorner(cornerOptions);
                 if (second.Status != PromptStatus.OK) return;
 
                 FrameTemplateCatalogItem item;
@@ -85,14 +85,14 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 }
 
                 FrameTemplateCatalogStore.Upsert(item);
-                editor.WriteMessage(
+                editor.WriteHudMessage(
                     "\n[图框模板] 已添加 {0} / {1}，裁图区域 {2:0.###} × {3:0.###}。",
                     item.PaperSize, item.TemplateName, item.ValidWidth,
                     item.ValidHeight);
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage("\n[图框模板] 添加失败：{0}", ex.Message);
+                editor.WriteHudMessage("\n[图框模板] 添加失败：{0}", ex.Message);
             }
         }
 
@@ -139,7 +139,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage("\n[裁图区域] 布置失败：{0}", ex.Message);
+                editor.WriteHudMessage("\n[裁图区域] 布置失败：{0}", ex.Message);
             }
         }
 
@@ -163,7 +163,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     regionService.ReadSelectedRegions(editor, db);
                 if (regions.Count == 0)
                 {
-                    editor.WriteMessage("\n[图框布置] 选择中没有有效裁图区域。");
+                    editor.WriteHudMessage("\n[图框布置] 选择中没有有效裁图区域。");
                     return;
                 }
 
@@ -186,7 +186,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     }
                 }
 
-                PromptPointResult point = editor.GetPoint(
+                PromptPointResult point = editor.GetHudPoint(
                     "\n选择第一个图框的左下角位置：");
                 if (point.Status != PromptStatus.OK) return;
 
@@ -201,7 +201,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     transaction.Commit();
                 }
                 editor.Regen();
-                editor.WriteMessage(
+                editor.WriteHudMessage(
                     "\n[图框布置] 已生成 {0} 个图框，共 {1} 行，每行最多 {2} 个。",
                     result.Count, result.Rows,
                     FrameLayoutSettingsStore.Load().FramesPerRow);
@@ -209,7 +209,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage("\n[图框布置] 失败：{0}", ex.Message);
+                editor.WriteHudMessage("\n[图框布置] 失败：{0}", ex.Message);
             }
         }
 
@@ -235,9 +235,9 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     LowerLimit = 1,
                     UpperLimit = 10000
                 };
-                PromptIntegerResult count = editor.GetInteger(countOptions);
+                PromptIntegerResult count = editor.GetHudInteger(countOptions);
                 if (count.Status != PromptStatus.OK) return;
-                PromptPointResult point = editor.GetPoint(
+                PromptPointResult point = editor.GetHudPoint(
                     "\n选择第一个图框的左下角位置：");
                 if (point.Status != PromptStatus.OK) return;
 
@@ -252,13 +252,13 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     transaction.Commit();
                 }
                 editor.Regen();
-                editor.WriteMessage("\n[直接布框] 已生成 {0} 个 {1} 图框。",
+                editor.WriteHudMessage("\n[直接布框] 已生成 {0} 个 {1} 图框。",
                     result.Count, template.PaperSize);
                 WriteLayoutWarnings(editor, result);
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage("\n[直接布框] 失败：{0}", ex.Message);
+                editor.WriteHudMessage("\n[直接布框] 失败：{0}", ex.Message);
             }
         }
 
@@ -276,19 +276,21 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             int count = 0;
             while (true)
             {
-                if (count > 0)
-                    editor.WriteMessage(
-                        "\n继续移动光标布置下一裁图矩形，按 Enter 或 Esc 完成。");
                 FrameCutRegionPlacementJig centerJig =
                     FrameCutRegionPlacementJig.ForCenter(
                         template.ValidWidth, template.ValidHeight);
-                PromptResult positionResult = editor.Drag(centerJig);
+                string centerPrompt = count > 0
+                    ? "继续指定下一裁图矩形中心点，按 Enter 或 Esc 完成"
+                    : "移动鼠标指定裁图矩形中心点，单击确认";
+                PromptResult positionResult = editor.DragWithHud(
+                    centerJig, centerPrompt);
                 if (positionResult.Status != PromptStatus.OK) break;
 
                 FrameCutRegionPlacementJig rotationJig =
                     FrameCutRegionPlacementJig.ForRotation(centerJig.Center,
                         template.ValidWidth, template.ValidHeight);
-                PromptResult rotationResult = editor.Drag(rotationJig);
+                PromptResult rotationResult = editor.DragWithHud(
+                    rotationJig, "移动鼠标调整裁图矩形旋转角度，单击确认");
                 if (rotationResult.Status != PromptStatus.OK) break;
 
                 ObjectId previewId;
@@ -333,7 +335,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             if (count > 0)
             {
                 editor.Regen();
-                editor.WriteMessage("\n[裁图区域] 已布置 {0} 个 {1} 红色裁图框。",
+                editor.WriteHudMessage("\n[裁图区域] 已布置 {0} 个 {1} 红色裁图框。",
                     count, template.PaperSize);
             }
         }
@@ -369,7 +371,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             {
                 MessageForAdding = "\n选择一个或多个闭合曲线："
             };
-            PromptSelectionResult selection = editor.GetSelection(options);
+            PromptSelectionResult selection = editor.GetHudSelection(options);
             if (selection.Status != PromptStatus.OK) return;
             double rotation;
             if (!TryPromptDirection(editor, out rotation)) return;
@@ -417,7 +419,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 transaction.Commit();
             }
             editor.Regen();
-            editor.WriteMessage("\n[裁图区域] 已设置 {0} 个闭合曲线。", count);
+            editor.WriteHudMessage("\n[裁图区域] 已设置 {0} 个闭合曲线。", count);
             if (oversized.Count > 0)
             {
                 CDBoxStudioFrameNoticeWindow.ShowNotice(
@@ -425,16 +427,16 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     new AcadMainWindow());
             }
             foreach (string message in rejected.Take(5))
-                editor.WriteMessage("\n  跳过：{0}", message);
+                editor.WriteHudMessage("\n  跳过：{0}", message);
             if (rejected.Count > 5)
-                editor.WriteMessage("\n  另有 {0} 个对象未设置。", rejected.Count - 5);
+                editor.WriteHudMessage("\n  另有 {0} 个对象未设置。", rejected.Count - 5);
         }
 
         private static bool TryPromptDirection(Editor editor,
             out double rotation)
         {
             rotation = 0;
-            PromptPointResult start = editor.GetPoint(
+            PromptPointResult start = editor.GetHudPoint(
                 "\n选择裁图方向起点：");
             if (start.Status != PromptStatus.OK) return false;
             PromptPointOptions endOptions = new PromptPointOptions(
@@ -443,12 +445,12 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 BasePoint = start.Value,
                 UseBasePoint = true
             };
-            PromptPointResult end = editor.GetPoint(endOptions);
+            PromptPointResult end = editor.GetHudPoint(endOptions);
             if (end.Status != PromptStatus.OK) return false;
             Vector3d direction = end.Value - start.Value;
             if (direction.Length <= GeometryHelper.Eps)
             {
-                editor.WriteMessage("\n[裁图区域] 裁图方向无效。");
+                editor.WriteHudMessage("\n[裁图区域] 裁图方向无效。");
                 return false;
             }
             rotation = Math.Atan2(direction.Y, direction.X);
@@ -462,7 +464,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             if (catalog == null || catalog.Templates == null
                 || catalog.Templates.Count == 0)
             {
-                editor.WriteMessage(
+                editor.WriteHudMessage(
                     "\n[图框模板] 尚未添加自定义图框，请先在图框设置中添加模板。");
                 return null;
             }
@@ -477,7 +479,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 .ToList();
             if (matches.Count == 0)
             {
-                editor.WriteMessage("\n[图框模板] 没有 {0} 图框模板。",
+                editor.WriteHudMessage("\n[图框模板] 没有 {0} 图框模板。",
                     string.IsNullOrWhiteSpace(requiredPaperSize)
                         ? "可用的" : requiredPaperSize);
                 return null;
@@ -559,9 +561,9 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 || result.Warnings.Count == 0) return;
             int limit = Math.Min(5, result.Warnings.Count);
             for (int i = 0; i < limit; i++)
-                editor.WriteMessage("\n  警告：{0}", result.Warnings[i]);
+                editor.WriteHudMessage("\n  警告：{0}", result.Warnings[i]);
             if (result.Warnings.Count > limit)
-                editor.WriteMessage("\n  另有 {0} 条附加标注警告。",
+                editor.WriteHudMessage("\n  另有 {0} 条附加标注警告。",
                     result.Warnings.Count - limit);
         }
 
@@ -599,7 +601,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                             "\n选择组成图框的对象（单独选择块可直接使用）："
                     };
                 PromptSelectionResult selection =
-                    editor.GetSelection(selectionOptions);
+                    editor.GetHudSelection(selectionOptions);
                 if (selection.Status != PromptStatus.OK
                     || selection.Value.Count == 0) return ObjectId.Null;
                 if (selection.Value.Count == 1)
@@ -627,7 +629,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 || string.IsNullOrWhiteSpace(file.StringResult)
                 || !File.Exists(file.StringResult)) return ObjectId.Null;
 
-            PromptPointResult point = editor.GetPoint(
+            PromptPointResult point = editor.GetHudPoint(
                 "\n选择模板图框可见范围的中心插入位置：");
             if (point.Status != PromptStatus.OK) return ObjectId.Null;
             string blockName;

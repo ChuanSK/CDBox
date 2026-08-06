@@ -40,7 +40,7 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("</div></header>");
 
             page.Append("<div class=\"as-mode-cards\">");
-            AppendModeCard(page, "surface", "表面积标注", "CASS 表面积计算与注记");
+            AppendModeCard(page, "surface", "表面积标注", "表面积或平面面积计算与注记");
             AppendModeCard(page, "pipeLength", "管线长度标注", "长度、开挖信息与属性联动");
             AppendModeCard(page, "node", "节点标注", "井号、井深和井类型注记");
             page.Append("</div>");
@@ -79,6 +79,9 @@ body.no-animations .annotation-settings-page *,body.no-animations .annotation-se
             script = script.Replace("step=\"0.1\"", "step=\"0.01\"");
             script = script.Replace("step=\"0.05\"", "step=\"0.01\"");
             script = script.Replace("step=\"0.001\"", "step=\"0.01\"");
+            script = script.Replace(
+                "this.field('计算方式','<div class=\"as-readonly\">'+esc(v.calculationMode||'调用 CASS surfacearea 计算（固定）')+'</div>')",
+                "this.field('计算设置',this.select('surface.calculationMode',v.calculationMode,[{value:'SurfaceArea',label:'表面积标注'},{value:'PlanArea',label:'面积标注'}],false))");
             script = script.Replace(
                 "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var h='<div class=\"as-color-control\"><span class=\"as-color-swatch\"></span><select class=\"as-select\" data-color-select data-field=\"'+path+'\" data-type=\"int\">';this.colors.forEach(function(c){h+='<option value=\"'+c.index+'\" data-color=\"'+esc(c.cssColor)+'\" '+(Number(c.index)===Number(value)?'selected':'')+'>'+esc(c.name)+' · '+c.index+'</option>';});return h+'</select></div>';};",
                 "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var c=null;for(var i=0;i<this.colors.length;i++){if(Number(this.colors[i].index)===Number(value)){c=this.colors[i];break;}}c=c||{index:value,name:'ACI '+value,cssColor:'#94a3b8',rgb:''};return '<div class=\"as-color-control\"><button type=\"button\" class=\"as-color-picker\" data-color-picker data-field=\"'+path+'\" data-index=\"'+c.index+'\"><span class=\"as-color-swatch\" style=\"background:'+esc(c.cssColor)+'\"></span><span class=\"as-color-copy\"><strong>'+esc(c.name)+'</strong><small>'+esc(c.rgb||('ACI '+c.index+' · '+c.cssColor))+'</small></span><span class=\"as-color-arrow\">›</span></button></div>';};");

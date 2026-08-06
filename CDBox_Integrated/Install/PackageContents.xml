@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage
   SchemaVersion="1.0"
-  AppVersion="3.3.0"
+  AppVersion="3.4.1"
   Name="CDBox"
   Description="CDBox 管线测绘辅助插件"
   Author="CDBox"
@@ -35,7 +35,7 @@
         <Command Global="TCGL" Local="TCGL" />
         <Command Global="CDSURF" Local="CDSURF" />
         <Command Global="BMJ" Local="BMJ" />
-        <Command Global="BMJBZ" Local="BMJBZ" />
+        <Command Global="MJBZ" Local="MJBZ" />
         <Command Global="CDLEN" Local="CDLEN" />
         <Command Global="GCBZ" Local="GCBZ" />
         <Command Global="CDNODE" Local="CDNODE" />
@@ -51,10 +51,8 @@
         <Command Global="CDQBOARD" Local="CDQBOARD" />
         <Command Global="CDEXCEL" Local="CDEXCEL" />
         <Command Global="GU_XL" Local="GU_XL" />
-        <Command Global="CDPROFILE" Local="CDPROFILE" />
-        <Command Global="CDZDM" Local="CDZDM" />
-        <Command Global="CDPROFILESET" Local="CDPROFILESET" />
-        <Command Global="CDZDMSZ" Local="CDZDMSZ" />
+        <Command Global="ZDM" Local="ZDM" />
+        <Command Global="ZDMSZ" Local="ZDMSZ" />
         <Command Global="TCFRAMEADD" Local="TCFRAMEADD" />
         <Command Global="TCFRAMECUT" Local="TCFRAMECUT" />
         <Command Global="TCFRAMELAYOUT" Local="TCFRAMELAYOUT" />

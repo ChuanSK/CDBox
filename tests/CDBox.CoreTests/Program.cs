@@ -260,6 +260,7 @@ namespace CDBox.CoreTests
                     StartNode = "W-51",
                     EndNode = "W-52",
                     Diameter = "DN200",
+                    Foundation = "砂石基础",
                     PlanLength = 16.59,
                     SelectionOrder = 0
                 }
@@ -308,13 +309,34 @@ namespace CDBox.CoreTests
             Near(4.340,
                 result.Profile.Spans[0].SlopePermille, 0.001,
                 "坡度应按两端管内底高差除平面距离计算为千分比");
+            Near(0.434,
+                result.Profile.Spans[0].SlopePercent, 0.001,
+                "参考图中的坡度显示值应按百分比输出");
+            Equal("砂石基础", result.Profile.Spans[0].Foundation,
+                "管道基础应传入纵断面数据栏");
             Near(1406.700,
                 result.Profile.Nodes[2].DesignInvertElevation, 1e-9,
                 "700沉泥井设计管内底标高应增加0.50米扣减值");
-            Near(1.300, result.Profile.Nodes[2].PipeBottomDepth, 1e-9,
-                "沉泥井管内底埋深应在井深基础上增加扣减值");
+            Near(0.300, result.Profile.Nodes[2].PipeBottomDepth, 1e-9,
+                "沉泥井管内底埋深应从井深扣除沉泥段");
             Near(36.59, result.Profile.Nodes[2].CumulativeDistance, 1e-9,
                 "累计平面距离");
+
+            LongitudinalProfileBuildResult reversed =
+                LongitudinalProfileCalculator.BuildBetweenNodes(
+                    pipes, wells, "W-53", "W-51");
+            True(reversed.Success, reversed.Message);
+            Equal("W-53", reversed.Profile.Nodes[0].NodeNo,
+                "纵断面左端必须保持为用户选择的起点节点");
+            Equal("W-51", reversed.Profile.Nodes[2].NodeNo,
+                "纵断面右端必须保持为用户选择的终点节点");
+
+            LongitudinalProfileBuildResult reversedSingle =
+                LongitudinalProfileCalculator.BuildBetweenNodes(
+                    new[] { pipes[1] }, wells, "W-52", "W-51");
+            True(reversedSingle.Success, reversedSingle.Message);
+            Equal("W-52", reversedSingle.Profile.Nodes[0].NodeNo,
+                "单管段也不能按原实体方向颠倒用户选择的起终点");
 
             LongitudinalProfileBuildResult disconnected =
                 LongitudinalProfileCalculator.Build(new[]
@@ -340,8 +362,40 @@ namespace CDBox.CoreTests
             settings.Normalize();
             Near(45.0, settings.HeaderWidth, 1e-9,
                 "表头宽度应回退默认值");
-            Equal(7, settings.Rows.Count,
-                "纵断面设置应始终保留七个数据栏");
+            Near(6.0, settings.HeaderTextHeight, 1e-9,
+                "当前表头文字高度应固化为默认值");
+            Equal("宋体", settings.HeaderTextStyleName,
+                "当前表头文字样式应固化为默认值");
+            Near(5.0, settings.HorizontalGridInterval, 1e-9,
+                "当前水平网格间距应固化为默认值");
+            Equal("CDBox-纵断面", settings.LayerName,
+                "当前绘图图层应固化为默认值");
+            Equal(8, settings.Rows.Count,
+                "纵断面设置应始终保留八个数据栏");
+            Equal("PipeFoundation", settings.Rows[6].Key,
+                "纵断面应包含管道基础栏");
+            True(settings.Rows.TrueForAll(x => x.TextStyleName == "宋体"),
+                "当前数据栏文字样式应固化为默认值");
+
+            LongitudinalProfileLayout layout =
+                LongitudinalProfileLayoutCalculator.Calculate(
+                    result.Profile, settings);
+            Near(0.5, layout.HorizontalFactor, 1e-9,
+                "横向1:1000应按参考图换算为0.5倍");
+            Near(5.0, layout.VerticalFactor, 1e-9,
+                "纵向1:100应按参考图换算为5倍");
+            Near(22.5, layout.HeaderRight, 1e-9,
+                "参考图表头宽度应为设置值的一半");
+            Near(42.5, layout.TableTop, 1e-9,
+                "八行参考表格总高");
+            Near(35.0, layout.Row("GroundElevation").Bottom, 1e-9,
+                "自然地面标高栏应按参考图缩放并位于表格顶部");
+            Near(0.0, layout.Row("WellNumber").Bottom, 1e-9,
+                "井编号栏底部应与插入点对齐");
+            Near(43.295, layout.DataRight, 1e-9,
+                "数据表应结束于最后一个井节点");
+            Near(45.0, layout.PlotRight, 1e-9,
+                "图面应按水平网格间距向右补齐");
 
             string standalone =
                 CDBoxStudioLongitudinalProfileSettingsPage
@@ -407,6 +461,11 @@ namespace CDBox.CoreTests
                 PipeLengthAnnotationTextComposer.ReplaceDerivedLengthToken(
                     "宽12.50m；长12.50m", "12.50", "9.20"),
                 "自定义下侧文字中长度字段不在首位时也应准确更新");
+
+            List<string> bottomLines = PipeLengthAnnotationTextComposer
+                .SplitBottomLines("第一行\r\n第二行\\P第三行");
+            Equal(3, bottomLines.Count, "下侧注记应按换行拆为多个单行文字");
+            Equal("第二行", bottomLines[1], "下侧注记换行内容应保持顺序");
         }
 
         private static void TestSpecialObjectsSkipQualityCheck()
@@ -1084,7 +1143,7 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("3.3.0", StringComparison.Ordinal) >= 0, "页面应显示 3.3.0 身份");
+            True(standalone.IndexOf("3.4.1", StringComparison.Ordinal) >= 0, "页面应显示 3.4.1 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
@@ -1142,6 +1201,10 @@ namespace CDBox.CoreTests
             False(annotationScript.IndexOf("step=\"0.1\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.1 小数步长");
             False(annotationScript.IndexOf("step=\"0.05\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.05 小数步长");
             False(annotationScript.IndexOf("step=\"0.001\"", StringComparison.Ordinal) >= 0, "标注设置不应保留 0.001 小数步长");
+            Contains(annotationScript, "surface.calculationMode", "表面积设置应提供计算模式选择");
+            Contains(annotationScript, "label:'表面积标注'", "计算设置应提供表面积标注");
+            Contains(annotationScript, "label:'面积标注'", "计算设置应提供面积标注");
+            False(annotationScript.IndexOf("调用 CASS surfacearea 计算（固定）", StringComparison.Ordinal) >= 0, "计算设置不应继续显示为固定模式");
             False(annotationEmbedded.IndexOf("data-action=\"reset-current\"", StringComparison.Ordinal) >= 0, "内嵌标注设置不应保留恢复默认按钮");
             False(annotationStandalone.IndexOf("data-action=\"reset-current\"", StringComparison.Ordinal) >= 0, "独立标注设置不应保留恢复默认按钮");
             False(annotationStandalone.IndexOf("data-action=\"close\">关闭", StringComparison.Ordinal) >= 0, "独立标注设置不应保留关闭按钮");

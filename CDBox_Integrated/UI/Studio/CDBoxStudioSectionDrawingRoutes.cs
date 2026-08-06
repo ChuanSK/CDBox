@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.SectionDrawing;
 using TCPipeAutoDraw.UI;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -65,7 +66,7 @@ namespace TCPipeAutoDraw.UI.Studio
                             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
                             if (doc == null) throw new InvalidOperationException("未找到当前图纸。");
                             SectionDrawingResult drawingResult = SectionDrawingService.SelectPositionAndDraw(doc, options);
-                            doc.Editor.WriteMessage(drawingResult.ToEditorMessage());
+                            doc.Editor.WriteHudMessage(drawingResult.ToEditorMessage());
                             SendResult(scriptSink, drawingResult.Message, drawingResult.Success);
                         })
                     };

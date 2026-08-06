@@ -1,33 +1,33 @@
 {
     "channel":  "studio-preview",
-    "latestVersion":  "CDBox-Studio-Preview-3.3.0",
-    "versionCode":  30300,
-    "title":  "CDBox Studio Preview 3.3.0",
-    "releaseDate":  "2026-07-30",
+    "latestVersion":  "CDBox-Studio-Preview-3.4.1",
+    "versionCode":  30401,
+    "title":  "CDBox Studio Preview 3.4.1",
+    "releaseDate":  "2026-08-06",
     "mandatory":  false,
     "package":  {
-                    "fileName":  "CDBox.Studio.Preview.3.3.0.zip",
-                    "size":  7574778,
-                    "sha256":  "26BA2E1A79A11116F5953FF0B4BBD1DFF1AFC614EAE7528863EDE8D586555B9A",
+                    "fileName":  "CDBox.Studio.Preview.3.4.1.zip",
+                    "size":  7597139,
+                    "sha256":  "EC93B1F8BB8AB59486CD5FB7D22F0F24FB5A4EFFAC483FEFB4F06165493E590F",
                     "urls":  [
                                  {
                                      "name":  "Gitee",
-                                     "url":  "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.3.0.zip"
+                                     "url":  "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.4.1.zip"
                                  },
                                  {
                                      "name":  "GitCode",
-                                     "url":  "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.3.0.zip"
+                                     "url":  "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.4.1.zip"
                                  },
                                  {
                                      "name":  "GitHub备用",
-                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.3.0/CDBox.Studio.Preview.3.3.0.zip"
+                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.4.1/CDBox.Studio.Preview.3.4.1.zip"
                                  }
                              ]
                 },
     "notes":  [
-                  "新增自定义图框、裁图与纵断面生成，并完善锁定图层和模板导入。",
-                  "新增 Excel 转 CAD、简码识别及统一 WebView2 设置界面。",
-                  "完善标注浮窗、重叠对象选择、节点绑定和属性变化后的注记同步。",
-                  "优化工程量明细导出、属性编辑、图层预设及三源更新检查。"
+                  "统一通知、提示与选择浮窗样式、动画、透明度和位置记忆。",
+                  "完善管长、节点、面积与表面积标注及属性变化后的绑定刷新。",
+                  "重构纵断面生成流程，并按参考图完善结构层、图层、井轮廓和管线样式。",
+                  "优化图框裁图、锁定图层、模板导入、工程量看板和更新器目标版本识别。"
               ]
 }

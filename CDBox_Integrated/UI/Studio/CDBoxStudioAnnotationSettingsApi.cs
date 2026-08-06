@@ -134,7 +134,9 @@ namespace TCPipeAutoDraw.UI.Studio
                 surface = new CDBoxStudioSurfaceAnnotationSettings
                 {
                     boundaryInterval = surface.BoundaryInterval,
-                    calculationMode = "调用 CASS surfacearea 计算（固定）",
+                    calculationMode = surface.CalculationMode == SurfaceAreaCalculationMode.PlanArea
+                        ? "PlanArea"
+                        : "SurfaceArea",
                     keepCassGeneratedObjects = !surface.DeleteCassGeneratedObjects,
                     textHeight = surface.TextHeight,
                     decimalPlaces = surface.DecimalPlaces,
@@ -181,7 +183,9 @@ namespace TCPipeAutoDraw.UI.Studio
             current.AnnotationFontName = NonEmpty(value.annotationFontName, current.AnnotationFontName, SurfaceAreaAnnotationOptions.Default.AnnotationFontName);
             current.AnnotationTemplate = NonEmpty(value.annotationTemplate, current.AnnotationTemplate, SurfaceAreaAnnotationOptions.Default.AnnotationTemplate);
             current.DeleteCassGeneratedObjects = !value.keepCassGeneratedObjects;
-            current.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
+            current.CalculationMode = string.Equals(value.calculationMode, "PlanArea", StringComparison.OrdinalIgnoreCase)
+                ? SurfaceAreaCalculationMode.PlanArea
+                : SurfaceAreaCalculationMode.CassCommand;
             return current;
         }
 

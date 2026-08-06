@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
@@ -119,6 +120,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public ObjectId PipeObjectId { get; set; }
         public ObjectId AnnotationObjectId { get; set; }
         public ObjectId BottomAnnotationObjectId { get; set; }
+        public List<ObjectId> BottomAnnotationObjectIds { get; private set; }
         public ObjectId LeaderObjectId { get; set; }
         public string AnnotationId { get; set; }
         public string SourceCDBoxObjectId { get; set; }
@@ -148,6 +150,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             PipeObjectId = ObjectId.Null;
             AnnotationObjectId = ObjectId.Null;
             BottomAnnotationObjectId = ObjectId.Null;
+            BottomAnnotationObjectIds = new List<ObjectId>();
             LeaderObjectId = ObjectId.Null;
             AnnotationId = string.Empty;
             SourceCDBoxObjectId = string.Empty;

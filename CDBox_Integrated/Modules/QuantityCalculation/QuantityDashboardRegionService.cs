@@ -47,10 +47,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             Editor ed = doc.Editor;
-            PromptPointResult p1 = ed.GetPoint("\n指定工程量统计区域第一个角点：");
+            PromptPointResult p1 = ed.GetHudPoint("\n指定工程量统计区域第一个角点：");
             if (p1.Status != PromptStatus.OK) return null;
             PromptCornerOptions corner = new PromptCornerOptions("\n指定工程量统计区域对角点：", p1.Value);
-            PromptPointResult p2 = ed.GetCorner(corner);
+            PromptPointResult p2 = ed.GetHudCorner(corner);
             if (p2.Status != PromptStatus.OK) return null;
             string defaultName = "统计区域 " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
             string name = PromptRegionName(ed, defaultName);
@@ -91,7 +91,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             PromptEntityOptions options = new PromptEntityOptions("\n选择已有闭合多段线作为工程量统计区域：");
             options.SetRejectMessage("\n只能选择二维闭合多段线。");
             options.AddAllowedClass(typeof(Polyline), true);
-            PromptEntityResult selected = ed.GetEntity(options);
+            PromptEntityResult selected = ed.GetHudEntity(options);
             if (selected.Status != PromptStatus.OK) return null;
 
             string defaultName = "统计区域 " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
@@ -323,7 +323,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             PromptStringOptions options = new PromptStringOptions("\n输入统计区域名称 <" + defaultName + ">：");
             options.AllowSpaces = true;
-            PromptResult result = ed.GetString(options);
+            PromptResult result = ed.GetHudString(options);
             if (result.Status != PromptStatus.OK) return null;
             string name = (result.StringResult ?? defaultName).Trim();
             return name.Length == 0 ? defaultName : name;

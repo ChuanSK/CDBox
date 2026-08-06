@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
 
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
@@ -579,7 +580,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 while (true)
                 {
                     PipeLengthAnnotationResult result = PipeLengthAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                    _doc.Editor.WriteMessage(result.ToEditorMessage());
+                    _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                     //WriteLog(result);
 
                     if (result.IsCancelled)
@@ -592,7 +593,6 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch (System.Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[管线长度标注] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

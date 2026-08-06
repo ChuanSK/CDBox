@@ -693,8 +693,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 try
                 {
                     if (wasVisible) this.Hide();
-                    _doc.Editor.WriteMessage("\n请选择对象，完成后回车确认；取消请按 ESC。 ");
-                    psr = _doc.Editor.GetSelection(opts);
+                    _doc.Editor.WriteHudMessage("\n请选择对象，完成后回车确认；取消请按 ESC。 ");
+                    psr = _doc.Editor.GetHudSelection(opts);
                 }
                 finally
                 {
@@ -974,7 +974,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             if (_lblStatus != null) _lblStatus.Text = message;
             try
             {
-                _doc.Editor.WriteMessage("\n[图层管理] " + message);
+                _doc.Editor.WriteHudMessage("\n[图层管理] " + message);
             }
             catch
             {

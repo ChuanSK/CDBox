@@ -12,6 +12,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public string StartNode { get; set; }
         public string EndNode { get; set; }
         public string Diameter { get; set; }
+        public string Foundation { get; set; }
         public double OuterDiameter { get; set; }
         public double PlanLength { get; set; }
         public int SelectionOrder { get; set; }
@@ -47,9 +48,11 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public string StartNode { get; set; }
         public string EndNode { get; set; }
         public string Diameter { get; set; }
+        public string Foundation { get; set; }
         public double OuterDiameter { get; set; }
         public double PlanLength { get; set; }
         public double SlopePermille { get; set; }
+        public double SlopePercent { get { return SlopePermille / 10.0; } }
     }
 
     public sealed class LongitudinalProfileData
@@ -84,6 +87,147 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
     {
         private static readonly StringComparer NodeComparer =
             StringComparer.CurrentCultureIgnoreCase;
+
+        /// <summary>
+        /// 从整张管网中自动寻找指定起点井到终点井的最短连通路径，
+        /// 再按该方向生成纵断面数据。允许原管网存在分支。
+        /// </summary>
+        public static LongitudinalProfileBuildResult BuildBetweenNodes(
+            IEnumerable<LongitudinalProfilePipeData> allPipes,
+            IEnumerable<LongitudinalProfileWellData> wells,
+            string startNode, string endNode)
+        {
+            string start = Clean(startNode);
+            string end = Clean(endNode);
+            if (start.Length == 0 || end.Length == 0)
+                return Fail("起点节点或终点节点缺少井编号。");
+            if (NodeComparer.Equals(start, end))
+                return Fail("起点节点和终点节点不能相同。");
+
+            List<LongitudinalProfilePipeData> pipes =
+                (allPipes ?? Enumerable.Empty<LongitudinalProfilePipeData>())
+                    .Where(p => p != null
+                        && Clean(p.StartNode).Length > 0
+                        && Clean(p.EndNode).Length > 0
+                        && p.PlanLength > 1e-8)
+                    .ToList();
+            if (pipes.Count == 0)
+                return Fail("当前图纸中没有可用于纵断面的主管管线。");
+
+            var adjacency =
+                new Dictionary<string, List<int>>(NodeComparer);
+            for (int i = 0; i < pipes.Count; i++)
+            {
+                pipes[i].StartNode = Clean(pipes[i].StartNode);
+                pipes[i].EndNode = Clean(pipes[i].EndNode);
+                AddEdge(adjacency, pipes[i].StartNode, i);
+                AddEdge(adjacency, pipes[i].EndNode, i);
+            }
+            if (!adjacency.ContainsKey(start)
+                || !adjacency.ContainsKey(end))
+                return Fail("所选起点或终点没有连接到已保存属性的主管管线。");
+
+            var distances =
+                new Dictionary<string, double>(NodeComparer);
+            var previousNode =
+                new Dictionary<string, string>(NodeComparer);
+            var previousEdge =
+                new Dictionary<string, int>(NodeComparer);
+            var visited = new HashSet<string>(NodeComparer);
+            distances[start] = 0.0;
+
+            while (true)
+            {
+                string current = null;
+                double currentDistance = double.MaxValue;
+                foreach (KeyValuePair<string, double> item in distances)
+                {
+                    if (visited.Contains(item.Key)) continue;
+                    if (item.Value < currentDistance)
+                    {
+                        current = item.Key;
+                        currentDistance = item.Value;
+                    }
+                }
+                if (current == null) break;
+                if (NodeComparer.Equals(current, end)) break;
+                visited.Add(current);
+
+                List<int> edges;
+                if (!adjacency.TryGetValue(current, out edges)) continue;
+                foreach (int edgeIndex in edges)
+                {
+                    LongitudinalProfilePipeData pipe = pipes[edgeIndex];
+                    string next = NodeComparer.Equals(
+                        pipe.StartNode, current)
+                        ? pipe.EndNode : pipe.StartNode;
+                    if (visited.Contains(next)) continue;
+                    double candidate = currentDistance + pipe.PlanLength;
+                    double known;
+                    if (!distances.TryGetValue(next, out known)
+                        || candidate < known - 1e-8)
+                    {
+                        distances[next] = candidate;
+                        previousNode[next] = current;
+                        previousEdge[next] = edgeIndex;
+                    }
+                }
+            }
+
+            if (!distances.ContainsKey(end)
+                || !previousEdge.ContainsKey(end))
+                return Fail("起点井“" + start + "”与终点井“"
+                    + end + "”之间没有连通的主管路径。");
+
+            var pathEdges = new List<int>();
+            string cursor = end;
+            int guard = 0;
+            while (!NodeComparer.Equals(cursor, start)
+                && guard++ <= pipes.Count)
+            {
+                int edge;
+                string previous;
+                if (!previousEdge.TryGetValue(cursor, out edge)
+                    || !previousNode.TryGetValue(cursor, out previous))
+                    return Fail("无法还原起点至终点的主管路径。");
+                pathEdges.Add(edge);
+                cursor = previous;
+            }
+            if (!NodeComparer.Equals(cursor, start))
+                return Fail("起点至终点的主管路径存在循环，无法生成纵断面。");
+            pathEdges.Reverse();
+
+            var selected = new List<LongitudinalProfilePipeData>();
+            string pathNode = start;
+            for (int i = 0; i < pathEdges.Count; i++)
+            {
+                LongitudinalProfilePipeData source = pipes[pathEdges[i]];
+                string nextNode;
+                if (NodeComparer.Equals(source.StartNode, pathNode))
+                    nextNode = source.EndNode;
+                else if (NodeComparer.Equals(source.EndNode, pathNode))
+                    nextNode = source.StartNode;
+                else
+                    return Fail("无法按所选起点到终点的方向还原主管路径。");
+                selected.Add(new LongitudinalProfilePipeData
+                {
+                    SourceId = source.SourceId,
+                    // 固定为用户选择的起点 -> 终点方向，单管段也不能因
+                    // 原对象自身的绘制方向而把纵断面左右颠倒。
+                    StartNode = pathNode,
+                    EndNode = nextNode,
+                    Diameter = source.Diameter,
+                    Foundation = source.Foundation,
+                    OuterDiameter = source.OuterDiameter,
+                    PlanLength = source.PlanLength,
+                    SelectionOrder = i
+                });
+                pathNode = nextNode;
+            }
+            if (!NodeComparer.Equals(pathNode, end))
+                return Fail("无法按所选起点到终点的方向还原主管路径。");
+            return Build(selected, wells);
+        }
 
         public static LongitudinalProfileBuildResult Build(
             IEnumerable<LongitudinalProfilePipeData> selectedPipes,
@@ -193,7 +337,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     GroundElevation = well.GroundElevation,
                     DesignInvertElevation =
                         well.GroundElevation - well.WellDepth + adjustment,
-                    PipeBottomDepth = well.WellDepth + adjustment,
+                    PipeBottomDepth = Math.Max(0.0,
+                        well.WellDepth - adjustment),
                     WellDepth = well.WellDepth,
                     SiltWellAdjustment = adjustment,
                     CumulativeDistance = distance
@@ -213,6 +358,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     StartNode = from.NodeNo,
                     EndNode = to.NodeNo,
                     Diameter = Clean(pipe.Diameter),
+                    Foundation = Clean(pipe.Foundation),
                     OuterDiameter = ResolveOuterDiameter(pipe),
                     PlanLength = pipe.PlanLength,
                     SlopePermille =

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -88,7 +89,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             DBText text = entity as DBText;
             if (text != null && (string.Equals(part, "MainText", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(part, "SecondaryText", StringComparison.OrdinalIgnoreCase)))
+                || PipeLengthAnnotationObjectService.IsSecondaryAnnotationPart(part)))
             {
                 grips.Add(new TextGripData(GetTextPoint(text)));
             }
@@ -300,7 +301,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         }
                         catch (System.Exception ex)
                         {
-                            try { doc.Editor.WriteMessage("\n[CDBox 标注绑定] 自动更新失败：" + ex.Message); }
+                            try { doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] 自动更新失败：" + ex.Message); }
                             catch { }
                         }
                         finally
@@ -314,7 +315,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 }
                 catch (System.Exception ex)
                 {
-                    try { doc.Editor.WriteMessage("\n[CDBox 标注绑定] 自动更新调度失败：" + ex.Message); }
+                    try { doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] 自动更新调度失败：" + ex.Message); }
                     catch { }
                     PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(
                         doc, edit.AnnotationId);

@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
@@ -31,6 +32,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
         private NumericUpDown _surfInterval;
         private NumericUpDown _surfTextHeight;
         private NumericUpDown _surfDecimals;
+        private ComboBox _surfCalculationMode;
         private CheckBox _surfKeepCassObjects;
         private ComboBox _surfFonts;
         private TextBox _surfTemplate;
@@ -168,13 +170,22 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             SetNumberValue(_surfInterval, (decimal)_surfaceInitialOptions.BoundaryInterval);
             AddRow(table, 0, "边界插值间隔（米）", _surfInterval);
 
-            var calcLabel = MakeValueLabel("调用 CASS surfacearea 计算（固定）");
-            AddRow(table, 1, "计算方式", calcLabel);
+            _surfCalculationMode = new ComboBox();
+            _surfCalculationMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            _surfCalculationMode.Items.Add("表面积标注");
+            _surfCalculationMode.Items.Add("面积标注");
+            _surfCalculationMode.SelectedIndex = _surfaceInitialOptions.CalculationMode == SurfaceAreaCalculationMode.PlanArea ? 1 : 0;
+            _surfCalculationMode.SelectedIndexChanged += delegate
+            {
+                if (_surfKeepCassObjects != null) _surfKeepCassObjects.Enabled = _surfCalculationMode.SelectedIndex != 1;
+            };
+            AddRow(table, 1, "计算设置", _surfCalculationMode);
 
             _surfKeepCassObjects = new CheckBox();
             _surfKeepCassObjects.Text = "保留 CASS 生成的三角网和三角面积文字（默认不保留）";
             _surfKeepCassObjects.AutoSize = true;
             _surfKeepCassObjects.Checked = !_surfaceInitialOptions.DeleteCassGeneratedObjects;
+            _surfKeepCassObjects.Enabled = _surfCalculationMode.SelectedIndex != 1;
             AddRow(table, 2, "CASS生成物", _surfKeepCassObjects);
 
             _surfTextHeight = MakeNumber(0.1M, 1000M, 1M, 1);
@@ -687,7 +698,9 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 TextHeight = (double)_surfTextHeight.Value,
                 DecimalPlaces = (int)_surfDecimals.Value,
                 AnnotationTemplate = _surfTemplate.Text,
-                CalculationMode = SurfaceAreaCalculationMode.CassCommand,
+                CalculationMode = _surfCalculationMode != null && _surfCalculationMode.SelectedIndex == 1
+                    ? SurfaceAreaCalculationMode.PlanArea
+                    : SurfaceAreaCalculationMode.CassCommand,
                 CassSurfaceLogPath = string.Empty,
                 DeleteCassGeneratedObjects = !(_surfKeepCassObjects != null && _surfKeepCassObjects.Checked),
                 AnnotationFontName = textStyleName,
@@ -793,7 +806,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 if (wasVisible) Hide();
 
                 SurfaceAreaAnnotationResult result = SurfaceAreaAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
 
                 if (result.Success || result.AsyncStarted)
                 {
@@ -808,7 +821,6 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             catch (Exception ex)
             {
                 restoreForm = true;
-                _doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -835,7 +847,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 while (true)
                 {
                     PipeLengthAnnotationResult result = PipeLengthAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                    _doc.Editor.WriteMessage(result.ToEditorMessage());
+                    _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                     if (result.IsCancelled)
                     {
                         restoreForm = false;
@@ -846,7 +858,6 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[管线长度标注] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -873,7 +884,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 while (true)
                 {
                     NodeAnnotationResult result = NodeAnnotationService.SelectAndAnnotate(_doc, options);
-                    _doc.Editor.WriteMessage(result.ToEditorMessage());
+                    _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                     if (!result.Success)
                     {
                         restoreForm = false;
@@ -884,7 +895,6 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[节点标注] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

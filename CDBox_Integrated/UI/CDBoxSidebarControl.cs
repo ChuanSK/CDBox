@@ -403,7 +403,9 @@ namespace TCPipeAutoDraw.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(new AcadMainWindow(), ex.Message, module.Name + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
+                    module.Name + "运行失败", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
@@ -415,7 +417,9 @@ namespace TCPipeAutoDraw.UI
                 Document doc = AcadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    CDBoxMessageBox.Show(new AcadMainWindow(),
+                        "未找到当前图纸。", "CDBox", MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
                     return;
                 }
                 string stateActionId = GetStateActionId(commandName);
@@ -424,7 +428,9 @@ namespace TCPipeAutoDraw.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 命令执行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
+                    "CDBox 命令执行失败", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 

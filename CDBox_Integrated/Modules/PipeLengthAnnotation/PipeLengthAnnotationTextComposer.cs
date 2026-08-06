@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -145,6 +146,22 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return fallback.Success
                 ? source.Remove(fallback.Index, fallback.Length).Insert(fallback.Index, newNumber)
                 : source;
+        }
+
+        public static List<string> SplitBottomLines(string text)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(text)) return result;
+            string normalized = text.Replace("\\P", "\n")
+                .Replace("\r\n", "\n").Replace('\r', '\n');
+            foreach (string rawLine in normalized.Split(
+                new[] { '\n' }, StringSplitOptions.None))
+            {
+                string line = Regex.Replace(rawLine ?? string.Empty,
+                    @"\s+", " ").Trim();
+                if (line.Length > 0) result.Add(line);
+            }
+            return result;
         }
 
         private static string ExtractNumber(string token)

@@ -31,7 +31,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             ObjectId previewTextStyleId = ResolveTextStyleId(doc, drawingOptions.TextStyleName);
             var jig = new SectionPlacementJig(drawingOptions, previewTextStyleId);
-            PromptResult prompt = ed.Drag(jig);
+            PromptResult prompt = ed.DragWithHud(jig,
+                "请选择生成图左下角插入点");
             if (prompt.Status != PromptStatus.OK)
             {
                 return new SectionDrawingResult

@@ -146,6 +146,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _bottomRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             _bottomText = CreateTextBox();
             _bottomText.ToolTip = "下侧补充标注";
+            _bottomText.AcceptsReturn = true;
+            _bottomText.TextWrapping = TextWrapping.Wrap;
+            _bottomText.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            _bottomText.VerticalContentAlignment = VerticalAlignment.Top;
+            _bottomText.MinHeight = 52;
+            _bottomText.MaxHeight = 112;
             _bottomRow.Children.Add(_bottomText);
             root.Children.Add(_bottomRow);
 
@@ -551,6 +557,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (e.Key == Key.Enter)
             {
+                if (ReferenceEquals(sender, _bottomText)
+                    && (Keyboard.Modifiers & ModifierKeys.Control) == 0)
+                {
+                    return;
+                }
                 e.Handled = true;
                 CommitCurrentModel();
                 Keyboard.ClearFocus();

@@ -27,7 +27,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 return;
             }
             ReleaseStaleWindow();
-            var window = new CDBoxStudioWebPageForm("属性编辑器 · 3.3.0", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
+            var window = new CDBoxStudioWebPageForm("属性编辑器 · 3.4.1", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
             _current = window;
             window.Width = 1180;
             window.Height = 820;
@@ -43,7 +43,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 RestoreCadFocus();
             };
             window.Show(owner ?? new AcadMainWindow());
-            CDBoxStudioLogger.Info("已打开属性编辑器 3.3.0 独立窗口。");
+            CDBoxStudioLogger.Info("已打开属性编辑器 3.4.1 独立窗口。");
         }
 
         private static bool IsReusable(CDBoxStudioWebPageForm window)
@@ -69,6 +69,40 @@ namespace TCPipeAutoDraw.UI.Studio
                     AcadApp.MainWindow.Focus();
             }
             catch { }
+        }
+
+        internal static FormWindowState? MinimizeForCadSelection()
+        {
+            CDBoxStudioWebPageForm window = _current;
+            if (!IsReusable(window)) return null;
+            if (window.InvokeRequired)
+            {
+                return (FormWindowState?)window.Invoke(
+                    new Func<FormWindowState?>(MinimizeForCadSelection));
+            }
+
+            FormWindowState previousState = window.WindowState;
+            window.WindowState = FormWindowState.Minimized;
+            System.Windows.Forms.Application.DoEvents();
+            RestoreCadFocus();
+            return previousState;
+        }
+
+        internal static void RestoreAfterCadSelection(FormWindowState? previousState)
+        {
+            CDBoxStudioWebPageForm window = _current;
+            if (!previousState.HasValue || !IsReusable(window)) return;
+            if (window.InvokeRequired)
+            {
+                window.Invoke(new Action<FormWindowState?>(RestoreAfterCadSelection), previousState);
+                return;
+            }
+
+            window.WindowState = previousState.Value == FormWindowState.Minimized
+                ? FormWindowState.Normal
+                : previousState.Value;
+            window.Show();
+            window.Activate();
         }
 
         private static CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)

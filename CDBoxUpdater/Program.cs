@@ -303,7 +303,30 @@ namespace CDBoxUpdater
             var result = new List<Process>();
             int currentPid = Process.GetCurrentProcess().Id;
 
-            if (!string.IsNullOrWhiteSpace(processName))
+            // 新版清单始终记录启动更新器的 AutoCAD 实例 PID。只等待该实例，
+            // 避免同机并行运行的 AutoCAD 2020/2023 等其它版本阻塞本次更新。
+            if (expectedPid > 0 && expectedPid != currentPid)
+            {
+                try
+                {
+                    Process process = Process.GetProcessById(expectedPid);
+                    if (MatchesExpectedStartTime(process, expectedStartTimeUtc))
+                        result.Add(process);
+                    else
+                        process.Dispose();
+                }
+                catch (ArgumentException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    UpdaterLogger.Warn("检查目标 AutoCAD PID 失败：" + ex.Message);
+                }
+                return result;
+            }
+
+            // 仅为没有 PID 的旧版 pending-update.json 保留进程名兼容逻辑。
+            if (expectedPid <= 0 && !string.IsNullOrWhiteSpace(processName))
             {
                 try
                 {
@@ -322,21 +345,6 @@ namespace CDBoxUpdater
                 {
                     UpdaterLogger.Warn("枚举 AutoCAD 进程失败，将退回到 PID 检查：" + ex.Message);
                 }
-            }
-
-            if (expectedPid <= 0 || expectedPid == currentPid) return result;
-            try
-            {
-                Process process = Process.GetProcessById(expectedPid);
-                if (MatchesExpectedStartTime(process, expectedStartTimeUtc)) result.Add(process);
-                else process.Dispose();
-            }
-            catch (ArgumentException)
-            {
-            }
-            catch (Exception ex)
-            {
-                UpdaterLogger.Warn("检查 AutoCAD PID 失败：" + ex.Message);
             }
             return result;
         }

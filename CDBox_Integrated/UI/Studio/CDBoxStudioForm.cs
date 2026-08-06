@@ -135,24 +135,33 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private void RouteMessage(string raw)
         {
-            CDBoxStudioRouteRequest request = CDBoxStudioRouteRequest.Parse(raw);
-            CDBoxStudioRouteResult result = _router == null ? null : _router.Route(request);
-            if (result == null || !result.Handled) return;
-
-            if (!string.IsNullOrWhiteSpace(result.WindowTitleSuffix))
+            CDBoxStudioRouteResult result;
+            using (CDBoxNotificationService.BeginWorkbenchScope(ShowToast))
             {
-                Text = "CDBox Studio（" + result.WindowTitleSuffix.Trim() + "）";
+                CDBoxStudioRouteRequest request =
+                    CDBoxStudioRouteRequest.Parse(raw);
+                result = _router == null
+                    ? null : _router.Route(request);
+                if (result == null || !result.Handled) return;
+
+                if (!string.IsNullOrWhiteSpace(result.WindowTitleSuffix))
+                {
+                    Text = "CDBox Studio（"
+                        + result.WindowTitleSuffix.Trim() + "）";
+                }
+
+                if (result.ActionToRun == null)
+                {
+                    if (result.RefreshPage) RefreshPage();
+                    if (!string.IsNullOrWhiteSpace(result.ExecuteScript))
+                        ExecuteScript(result.ExecuteScript);
+                    if (!string.IsNullOrWhiteSpace(result.ToastMessage))
+                        ShowToast(result.ToastMessage, result.ToastKind);
+                    return;
+                }
             }
 
-            if (result.ActionToRun != null)
-            {
-                RunAction(result.ActionToRun, result.RefreshPage);
-                return;
-            }
-
-            if (result.RefreshPage) RefreshPage();
-            if (!string.IsNullOrWhiteSpace(result.ExecuteScript)) ExecuteScript(result.ExecuteScript);
-            if (!string.IsNullOrWhiteSpace(result.ToastMessage)) ShowToast(result.ToastMessage, result.ToastKind);
+            RunAction(result.ActionToRun, result.RefreshPage);
         }
 
         private void RunAction(CDBoxStudioAction action, bool refreshAfterRun)

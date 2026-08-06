@@ -662,11 +662,19 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 ObjectId textId = DrawAnnotationDbText(db, tr, initialLayout.TopTextPoint, text, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
                 result.AnnotationObjectId = textId;
 
-                ObjectId bottomTextId = ObjectId.Null;
-                if (!string.IsNullOrWhiteSpace(bottomText) && !textId.IsNull)
+                List<string> bottomLines = SplitBottomAnnotationLines(bottomText);
+                if (bottomLines.Count > 0 && !textId.IsNull)
                 {
-                    bottomTextId = DrawAnnotationDbText(db, tr, initialLayout.BottomTextPoint, bottomText, options.TextHeight, result.AnnotationLayerName, 7, finalTextStyleId);
-                    result.BottomAnnotationObjectId = bottomTextId;
+                    for (int i = 0; i < bottomLines.Count && i < initialLayout.BottomTextPoints.Count; i++)
+                    {
+                        ObjectId bottomTextId = DrawAnnotationDbText(db, tr,
+                            initialLayout.BottomTextPoints[i], bottomLines[i], options.TextHeight,
+                            result.AnnotationLayerName, 7, finalTextStyleId);
+                        if (bottomTextId.IsNull) continue;
+                        result.BottomAnnotationObjectIds.Add(bottomTextId);
+                        if (result.BottomAnnotationObjectId.IsNull)
+                            result.BottomAnnotationObjectId = bottomTextId;
+                    }
                 }
 
                 // 为保证“预览即实际”，正式落图使用与 Jig 预览完全相同的布局计算结果。
@@ -693,7 +701,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             PipeLengthAnnotationEditModel model = PipeLengthAnnotationObjectService.LoadEditModel(doc, annotationObjectId);
             if (model == null || !model.HasBindingPoint)
             {
-                doc.Editor.WriteMessage("\n[CDBox 标注调整] 标注缺少有效绑定点。 ");
+                doc.Editor.WriteHudMessage("\n[CDBox 标注调整] 标注缺少有效绑定点。 ");
                 return false;
             }
 
@@ -724,7 +732,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Point3d leaderJoin = IsRightAttachment(attachment) ? layout.UnderlineEnd : layout.UnderlineStart;
             Point3d farEnd = IsRightAttachment(attachment) ? layout.UnderlineStart : layout.UnderlineEnd;
             PipeLengthAnnotationObjectService.ApplyExistingPlacement(doc, model.AnnotationId,
-                layout.TopTextPoint, layout.BottomTextPoint, leaderJoin, farEnd, annotationObjectId);
+                layout.TopTextPoint, layout.BottomTextPoints, leaderJoin, farEnd, annotationObjectId);
             return true;
         }
 
@@ -1148,6 +1156,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
 
+        internal static List<string> SplitBottomAnnotationLines(string text)
+        {
+            return PipeLengthAnnotationTextComposer.SplitBottomLines(text);
+        }
+
         private static ObjectId DrawLeaderByUnderline(Database db, Transaction tr, Point3d leaderStartPoint,
             Point3d underlineStart, Point3d underlineEnd, string layerName, AttachmentPoint attachment)
         {
@@ -1344,7 +1357,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                var options = new JigPromptPointOptions("\n指定注记位置，按 ESC 退出");
+                var options = new JigPromptPointOptions("\n指定注记位置，按 ESC 退出：");
                 options.UseBasePoint = true;
                 options.BasePoint = _leaderStartPoint;
                 options.UserInputControls = UserInputControls.Accept3dCoordinates
@@ -1370,9 +1383,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 PreviewLayout layout = BuildPreviewLayout(_text, _bottomText, _textHeight, _annotationPoint, attachment, _metrics);
 
                 DrawPreviewText(draw, _database, layout.TopTextPoint, _text, _textHeight, _textStyleId);
-                if (!string.IsNullOrWhiteSpace(_bottomText))
+                List<string> bottomLines = SplitBottomAnnotationLines(_bottomText);
+                for (int i = 0; i < bottomLines.Count && i < layout.BottomTextPoints.Count; i++)
                 {
-                    DrawPreviewText(draw, _database, layout.BottomTextPoint, _bottomText, _textHeight, _textStyleId);
+                    DrawPreviewText(draw, _database, layout.BottomTextPoints[i],
+                        bottomLines[i], _textHeight, _textStyleId);
                 }
 
                 using (var polyline = new Autodesk.AutoCAD.DatabaseServices.Polyline())
@@ -1397,13 +1412,18 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             /// DBText 的中心基线点。预览和正式落图都使用同一对齐方式，避免“预览一套、成图一套”。
             /// </summary>
             public Point3d TopTextPoint { get; set; }
-            public Point3d BottomTextPoint { get; set; }
+            public List<Point3d> BottomTextPoints { get; private set; }
 
             public double TopTextWidth { get; set; }
             public double BottomTextWidth { get; set; }
             public double UnderlineWidth { get; set; }
             public Point3d UnderlineStart { get; set; }
             public Point3d UnderlineEnd { get; set; }
+
+            public PreviewLayout()
+            {
+                BottomTextPoints = new List<Point3d>();
+            }
         }
 
         private sealed class TextLayoutMetrics
@@ -1418,7 +1438,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             metrics = metrics ?? CreateEstimatedTextLayoutMetrics(text, bottomText, textHeight);
 
             double topWidth = Math.Max(metrics.TopTextWidth, EstimatePreviewTextWidth(text, textHeight));
-            double bottomWidth = string.IsNullOrWhiteSpace(bottomText) ? 0.0 : Math.Max(metrics.BottomTextWidth, EstimatePreviewTextWidth(bottomText, textHeight));
+            List<string> bottomLines = SplitBottomAnnotationLines(bottomText);
+            double bottomWidth = bottomLines.Count == 0 ? 0.0
+                : Math.Max(metrics.BottomTextWidth, EstimateMaximumTextWidth(bottomLines, textHeight));
             double sideMargin = Math.Max(textHeight * 0.12, 0.03);
             double lineWidth = Math.Max(topWidth, bottomWidth) + sideMargin * 2.0;
             if (lineWidth < DuplicateTolerance) lineWidth = Math.Max(textHeight * 4.0, 1.0);
@@ -1450,7 +1472,13 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             layout.UnderlineStart = new Point3d(lineStartX, lineY, z);
             layout.UnderlineEnd = new Point3d(lineEndX, lineY, z);
             layout.TopTextPoint = new Point3d(centerX, annotationPoint.Y, z);
-            layout.BottomTextPoint = new Point3d(centerX, lineY - lineGap - textHeight, z);
+            double firstBottomY = lineY - lineGap - textHeight;
+            double lineSpacing = Math.Max(textHeight * 1.45, textHeight + 0.05);
+            for (int i = 0; i < bottomLines.Count; i++)
+            {
+                layout.BottomTextPoints.Add(new Point3d(centerX,
+                    firstBottomY - i * lineSpacing, z));
+            }
             return layout;
         }
 
@@ -1518,9 +1546,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             TextLayoutMetrics estimated = CreateEstimatedTextLayoutMetrics(topText, bottomText, textHeight);
             var metrics = new TextLayoutMetrics();
             metrics.TopTextWidth = Math.Max(estimated.TopTextWidth, MeasureDbTextWidth(db, tr, topText, textHeight, textStyleId, estimated.TopTextWidth));
-            metrics.BottomTextWidth = string.IsNullOrWhiteSpace(bottomText)
-                ? 0.0
-                : Math.Max(estimated.BottomTextWidth, MeasureDbTextWidth(db, tr, bottomText, textHeight, textStyleId, estimated.BottomTextWidth));
+            List<string> bottomLines = SplitBottomAnnotationLines(bottomText);
+            metrics.BottomTextWidth = 0.0;
+            foreach (string bottomLine in bottomLines)
+            {
+                double estimatedLineWidth = EstimatePreviewTextWidth(bottomLine, textHeight);
+                metrics.BottomTextWidth = Math.Max(metrics.BottomTextWidth,
+                    MeasureDbTextWidth(db, tr, bottomLine, textHeight, textStyleId,
+                        estimatedLineWidth));
+            }
             return metrics;
         }
 
@@ -1528,8 +1562,19 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             var metrics = new TextLayoutMetrics();
             metrics.TopTextWidth = EstimatePreviewTextWidth(topText, textHeight);
-            metrics.BottomTextWidth = string.IsNullOrWhiteSpace(bottomText) ? 0.0 : EstimatePreviewTextWidth(bottomText, textHeight);
+            metrics.BottomTextWidth = EstimateMaximumTextWidth(
+                SplitBottomAnnotationLines(bottomText), textHeight);
             return metrics;
+        }
+
+        private static double EstimateMaximumTextWidth(IList<string> lines,
+            double textHeight)
+        {
+            double width = 0.0;
+            if (lines == null) return width;
+            foreach (string line in lines)
+                width = Math.Max(width, EstimatePreviewTextWidth(line, textHeight));
+            return width;
         }
 
         private static double MeasureDbTextWidth(Database db, Transaction tr, string text, double textHeight, ObjectId textStyleId, double fallbackWidth)

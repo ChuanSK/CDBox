@@ -33,11 +33,11 @@ namespace TCPipeAutoDraw.Modules.ShortCodeRecognition
                     new ShortCodeRecognitionModule().Run(document,
                         selected.StringResult,
                         ShortCodeRecognitionSettingsStore.Load());
-                editor.WriteMessage(result.ToEditorMessage());
+                editor.WriteHudMessage(result.ToEditorMessage());
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage(
+                editor.WriteHudMessage(
                     "\n[简码识别] 识别失败，图纸未写入不完整结果："
                     + ex.Message);
             }

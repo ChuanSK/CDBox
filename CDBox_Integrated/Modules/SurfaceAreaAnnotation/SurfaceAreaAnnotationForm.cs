@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
@@ -18,6 +19,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         private NumericUpDown _numInterval;
         private NumericUpDown _numTextHeight;
         private NumericUpDown _numDecimals;
+        private ComboBox _cmbCalculationMode;
         private TextBox _txtCassLogPath;
         private Button _btnBrowseCassLog;
         private CheckBox _chkDeleteCassObjects;
@@ -60,7 +62,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             Controls.Add(root);
 
             var title = new Label();
-            title.Text = "表面积标注：固定调用 CASS surfacearea 计算";
+            title.Text = "表面积 / 面积标注";
             title.AutoSize = true;
             title.Font = new System.Drawing.Font(title.Font.FontFamily, 11, System.Drawing.FontStyle.Bold);
             title.Padding = new Padding(0, 0, 0, 8);
@@ -79,12 +81,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             SetNumberValue(_numInterval, (decimal)_initialOptions.BoundaryInterval);
             AddRow(options, 0, "边界插值间隔（米）", _numInterval);
 
-            var calcLabel = new Label();
-            calcLabel.Text = "调用 CASS surfacearea 计算（固定）";
-            calcLabel.AutoSize = true;
-            calcLabel.Dock = DockStyle.Fill;
-            calcLabel.TextAlign = ContentAlignment.MiddleLeft;
-            AddRow(options, 1, "计算方式", calcLabel);
+            _cmbCalculationMode = new ComboBox();
+            _cmbCalculationMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            _cmbCalculationMode.Items.Add("表面积标注");
+            _cmbCalculationMode.Items.Add("面积标注");
+            _cmbCalculationMode.SelectedIndex = _initialOptions.CalculationMode == SurfaceAreaCalculationMode.PlanArea ? 1 : 0;
+            _cmbCalculationMode.SelectedIndexChanged += delegate { UpdateCalculationControls(); };
+            AddRow(options, 1, "计算设置", _cmbCalculationMode);
 
             _chkDeleteCassObjects = new CheckBox();
             _chkDeleteCassObjects.Text = "保留 CASS 生成的三角网和三角面积文字（默认不保留）";
@@ -356,7 +359,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
         private void UpdateCalculationControls()
         {
-            if (_chkDeleteCassObjects != null) _chkDeleteCassObjects.Enabled = true;
+            bool useCass = _cmbCalculationMode == null || _cmbCalculationMode.SelectedIndex != 1;
+            if (_chkDeleteCassObjects != null) _chkDeleteCassObjects.Enabled = useCass;
             if (_txtCassLogPath != null) _txtCassLogPath.Enabled = false;
             if (_btnBrowseCassLog != null) _btnBrowseCassLog.Enabled = false;
         }
@@ -421,7 +425,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 TextHeight = (double)_numTextHeight.Value,
                 DecimalPlaces = (int)_numDecimals.Value,
                 AnnotationTemplate = _txtTemplate.Text,
-                CalculationMode = SurfaceAreaCalculationMode.CassCommand,
+                CalculationMode = _cmbCalculationMode != null && _cmbCalculationMode.SelectedIndex == 1
+                    ? SurfaceAreaCalculationMode.PlanArea
+                    : SurfaceAreaCalculationMode.CassCommand,
                 CassSurfaceLogPath = _txtCassLogPath == null ? string.Empty : _txtCassLogPath.Text.Trim(),
                 DeleteCassGeneratedObjects = !(_chkDeleteCassObjects != null && _chkDeleteCassObjects.Checked),
                 AnnotationFontName = textStyleName,
@@ -447,7 +453,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 if (wasVisible) Hide();
 
                 SurfaceAreaAnnotationResult result = SurfaceAreaAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                 //WriteLog(result);
 
                 // 计算并注记成功后直接结束本次表单流程。
@@ -460,7 +466,6 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

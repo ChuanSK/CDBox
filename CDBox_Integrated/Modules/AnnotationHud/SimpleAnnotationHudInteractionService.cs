@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -142,7 +143,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
             }
             catch (Exception ex)
             {
-                doc.Editor.WriteMessage("\n[CDBox 标注浮窗] 打开失败：" + ex.Message);
+                doc.Editor.WriteHudMessage("\n[CDBox 标注浮窗] 打开失败：" + ex.Message);
             }
         }
 

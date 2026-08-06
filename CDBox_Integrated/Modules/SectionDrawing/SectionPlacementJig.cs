@@ -37,7 +37,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
         protected override SamplerStatus Sampler(JigPrompts prompts)
         {
-            var opts = new JigPromptPointOptions("\n请选择生成图左下角插入点：");
+            var opts = new JigPromptPointOptions("\n ");
             opts.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
             PromptPointResult res = prompts.AcquirePoint(opts);
             if (res.Status != PromptStatus.OK) return SamplerStatus.Cancel;

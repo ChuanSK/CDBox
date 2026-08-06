@@ -34,7 +34,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             Editor ed = doc.Editor;
 
             var opt = new PromptEntityOptions("\n选择需要编辑属性的管线或节点（检查井）：");
-            PromptEntityResult res = ed.GetEntity(opt);
+            PromptEntityResult res = ed.GetHudEntity(opt);
             if (res.Status != PromptStatus.OK) return null;
 
             return ReadPipe(doc, res.ObjectId);
@@ -88,7 +88,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             opt.MessageForAdding = "\n选择需要编辑属性的对象（可点选多个或框选）：";
             opt.MessageForRemoval = "\n移除对象：";
 
-            PromptSelectionResult res = ed.GetSelection(opt);
+            PromptSelectionResult res = ed.GetHudSelection(opt);
             if (res.Status != PromptStatus.OK || res.Value == null || res.Value.Count == 0) return new ObjectId[0];
             return FilterNonNullIds(res.Value.GetObjectIds());
         }
@@ -451,7 +451,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             opt.MessageForAdding = "\n选择需要批量写入属性的对象（管线/节点）：";
             opt.MessageForRemoval = "\n移除对象：";
 
-            PromptSelectionResult res = ed.GetSelection(opt);
+            PromptSelectionResult res = ed.GetHudSelection(opt);
             if (res.Status != PromptStatus.OK || res.Value == null || res.Value.Count == 0)
             {
                 return new QuantityPipeWriteResult { Success = false, Message = "未选择对象。" };
@@ -1021,12 +1021,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             if (candidates == null || candidates.Count == 0)
             {
-                doc.Editor.WriteMessage("\n未找到有效井对象。请确认图层管理中井对象父属性=井，分类=检查、沉泥井。");
+                doc.Editor.WriteHudMessage("\n未找到有效井对象。请确认图层管理中井对象父属性=井，分类=检查、沉泥井。");
                 return attributes;
             }
 
             var jig = new QuantityNodeSelectPreviewJig(candidates, forStart, textStyleId);
-            PromptResult dragResult = doc.Editor.Drag(jig);
+            PromptResult dragResult = doc.Editor.DragWithHud(jig,
+                forStart
+                    ? "移动鼠标选择起点井（预览自动吸附最近节点，单击确认）"
+                    : "移动鼠标选择终点井（预览自动吸附最近节点，单击确认）");
             if (dragResult.Status != PromptStatus.OK) return attributes;
 
             NodeCandidate node = jig.SelectedCandidate ?? FindNearestNodeCandidate(candidates, jig.PickPoint);
@@ -1037,12 +1040,56 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 else ApplyNodeToPipeEnd(attributes, node, true);
 
                 string nodeNo = node.Attributes == null ? string.Empty : (node.Attributes.NodeNo ?? string.Empty);
-                doc.Editor.WriteMessage(string.IsNullOrWhiteSpace(nodeNo)
+                doc.Editor.WriteHudMessage(string.IsNullOrWhiteSpace(nodeNo)
                     ? "\n已选择未编号节点。"
                     : "\n已选择节点：" + nodeNo);
             }
 
             return attributes;
+        }
+
+        /// <summary>
+        /// 供纵断面等流程复用的节点选择。交互与节点标注一致：
+        /// 光标移动时自动吸附最近井对象，并显示红色引线和井号预览。
+        /// 返回 null 表示取消或未找到有效节点。
+        /// </summary>
+        public static QuantityPipeAttributes SelectNodeWithPreview(
+            Document doc, bool forStart)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            Database db = doc.Database;
+            List<NodeCandidate> candidates;
+            ObjectId textStyleId = ObjectId.Null;
+            using (Transaction tr =
+                db.TransactionManager.StartTransaction())
+            {
+                candidates = CollectNodeCandidates(db, tr,
+                    db.CurrentSpaceId);
+                try { textStyleId = db.Textstyle; }
+                catch { textStyleId = ObjectId.Null; }
+                tr.Commit();
+            }
+
+            if (candidates == null || candidates.Count == 0)
+            {
+                doc.Editor.WriteHudMessage(
+                    "\n未找到有效井对象。请确认图层管理中井对象父属性=井，分类=检查井或沉泥井。");
+                return null;
+            }
+
+            var jig = new QuantityNodeSelectPreviewJig(candidates,
+                forStart, textStyleId);
+            PromptResult dragResult = doc.Editor.DragWithHud(jig,
+                forStart
+                    ? "选择纵断面起点节点（自动吸附并预览井号，单击确认）"
+                    : "选择纵断面终点节点（自动吸附并预览井号，单击确认）");
+            if (dragResult.Status != PromptStatus.OK) return null;
+
+            NodeCandidate selected = jig.SelectedCandidate
+                ?? FindNearestNodeCandidate(candidates, jig.PickPoint);
+            if (selected == null || selected.Attributes == null)
+                return null;
+            return selected.Attributes.Clone();
         }
 
         public static void SaveDefaultProfile(string kind, QuantityPipeAttributes attrs)
@@ -1377,7 +1424,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 attrs.LayerParentGroup = meta.ParentGroup ?? string.Empty;
                 attrs.LayerParentClass = meta.ParentClass ?? string.Empty;
                 attrs.LayerTags = meta.TagText ?? string.Empty;
-                sourceText += " " + attrs.LayerParentGroup + " " + attrs.LayerParentClass + " " + attrs.LayerTags;
+                sourceText += " " + attrs.LayerParentGroup + " " + attrs.LayerParentClass
+                    + " " + attrs.LayerTags + " " + (meta.Specification ?? string.Empty)
+                    + " " + (meta.Material ?? string.Empty);
             }
 
             string inferredKind = InferObjectKind(sourceText, entity);
@@ -1489,6 +1538,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             attrs.LayerParentGroup = meta == null ? string.Empty : (meta.ParentGroup ?? string.Empty);
             attrs.LayerParentClass = meta == null ? string.Empty : (meta.ParentClass ?? string.Empty);
             attrs.LayerTags = meta == null ? string.Empty : (meta.TagText ?? string.Empty);
+            if (meta == null || attrs.IsSpecialObject
+                || QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind)) return;
+
+            string recognizedDiameter = InferDiameterFromSpecification(
+                meta.Specification);
+            if (!string.IsNullOrWhiteSpace(recognizedDiameter))
+            {
+                attrs.Diameter = recognizedDiameter;
+                double outerDiameter = InferOuterDiameter(recognizedDiameter);
+                if (outerDiameter > 0) attrs.PipeOuterDiameter = outerDiameter;
+            }
         }
 
         private static LayerMetadata GetLayerMetadataSafe(Database db, Transaction tr, string layerName)
@@ -2557,10 +2617,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                string message = _forStart
-                    ? "\n移动鼠标选择起点井（预览自动吸附最近节点，单击确认）："
-                    : "\n移动鼠标选择终点井（预览自动吸附最近节点，单击确认）：";
-                var options = new JigPromptPointOptions(message);
+                var options = new JigPromptPointOptions("\n ");
                 options.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
                 PromptPointResult result = prompts.AcquirePoint(options);
                 if (result.Status != PromptStatus.OK) return SamplerStatus.Cancel;
@@ -2689,6 +2746,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             return string.Empty;
+        }
+
+        private static string InferDiameterFromSpecification(string specification)
+        {
+            string diameter = InferDiameter(specification);
+            if (!string.IsNullOrWhiteSpace(diameter)) return diameter;
+            Match number = Regex.Match(specification ?? string.Empty,
+                @"(?<!\d)(?<n>\d{2,4})(?!\d)", RegexOptions.IgnoreCase);
+            return number.Success ? "DN" + number.Groups["n"].Value
+                : string.Empty;
         }
 
         private static string InferWellSpec(string text)

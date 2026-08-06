@@ -207,7 +207,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             {
                 MessageForAdding = "\n选择已布置的裁图区域："
             };
-            PromptSelectionResult selection = editor.GetSelection(options);
+            PromptSelectionResult selection = editor.GetHudSelection(options);
             if (selection.Status != PromptStatus.OK) return result;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
