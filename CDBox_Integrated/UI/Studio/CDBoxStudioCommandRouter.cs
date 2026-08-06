@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -88,8 +88,8 @@ namespace TCPipeAutoDraw.UI.Studio
             switch (name)
             {
                 case "ready":
-                    CDBoxStudioLogger.Info("Studio 前端已就绪。动作数量：" + _actionsById.Count);
-                    result.ToastMessage = "CDBox Studio 已就绪";
+                    CDBoxStudioLogger.Info("Studio ???????????" + _actionsById.Count);
+                    result.ToastMessage = "CDBox Studio ???";
                     result.ToastKind = "success";
                     return result;
 
@@ -155,7 +155,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "opensettingswindow":
                     CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
-                    result.ToastMessage = "已打开 CDBox设置";
+                    result.ToastMessage = "??? CDBox??";
                     result.ToastKind = "success";
                     return result;
 
@@ -171,7 +171,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 default:
                     result.Handled = false;
-                    CDBoxStudioLogger.Warn("收到未知 Studio 路由消息：" + request.Name);
+                    CDBoxStudioLogger.Warn("???? Studio ?????" + request.Name);
                     return result;
             }
         }
@@ -183,20 +183,20 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioAction action;
             if (string.IsNullOrWhiteSpace(id) || !_actionsById.TryGetValue(id.Trim(), out action) || action == null)
             {
-                result.ToastMessage = "未找到该功能入口";
+                result.ToastMessage = "????????";
                 result.ToastKind = "warning";
-                CDBoxStudioLogger.Warn("运行入口失败，未找到动作：" + (id ?? string.Empty));
+                CDBoxStudioLogger.Warn("?????????????" + (id ?? string.Empty));
                 return result;
             }
 
             if (!action.Enabled)
             {
-                result.ToastMessage = action.Title + " 暂未启用";
+                result.ToastMessage = action.Title + " ????";
                 result.ToastKind = "warning";
                 return result;
             }
 
-            CDBoxStudioLogger.Info("运行入口：" + action.Title + " [" + action.Id + "]");
+            CDBoxStudioLogger.Info("?????" + action.Title + " [" + action.Id + "]");
             result.ActionToRun = action;
             result.RefreshPage = true;
             return result;
@@ -209,7 +209,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 Handled = true,
                 RefreshPage = false,
                 ToastKind = "success",
-                ToastMessage = "Studio 设置已保存"
+                ToastMessage = "Studio ?????"
             };
 
             try
@@ -220,7 +220,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
                 appSettings.PromptInstallOnLoad = ReadBooleanArgument(argument, "promptinstall", appSettings.PromptInstallOnLoad);
                 CDBoxAppSettingsStore.Save(appSettings);
-                CDBoxStudioLogger.Info("保存 Studio 设置：Theme=" + _settings.Theme
+                CDBoxStudioLogger.Info("?? Studio ???Theme=" + _settings.Theme
                     + ", AnimationsEnabled=" + _settings.AnimationsEnabled
                     + ", AnnotationHudNormalOpacity=" + _settings.AnnotationHudNormalOpacity.ToString("0.##", CultureInfo.InvariantCulture)
                     + ", AnnotationHudHoverOpacity=" + _settings.AnnotationHudHoverOpacity.ToString("0.##", CultureInfo.InvariantCulture)
@@ -233,8 +233,8 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "设置保存失败：" + ex.Message;
-                CDBoxStudioLogger.Error("保存 Studio 设置失败。", ex);
+                result.ToastMessage = "???????" + ex.Message;
+                CDBoxStudioLogger.Error("?? Studio ?????", ex);
             }
 
             return result;
@@ -343,8 +343,8 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
-                dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
+                dialog.Title = "?????????????? CDBox.dll";
+                dialog.Filter = "CDBox.dll|CDBox.dll|DLL ?? (*.dll)|*.dll|???? (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK)
                     return new CDBoxStudioRouteResult { Handled = true };
@@ -354,10 +354,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (update.Success) app.InstalledPath = update.InstallRoot;
                 CDBoxAppSettingsStore.Save(app);
                 string prompt = update.Success
-                    ? "本地更新包已完成校验，独立更新器已启动。\r\n\r\n请正常关闭 AutoCAD，更新器将在 CAD 完全退出后继续安装。"
+                    ? "????????????????????\r\n\r\n????? AutoCAD?????? CAD ??????????"
                     : update.Message;
                 CDBoxMessageBox.Show(new AcadMainWindow(), prompt,
-                    update.Success ? "本地更新已准备" : "本地更新失败",
+                    update.Success ? "???????" : "??????",
                     MessageBoxButtons.OK,
                     update.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                 return new CDBoxStudioRouteResult
@@ -365,14 +365,14 @@ namespace TCPipeAutoDraw.UI.Studio
                     Handled = true,
                     RefreshPage = false,
                     ToastKind = update.Success ? "success" : "error",
-                    ToastMessage = update.Success ? "本地更新已准备，请关闭 AutoCAD 完成安装" : "本地更新准备失败"
+                    ToastMessage = update.Success ? "??????????? AutoCAD ????" : "????????"
                 };
             }
         }
 
         private CDBoxStudioRouteResult RouteUninstallPlugin()
         {
-            DialogResult confirm = CDBoxPromptDialog.ShowYesNo(new AcadMainWindow(), "卸载 CDBox", "确定卸载 CDBox 自动加载并删除安装目录吗？", "卸载", "取消", out _);
+            DialogResult confirm = CDBoxPromptDialog.ShowYesNo(new AcadMainWindow(), "?? CDBox", "???? CDBox ?????????????", "??", "??", out _);
             if (confirm != DialogResult.Yes) return new CDBoxStudioRouteResult { Handled = true };
 
             CDBoxInstallResult uninstall = CDBoxInstaller.Uninstall();
@@ -395,13 +395,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 int count = CDBoxStudioRecognitionRules.SavePayload(payload);
-                result.ToastMessage = "属性识别表已保存：" + count + " 条规则";
+                result.ToastMessage = "?????????" + count + " ???";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "属性识别表保存失败：" + ex.Message;
-                CDBoxStudioLogger.Error("Studio 保存属性识别表失败。", ex);
+                result.ToastMessage = "??????????" + ex.Message;
+                CDBoxStudioLogger.Error("Studio ??????????", ex);
             }
 
             return result;
@@ -419,13 +419,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 int count = CDBoxStudioDefaultProfiles.SavePayload(payload);
-                result.ToastMessage = "属性默认表已保存：" + count + " 个字段";
+                result.ToastMessage = "?????????" + count + " ???";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "属性默认表保存失败：" + ex.Message;
-                CDBoxStudioLogger.Error("Studio 保存属性默认表失败。", ex);
+                result.ToastMessage = "??????????" + ex.Message;
+                CDBoxStudioLogger.Error("Studio ??????????", ex);
             }
 
             return result;
@@ -443,13 +443,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioDefaultProfilesWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开属性默认表独立窗口";
+                result.ToastMessage = "????????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "属性默认表独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性默认表独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "??????????????" + ex.Message;
+                CDBoxStudioLogger.Error("????????? WebView2 ?????", ex);
             }
 
             return result;
@@ -471,15 +471,15 @@ namespace TCPipeAutoDraw.UI.Studio
                     form.ShowDialog(new AcadMainWindow());
                 }
 
-                result.ToastMessage = "旧版属性默认表已关闭，页面已刷新";
-                CDBoxStudioLogger.Info("通过旧版窗口打开属性默认表。路径：" + CDBoxStudioDefaultProfiles.DefaultsFilePath);
+                result.ToastMessage = "????????????????";
+                CDBoxStudioLogger.Info("?????????????????" + CDBoxStudioDefaultProfiles.DefaultsFilePath);
             }
             catch (Exception ex)
             {
                 result.RefreshPage = false;
                 result.ToastKind = "error";
-                result.ToastMessage = "旧版属性默认表打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开旧版属性默认表失败。", ex);
+                result.ToastMessage = "????????????" + ex.Message;
+                CDBoxStudioLogger.Error("????????????", ex);
             }
 
             return result;
@@ -497,13 +497,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioRecognitionRulesWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开属性识别表独立窗口";
+                result.ToastMessage = "????????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "属性识别表独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性识别表独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "??????????????" + ex.Message;
+                CDBoxStudioLogger.Error("????????? WebView2 ?????", ex);
             }
 
             return result;
@@ -526,14 +526,14 @@ namespace TCPipeAutoDraw.UI.Studio
                     if (dialogResult == DialogResult.OK)
                     {
                         LayerManagerService.SaveRecognitionRules(form.Rules);
-                        result.ToastMessage = "旧版属性识别表已保存";
-                        CDBoxStudioLogger.Info("通过旧版窗口保存属性识别表。路径：" + LayerManagerService.GetRecognitionRulesFilePath());
+                        result.ToastMessage = "??????????";
+                        CDBoxStudioLogger.Info("?????????????????" + LayerManagerService.GetRecognitionRulesFilePath());
                     }
                     else
                     {
                         result.RefreshPage = false;
                         result.ToastKind = "info";
-                        result.ToastMessage = "已关闭旧版属性识别表";
+                        result.ToastMessage = "??????????";
                     }
                 }
             }
@@ -541,8 +541,8 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 result.RefreshPage = false;
                 result.ToastKind = "error";
-                result.ToastMessage = "旧版属性识别表打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开旧版属性识别表失败。", ex);
+                result.ToastMessage = "????????????" + ex.Message;
+                CDBoxStudioLogger.Error("????????????", ex);
             }
 
             return result;
@@ -555,13 +555,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioLayerManagerWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开图层管理器独立窗口";
+                result.ToastMessage = "????????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "图层管理器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开图层管理器独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "??????????????" + ex.Message;
+                CDBoxStudioLogger.Error("????????? WebView2 ?????", ex);
             }
             return result;
         }
@@ -572,13 +572,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioQuantityDashboardWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开工程量动态看板独立窗口";
+                result.ToastMessage = "??????????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "工程量动态看板独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开工程量动态看板独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "????????????????" + ex.Message;
+                CDBoxStudioLogger.Error("??????????? WebView2 ?????", ex);
             }
             return result;
         }
@@ -592,12 +592,12 @@ namespace TCPipeAutoDraw.UI.Studio
                 Autodesk.AutoCAD.ApplicationServices.Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
                 QuantityPipeSelectionInfo info = doc == null || string.IsNullOrWhiteSpace(request.handle) ? null : QuantityPipeAttributeService.ReadPipe(doc, ResolveHandle(doc, request.handle));
                 CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, request.documentId);
-                result.ToastMessage = "已打开属性编辑器独立窗口";
+                result.ToastMessage = "????????????";
             }
             catch (Exception ex)
             {
-                result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.3.0 独立窗口失败。", ex);
+                result.ToastKind = "error"; result.ToastMessage = "??????????????" + ex.Message;
+                CDBoxStudioLogger.Error("??????? 3.4.1 ???????", ex);
             }
             return result;
         }
@@ -608,13 +608,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioSectionDrawingWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开断面图生成独立窗口";
+                result.ToastMessage = "????????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "断面图生成独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开断面图生成 Preview 10 独立窗口失败。", ex);
+                result.ToastMessage = "??????????????" + ex.Message;
+                CDBoxStudioLogger.Error("??????? Preview 10 ???????", ex);
             }
             return result;
         }
@@ -629,13 +629,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow());
-                result.ToastMessage = "已打开图框设置独立窗口";
+                result.ToastMessage = "???????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "图框设置独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开图框设置独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "?????????????" + ex.Message;
+                CDBoxStudioLogger.Error("???????? WebView2 ?????", ex);
             }
             return result;
         }
@@ -662,7 +662,7 @@ namespace TCPipeAutoDraw.UI.Studio
             {
             }
 
-            CDBoxStudioLogger.Info("打开图层管理器 WebView2 页面。");
+            CDBoxStudioLogger.Info("??????? WebView2 ???");
             return new CDBoxStudioRouteResult { Handled = true, RefreshPage = false };
         }
 
@@ -672,13 +672,13 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), section);
-                result.ToastMessage = "已打开标注设置独立窗口";
+                result.ToastMessage = "???????????";
             }
             catch (Exception ex)
             {
                 result.ToastKind = "error";
-                result.ToastMessage = "标注设置独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开标注设置独立 WebView2 窗口失败。", ex);
+                result.ToastMessage = "?????????????" + ex.Message;
+                CDBoxStudioLogger.Error("???????? WebView2 ?????", ex);
             }
             return result;
         }
@@ -691,7 +691,7 @@ namespace TCPipeAutoDraw.UI.Studio
             {
             }
 
-            CDBoxStudioLogger.Info("打开标注设置 WebView2 页面，模块：" + (section ?? "surface"));
+            CDBoxStudioLogger.Info("?????? WebView2 ??????" + (section ?? "surface"));
             return new CDBoxStudioRouteResult { Handled = true, RefreshPage = false };
         }
 
@@ -702,14 +702,14 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 CDBoxStudioLogger.OpenLogFolder();
-                result.ToastMessage = "已打开 Studio 日志目录";
-                CDBoxStudioLogger.Info("打开 Studio 日志目录。路径：" + CDBoxStudioLogger.LogDirectory);
+                result.ToastMessage = "??? Studio ????";
+                CDBoxStudioLogger.Info("?? Studio ????????" + CDBoxStudioLogger.LogDirectory);
             }
             catch (Exception ex)
             {
-                result.ToastMessage = "日志目录打开失败：" + ex.Message;
+                result.ToastMessage = "?????????" + ex.Message;
                 result.ToastKind = "error";
-                CDBoxStudioLogger.Error("打开 Studio 日志目录失败。", ex);
+                CDBoxStudioLogger.Error("?? Studio ???????", ex);
             }
 
             return result;

@@ -23,7 +23,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     public sealed class QuantityMainPipeAttributeForm : QuantityCompactAttributeForm
     {
         public QuantityMainPipeAttributeForm(Document doc, QuantityPipeSelectionInfo info)
-            : base(doc, info, QuantityPipeAttributes.KindMainPipe, "主管属性")
+            : base(doc, info, QuantityPipeAttributes.KindMainPipe, "????")
         {
         }
     }
@@ -31,7 +31,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     public sealed class QuantityNodeWellAttributeForm : QuantityCompactAttributeForm
     {
         public QuantityNodeWellAttributeForm(Document doc, QuantityPipeSelectionInfo info)
-            : base(doc, info, QuantityPipeAttributes.KindNodeWell, "节点/检查井属性")
+            : base(doc, info, QuantityPipeAttributes.KindNodeWell, "??/?????")
         {
         }
     }
@@ -39,7 +39,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     public sealed class QuantityBranchPipeAttributeForm : QuantityCompactAttributeForm
     {
         public QuantityBranchPipeAttributeForm(Document doc, QuantityPipeSelectionInfo info)
-            : base(doc, info, QuantityPipeAttributes.KindBranchPipe, "支管属性")
+            : base(doc, info, QuantityPipeAttributes.KindBranchPipe, "????")
         {
         }
     }
@@ -100,9 +100,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             _lblInfo = new Label();
             _lblInfo.AutoSize = true;
-            _lblInfo.Text = "对象：" + info.ObjectTypeName + " / Handle " + info.HandleText
-                + "    图层：" + (info.LayerName ?? string.Empty)
-                + "    父属性：" + (_attributes.LayerParentGroup ?? string.Empty);
+            _lblInfo.Text = "???" + info.ObjectTypeName + " / Handle " + info.HandleText
+                + "    ???" + (info.LayerName ?? string.Empty)
+                + "    ????" + (_attributes.LayerParentGroup ?? string.Empty);
             root.Controls.Add(_lblInfo, 0, 1);
 
             _fields = new QuantityAttributeFieldsPanel(_kind, false);
@@ -120,7 +120,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             _lblStatus = new Label();
             _lblStatus.AutoSize = true;
-            _lblStatus.Text = info.HasSavedAttributes ? "已读取已有属性。" : "未设置属性，已套用对应默认表。";
+            _lblStatus.Text = info.HasSavedAttributes ? "????????" : "???????????????";
             _lblStatus.Padding = new Padding(0, 6, 0, 6);
             bottom.Controls.Add(_lblStatus, 0, 0);
 
@@ -130,15 +130,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             buttons.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft;
             bottom.Controls.Add(buttons, 0, 1);
 
-            AddButton(buttons, "关闭", 80, delegate { Close(); });
-            AddButton(buttons, "确认", 90, delegate { ConfirmAttributes(); });
-            AddButton(buttons, "刷新", 80, delegate { RefreshCurrentAttributes(); });
-            AddButton(buttons, "按默认表重填", 120, delegate { ReloadDefault(); });
+            AddButton(buttons, "??", 80, delegate { Close(); });
+            AddButton(buttons, "??", 90, delegate { ConfirmAttributes(); });
+            AddButton(buttons, "??", 80, delegate { RefreshCurrentAttributes(); });
+            AddButton(buttons, "??????", 120, delegate { ReloadDefault(); });
             if (QuantityPipeAttributes.IsMainPipeKind(_kind))
             {
-                AddButton(buttons, "调换起终点", 110, delegate { SwapStartEndNodes(); });
-                AddButton(buttons, "选终点井", 90, delegate { SelectNodeManually(false); });
-                AddButton(buttons, "选起点井", 90, delegate { SelectNodeManually(true); });
+                AddButton(buttons, "?????", 110, delegate { SwapStartEndNodes(); });
+                AddButton(buttons, "????", 90, delegate { SelectNodeManually(false); });
+                AddButton(buttons, "????", 90, delegate { SelectNodeManually(true); });
             }
         }
 
@@ -173,7 +173,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -186,11 +186,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 attrs.ObjectKind = _kind;
                 _attributes = attrs;
                 _fields.LoadAttributes(_attributes, _cadLength);
-                _lblStatus.Text = "已按当前类型默认表重新填充。";
+                _lblStatus.Text = "??????????????";
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "载入默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -202,11 +202,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 _attributes.ObjectKind = _kind;
                 _attributes = QuantityPipeAttributeService.RefreshAttributesForObject(_doc, _objectId, _attributes);
                 _fields.LoadAttributes(_attributes, _cadLength);
-                _lblStatus.Text = "已刷新：自动识别规格、起终点，并重新计算平均开挖深度等相关数值。";
+                _lblStatus.Text = "????????????????????????????????";
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "刷新属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -217,27 +217,32 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 _fields.FillAttributes(_attributes, false);
                 _attributes.ObjectKind = QuantityPipeAttributes.KindMainPipe;
 
-                Hide();
+                FormWindowState previousState = WindowState;
+                WindowState = FormWindowState.Minimized;
+                System.Windows.Forms.Application.DoEvents();
                 try
                 {
                     _attributes = QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(_doc, _objectId, _attributes, forStart);
                 }
                 finally
                 {
+                    WindowState = previousState == FormWindowState.Minimized
+                        ? FormWindowState.Normal
+                        : previousState;
                     Show();
                     Activate();
                 }
 
                 _fields.UpdateMainPipeStartEndFields(_attributes, true);
                 string nodeNo = forStart ? _attributes.StartNode : _attributes.EndNode;
-                _lblStatus.Text = (forStart ? "已手动选择起点井" : "已手动选择终点井")
-                    + (string.IsNullOrWhiteSpace(nodeNo) ? "。" : "：" + nodeNo + "。");
+                _lblStatus.Text = (forStart ? "????????" : "????????")
+                    + (string.IsNullOrWhiteSpace(nodeNo) ? "?" : "?" + nodeNo + "?");
             }
             catch (System.Exception ex)
             {
                 Show();
                 Activate();
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "手动选择节点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -245,8 +250,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             try
             {
-                // 重新识别起终点只应更新起点井、终点井及对应深度。
-                // 不能调用 ApplySmartDefaults，也不能重新 LoadAttributes，避免用户已编辑的结构层、开挖宽度等字段被默认表或自动计算覆盖。
+                // ????????????????????????
+                // ???? ApplySmartDefaults?????? LoadAttributes????????????????????????????????
                 _fields.FillAttributes(_attributes, false);
                 _attributes.StartNode = string.Empty;
                 _attributes.EndNode = string.Empty;
@@ -256,11 +261,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 _attributes = QuantityPipeAttributeService.ReDetectConnectedNodeInfo(_doc, _objectId, _attributes);
                 _fields.UpdateMainPipeStartEndFields(_attributes, true);
-                _lblStatus.Text = "已重新识别起终点，并按当前结构层重新计算平均开挖深度。";
+                _lblStatus.Text = "???????????????????????????";
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "识别起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -270,11 +275,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 _fields.SwapMainPipeStartEnd();
                 _fields.FillAttributes(_attributes);
-                _lblStatus.Text = "已调换起点与终点，确认后写入对象属性。";
+                _lblStatus.Text = "???????????????????";
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "调换起终点失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
@@ -288,7 +293,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         public QuantityDefaultProfileForm()
         {
-            Text = "属性默认表（SXMRB）";
+            Text = "??????SXMRB?";
             Width = 680;
             Height = 740;
             StartPosition = FormStartPosition.CenterScreen;
@@ -313,7 +318,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             var note = new Label();
             note.AutoSize = true;
-            note.Text = "用于设置主管、节点/检查井、支管三类对象的默认属性；属性编辑器识别到未设置属性对象时自动套用。";
+            note.Text = "?????????/?????????????????????????????????????";
             note.Padding = new Padding(0, 0, 0, 8);
             root.Controls.Add(note, 0, 0);
 
@@ -321,9 +326,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             tabs.Dock = DockStyle.Fill;
             root.Controls.Add(tabs, 0, 1);
 
-            _mainPanel = AddTab(tabs, "主管默认表", QuantityPipeAttributes.KindMainPipe);
-            _nodePanel = AddTab(tabs, "节点/井默认表", QuantityPipeAttributes.KindNodeWell);
-            _branchPanel = AddTab(tabs, "支管默认表", QuantityPipeAttributes.KindBranchPipe);
+            _mainPanel = AddTab(tabs, "?????", QuantityPipeAttributes.KindMainPipe);
+            _nodePanel = AddTab(tabs, "??/????", QuantityPipeAttributes.KindNodeWell);
+            _branchPanel = AddTab(tabs, "?????", QuantityPipeAttributes.KindBranchPipe);
 
             var bottom = new TableLayoutPanel();
             bottom.Dock = DockStyle.Fill;
@@ -345,9 +350,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             buttons.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft;
             bottom.Controls.Add(buttons, 0, 1);
 
-            AddButton(buttons, "关闭", 80, delegate { Close(); });
-            AddButton(buttons, "保存默认表", 140, delegate { SaveDefaults(); });
-            AddButton(buttons, "恢复内置默认", 120, delegate { ResetBuiltInDefaults(); });
+            AddButton(buttons, "??", 80, delegate { Close(); });
+            AddButton(buttons, "?????", 140, delegate { SaveDefaults(); });
+            AddButton(buttons, "??????", 120, delegate { ResetBuiltInDefaults(); });
         }
 
         private static QuantityAttributeFieldsPanel AddTab(TabControl tabs, string title, string kind)
@@ -377,7 +382,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _mainPanel.LoadAttributes(defaults.MainPipe ?? QuantityPipeAttributes.DefaultMainPipe, 0.0);
             _nodePanel.LoadAttributes(defaults.NodeWell ?? QuantityPipeAttributes.DefaultNodeWell, 0.0);
             _branchPanel.LoadAttributes(defaults.BranchPipe ?? QuantityPipeAttributes.DefaultBranchPipe, 0.0);
-            _lblStatus.Text = "已载入默认表。";
+            _lblStatus.Text = "???????";
         }
 
         private void SaveDefaults()
@@ -395,11 +400,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 defaults.NodeWell.ObjectKind = QuantityPipeAttributes.KindNodeWell;
                 defaults.BranchPipe.ObjectKind = QuantityPipeAttributes.KindBranchPipe;
                 QuantityAttributeDefaultStore.Save(defaults);
-                _lblStatus.Text = "默认表已保存。";
+                _lblStatus.Text = "???????";
             }
             catch (System.Exception ex)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "保存默认表失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -408,7 +413,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _mainPanel.LoadAttributes(QuantityPipeAttributes.DefaultMainPipe, 0.0);
             _nodePanel.LoadAttributes(QuantityPipeAttributes.DefaultNodeWell, 0.0);
             _branchPanel.LoadAttributes(QuantityPipeAttributes.DefaultBranchPipe, 0.0);
-            _lblStatus.Text = "已恢复为内置默认值，点击“保存全部默认表”后生效。";
+            _lblStatus.Text = "?????????????????????????";
         }
     }
 
@@ -445,7 +450,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _layout.Padding = new Padding(2, 8, 8, 8);
             Controls.Add(_layout);
 
-            AddCheck("Enabled", "参与统计");
+            AddCheck("Enabled", "????");
 
             if (QuantityPipeAttributes.IsNodeKind(_kind)) BuildNodeFields();
             else if (QuantityPipeAttributes.IsBranchKind(_kind)) BuildBranchFields();
@@ -454,91 +459,91 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private void BuildMainFields()
         {
-            AddText("Material", "管材");
-            AddText("Diameter", "规格/管径");
-            AddCheck("DrawLengthWidthHeightAnnotation", "标注长宽高");
+            AddText("Material", "??");
+            AddText("Diameter", "??/??");
+            AddCheck("DrawLengthWidthHeightAnnotation", "?????");
             if (!_defaultMode) AddCadLengthAndManualLength();
             if (!_defaultMode)
             {
-                AddText("StartNode", "起点井");
-                TextBox startDepthBox = AddNumber("StartDepth", "起点深度 m");
-                AddText("EndNode", "终点井");
-                TextBox endDepthBox = AddNumber("EndDepth", "终点深度 m");
-                TextBox averageDepthBox = AddNumber("AverageDepth", "平均深度 m");
+                AddText("StartNode", "???");
+                TextBox startDepthBox = AddNumber("StartDepth", "???? m");
+                AddText("EndNode", "???");
+                TextBox endDepthBox = AddNumber("EndDepth", "???? m");
+                TextBox averageDepthBox = AddNumber("AverageDepth", "???? m");
 
                 EventHandler updateDepth = delegate { if (!_loadingAttributes) RecalculateMainPipeDerivedValuesFromDepthChange(); };
                 startDepthBox.TextChanged += updateDepth;
                 endDepthBox.TextChanged += updateDepth;
                 averageDepthBox.TextChanged += delegate { if (!_loadingAttributes && !_updatingDerivedValues) UpdateStructureLayerEditor(false); };
             }
-            AddNumber("TrenchWidth", "开挖宽度 m");
-            AddNumber("RoadThickness", "原路面结构层 m");
-            AddCombo("ExcavationType", "开挖方式", "机械开挖", "人工开挖");
-            AddCombo("BackfillType", "回填类型", "中粗砂回填", "原土回填", "混合/特殊");
-            AddStructureMultiline("BackfillStructure", "回填结构层\n每行一层");
+            AddNumber("TrenchWidth", "???? m");
+            AddNumber("RoadThickness", "?????? m");
+            AddCombo("ExcavationType", "????", "????", "????");
+            AddCombo("BackfillType", "????", "?????", "????", "??/??");
+            AddStructureMultiline("BackfillStructure", "?????\n????");
             AddPipeDeductFields();
         }
 
         private void BuildBranchFields()
         {
-            AddText("Material", "管材");
-            AddText("Diameter", "规格/管径");
-            AddCheck("DrawLengthWidthHeightAnnotation", "标注长宽高");
+            AddText("Material", "??");
+            AddText("Diameter", "??/??");
+            AddCheck("DrawLengthWidthHeightAnnotation", "?????");
             if (!_defaultMode) AddCadLengthAndManualLength();
-            ComboBox branchTypeCombo = AddCombo("BranchType", "支管类型", "砼恢复", "原土回填", "明管", "并埋", "雨水");
+            ComboBox branchTypeCombo = AddCombo("BranchType", "????", "???", "????", "??", "??", "??");
             branchTypeCombo.TextChanged += delegate { if (!_loadingAttributes) ApplyBranchTypeTemplateFromUi(); };
-            AddCheck("BranchIncludeInCalculation", "加入计算");
-            AddNumber("RoadThickness", "原路面结构层 m");
-            AddNumber("TrenchWidth", "开挖宽度 m");
-            TextBox branchDepthBox = AddNumber("BranchDepth", "开挖深度 m");
+            AddCheck("BranchIncludeInCalculation", "????");
+            AddNumber("RoadThickness", "?????? m");
+            AddNumber("TrenchWidth", "???? m");
+            TextBox branchDepthBox = AddNumber("BranchDepth", "???? m");
             branchDepthBox.TextChanged += delegate
             {
-                if (!_loadingAttributes && ContainsAny(GetText("BranchType", string.Empty), "原土回填", "原土")) ApplyBranchTypeTemplateFromUi();
+                if (!_loadingAttributes && ContainsAny(GetText("BranchType", string.Empty), "????", "??")) ApplyBranchTypeTemplateFromUi();
                 else UpdateStructureLayerEditor(false);
             };
-            AddCombo("ExcavationType", "开挖方式", "人工开挖", "机械开挖");
-            AddCombo("BackfillType", "回填类型", "中粗砂回填", "原土回填", "混合/特殊");
-            AddStructureMultiline("BackfillStructure", "回填结构层\n每行一层");
+            AddCombo("ExcavationType", "????", "????", "????");
+            AddCombo("BackfillType", "????", "?????", "????", "??/??");
+            AddStructureMultiline("BackfillStructure", "?????\n????");
             AddPipeDeductFields();
         }
 
         private void BuildNodeFields()
         {
-            if (!_defaultMode) AddText("NodeNo", "节点/井编号");
-            AddText("WellSpec", "井规格/直径");
-            AddCombo("WellMaterialType", "井材料类型", "成品塑料井", "砖砌井", "现浇混凝土井");
-            AddCombo("WellCoverMaterial", "井盖类型/材料", "混凝土井盖", "铸铁井盖");
-            AddCombo("WellType", "井类型", "检查井", "沉泥井", "跌水井");
-            AddNumber("SiltWellDeductDepth500", "500沉泥扣减 m");
-            AddNumber("SiltWellDeductDepth700", "700沉泥扣减 m");
+            if (!_defaultMode) AddText("NodeNo", "??/???");
+            AddText("WellSpec", "???/??");
+            AddCombo("WellMaterialType", "?????", "?????", "???", "??????");
+            AddCombo("WellCoverMaterial", "????/??", "?????", "????");
+            AddCombo("WellType", "???", "???", "???", "???");
+            AddNumber("SiltWellDeductDepth500", "500???? m");
+            AddNumber("SiltWellDeductDepth700", "700???? m");
             if (!_defaultMode)
             {
-                AddNumber("GroundElevation", "自然标高 m");
-                TextBox wellDepthBox = AddNumber("WellDepth", "井深 m");
+                AddNumber("GroundElevation", "???? m");
+                TextBox wellDepthBox = AddNumber("WellDepth", "?? m");
                 wellDepthBox.TextChanged += delegate { UpdateStructureLayerEditor(false); };
-                AddNumber("ShaftLength", "井筒长度 m");
+                AddNumber("ShaftLength", "???? m");
             }
-            AddNumber("RoadThickness", "原路面结构层 m");
-            AddNumber("ExcavationLength", "开挖长 m");
-            AddNumber("ExcavationWidth", "开挖宽 m");
-            AddCombo("ExcavationType", "开挖方式", "机械开挖", "人工开挖");
-            AddCombo("BackfillType", "回填类型", "中粗砂回填", "原土回填", "混合/特殊");
-            AddStructureMultiline("BackfillStructure", "井结构层");
-            AddText("CoverPlate", "承压盖板");
+            AddNumber("RoadThickness", "?????? m");
+            AddNumber("ExcavationLength", "??? m");
+            AddNumber("ExcavationWidth", "??? m");
+            AddCombo("ExcavationType", "????", "????", "????");
+            AddCombo("BackfillType", "????", "?????", "????", "??/??");
+            AddStructureMultiline("BackfillStructure", "????");
+            AddText("CoverPlate", "????");
         }
 
         private void AddPipeDeductFields()
         {
-            TextBox pipeDiameterBox = AddNumber("PipeOuterDiameter", "管道外径 m");
+            TextBox pipeDiameterBox = AddNumber("PipeOuterDiameter", "???? m");
             pipeDiameterBox.TextChanged += delegate { UpdateStructureLayerEditor(false); };
-            AddCheck("DeductPipeVolume", "扣除管身体积");
+            AddCheck("DeductPipeVolume", "??????");
         }
 
         private void AddCadLengthAndManualLength()
         {
-            AddLabelValue("CadLength", "管线长度(m)");
-            AddCheck("UseManualLength", "使用手动长度");
-            AddNumber("ManualLength", "手动长度 m");
+            AddLabelValue("CadLength", "????(m)");
+            AddCheck("UseManualLength", "??????");
+            AddNumber("ManualLength", "???? m");
         }
 
         private void AddText(string key, string label)
@@ -708,8 +713,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 SetText("EndNode", attrs.EndNode);
                 SetNumber("EndDepth", attrs.EndDepth);
 
-                // 起点深度、终点深度已经是“井深 + 当前管线垫层”后的开挖深度，
-                // 因此平均深度直接按当前起终点深度实时计算。
+                // ??????????????? + ??????????????
+                // ?????????????????????
                 if (setAverageIfEmpty)
                 {
                     double average = CalculateMainPipeAverageDepthForUi();
@@ -787,29 +792,29 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double depth = GetNumber("BranchDepth", 0.0);
             if (depth <= 0) depth = 0.6;
 
-            if (ContainsAny(branchType, "明管", "并埋"))
+            if (ContainsAny(branchType, "??", "??"))
             {
                 SetCheck("BranchIncludeInCalculation", false);
-                SetText("BackfillType", "无结构层");
+                SetText("BackfillType", "????");
                 SetText("BackfillStructure", string.Empty);
                 UpdateStructureLayerEditor(false);
                 return;
             }
 
-            if (ContainsAny(branchType, "原土回填", "原土"))
+            if (ContainsAny(branchType, "????", "??"))
             {
                 SetCheck("BranchIncludeInCalculation", true);
-                SetText("BackfillType", "原土回填");
-                SetText("BackfillStructure", "原土回填 " + Format(depth) + " 管线层");
+                SetText("BackfillType", "????");
+                SetText("BackfillStructure", "???? " + Format(depth) + " ???");
                 UpdateStructureLayerEditor(false);
                 return;
             }
 
-            if (ContainsAny(branchType, "砼恢复", "混凝土恢复", "砼"))
+            if (ContainsAny(branchType, "???", "?????", "?"))
             {
                 SetCheck("BranchIncludeInCalculation", true);
-                SetText("BackfillType", "中粗砂回填");
-                SetText("BackfillStructure", "C25砼恢复 0.25 锁定" + Environment.NewLine + "中粗砂回填 0.25 管线层" + Environment.NewLine + "中粗砂垫层 0.10 锁定");
+                SetText("BackfillType", "?????");
+                SetText("BackfillStructure", "C25??? 0.25 ??" + Environment.NewLine + "????? 0.25 ???" + Environment.NewLine + "????? 0.10 ??");
                 UpdateStructureLayerEditor(false);
                 return;
             }
@@ -821,8 +826,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (!QuantityPipeAttributes.IsMainPipeKind(_kind)) return 0.0;
 
-            // v22：起点深度、终点深度字段本身就是管线开挖深度。
-            // 平均深度直接随当前起终点深度实时变化，不再重复叠加管线垫层。
+            // v22???????????????????????
+            // ??????????????????????????????
             double startExcavationDepth = GetNumber("StartDepth", 0.0);
             double endExcavationDepth = GetNumber("EndDepth", 0.0);
 
@@ -877,8 +882,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     ApplyPipeCushionDeltaToEndpointDepths(editedPipeCushion - _lastPipeCushion);
                     SetMainPipeAverageFromCurrentEndpointDepths();
 
-                    // 用新的平均深度重新分配非锁定结构层。若被自动分配的刚好也是管线垫层，
-                    // 则再次把垫层差值同步到起终点深度，保证“结构层变，深度也变”。
+                    // ??????????????????????????????????
+                    // ???????????????????????????????
                     UpdateStructureLayerEditor(false);
                     double recalculatedPipeCushion = GetPipeCushionForUi();
                     ApplyPipeCushionDeltaToEndpointDepths(recalculatedPipeCushion - editedPipeCushion);
@@ -932,8 +937,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static string NormalizeWellCoverMaterial(string value)
         {
             value = value ?? string.Empty;
-            if (ContainsAny(value, "混凝土", "砼")) return "混凝土井盖";
-            if (ContainsAny(value, "铸铁", "球墨")) return "铸铁井盖";
+            if (ContainsAny(value, "???", "?")) return "?????";
+            if (ContainsAny(value, "??", "??")) return "????";
             return value;
         }
 
@@ -946,7 +951,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch
             {
-                // 结构层只是辅助属性编辑，不应因自动计算影响窗体使用。
+                // ??????????????????????????
             }
         }
 
@@ -1042,9 +1047,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
     internal sealed class QuantityStructureLayerEditor : UserControl
     {
-        private const string LayerTypeGeneral = "一般层";
-        private const string LayerTypePipe = "管线层";
-        private const string LayerTypeCushion = "垫层";
+        private const string LayerTypeGeneral = "???";
+        private const string LayerTypePipe = "???";
+        private const string LayerTypeCushion = "??";
         public delegate double DoubleProvider();
 
         public event DoubleProvider RequestTotalHeight;
@@ -1074,11 +1079,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             buttons.AutoSize = true;
             root.Controls.Add(buttons, 0, 0);
 
-            AddSmallButton(buttons, "添加层", 70, delegate { AddLayer("回填层", 0.0, false, LayerTypeGeneral); RecalculateAutoLayers(false); RaiseStructureChanged(); });
-            AddSmallButton(buttons, "删除层", 70, delegate { DeleteCurrentLayer(); RecalculateAutoLayers(false); RaiseStructureChanged(); });
-            AddSmallButton(buttons, "上移", 55, delegate { MoveCurrentLayer(-1); RaiseStructureChanged(); });
-            AddSmallButton(buttons, "下移", 55, delegate { MoveCurrentLayer(1); RaiseStructureChanged(); });
-            AddSmallButton(buttons, "自动计算", 80, delegate { RecalculateAutoLayers(true); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "???", 70, delegate { AddLayer("???", 0.0, false, LayerTypeGeneral); RecalculateAutoLayers(false); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "???", 70, delegate { DeleteCurrentLayer(); RecalculateAutoLayers(false); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "??", 55, delegate { MoveCurrentLayer(-1); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "??", 55, delegate { MoveCurrentLayer(1); RaiseStructureChanged(); });
+            AddSmallButton(buttons, "????", 80, delegate { RecalculateAutoLayers(true); RaiseStructureChanged(); });
 
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
@@ -1092,9 +1097,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _grid.BackgroundColor = System.Drawing.SystemColors.Window;
             _grid.BorderStyle = BorderStyle.FixedSingle;
             _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            _grid.Columns.Add(CreateTextColumn("LayerName", "层级名称", 180));
-            _grid.Columns.Add(CreateTextColumn("LayerHeight", "高度 m", 70));
-            _grid.Columns.Add(CreateCheckColumn("Locked", "锁定", 55));
+            _grid.Columns.Add(CreateTextColumn("LayerName", "????", 180));
+            _grid.Columns.Add(CreateTextColumn("LayerHeight", "?? m", 70));
+            _grid.Columns.Add(CreateCheckColumn("Locked", "??", 55));
             _grid.Columns.Add(CreateLayerTypeColumn());
             _grid.CurrentCellDirtyStateChanged += delegate
             {
@@ -1117,7 +1122,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             _statusLabel = new Label();
             _statusLabel.AutoSize = true;
             _statusLabel.Padding = new Padding(0, 3, 0, 0);
-            _statusLabel.Text = _nodeWellMode ? "非锁定层按井深自动分配；垫层位于井深之下，不参与扣减。" : "非锁定层会按总高自动分配；管线层高度应大于管径，垫层计入管线开挖深度。";
+            _statusLabel.Text = _nodeWellMode ? "???????????????????????????" : "???????????????????????????????????";
             root.Controls.Add(_statusLabel, 0, 2);
         }
 
@@ -1156,7 +1161,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             var col = new DataGridViewComboBoxColumn();
             col.Name = "LayerType";
-            col.HeaderText = "层类型";
+            col.HeaderText = "???";
             col.Width = 78;
             col.FlatStyle = FlatStyle.Flat;
             col.Items.AddRange(LayerTypeGeneral, LayerTypePipe, LayerTypeCushion);
@@ -1261,15 +1266,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             for (int i = 0; i < _grid.Rows.Count; i++)
             {
                 string name = GetString(i, 0).Trim();
-                if (name.Length == 0) name = "结构层";
+                if (name.Length == 0) name = "???";
                 double height = ParseDouble(GetString(i, 1), 0.0);
                 bool locked = GetBool(i, 2);
                 string layerType = NormalizeLayerType(GetString(i, 3));
 
                 string line = name + " " + Format(height);
-                if (locked) line += " 锁定";
-                if (string.Equals(layerType, LayerTypePipe, StringComparison.Ordinal)) line += " 管线层";
-                else if (string.Equals(layerType, LayerTypeCushion, StringComparison.Ordinal)) line += " 垫层";
+                if (locked) line += " ??";
+                if (string.Equals(layerType, LayerTypePipe, StringComparison.Ordinal)) line += " ???";
+                else if (string.Equals(layerType, LayerTypeCushion, StringComparison.Ordinal)) line += " ??";
                 lines.Add(line);
             }
             return string.Join(Environment.NewLine, lines.ToArray());
@@ -1297,8 +1302,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 bool isBelowWellLayer = _nodeWellMode && IsCushionLayerRow(i);
                 if (isBelowWellLayer)
                 {
-                        // 井的垫层位于用户填写的井深之下。
-                        // 用户填写的井深只到垫层上方，所以自动计算井内结构层时不能再扣减垫层。
+                        // ????????????????
+                        // ??????????????????????????????????
                     ignoredBelowLayerSum += ParseDouble(GetString(i, 1), 0.0);
                     continue;
                 }
@@ -1309,7 +1314,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             if (totalHeight <= 0)
             {
-                SetStatus("未取得有效总高，暂不自动计算非锁定层。", false, showWarnings);
+                SetStatus("???????????????????", false, showWarnings);
                 return;
             }
 
@@ -1318,11 +1323,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 double diff = totalHeight - lockedSum;
                 if (Math.Abs(diff) > 0.001)
                 {
-                    SetStatus("全部层已锁定，但层高合计与总高不一致。", true, showWarnings);
+                    SetStatus("???????????????????", true, showWarnings);
                 }
                 else
                 {
-                    SetStatus(_nodeWellMode && ignoredBelowLayerSum > 0 ? "结构层高度与井深一致；垫层位于井深之下，未参与扣减。" : "结构层高度与总高一致。", false, false);
+                    SetStatus(_nodeWellMode && ignoredBelowLayerSum > 0 ? "??????????????????????????" : "???????????", false, false);
                 }
                 return;
             }
@@ -1346,7 +1351,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (remaining < 0)
             {
                 hasError = true;
-                SetStatus("锁定层合计已超过总高，非锁定层计算为负值。", true, showWarnings);
+                SetStatus("?????????????????????", true, showWarnings);
             }
 
             int pipeRow = PipeLayerIndex();
@@ -1356,14 +1361,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (pipeLayerHeight <= pipeDiameter)
                 {
                     hasError = true;
-                    SetStatus("管线所在层高度不大于管径，请人工调整。", true, showWarnings);
+                    SetStatus("???????????????????", true, showWarnings);
                 }
             }
 
             if (!hasError)
             {
-                string msg = unlocked.Count == 1 ? "已按总高自动计算非锁定层。" : "已按总高平均分配多个非锁定层。";
-                if (_nodeWellMode && ignoredBelowLayerSum > 0) msg += "垫层位于井深之下，未参与扣减。";
+                string msg = unlocked.Count == 1 ? "?????????????" : "???????????????";
+                if (_nodeWellMode && ignoredBelowLayerSum > 0) msg += "???????????????";
                 SetStatus(msg, false, false);
             }
         }
@@ -1382,7 +1387,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (warning && popup && !_warningShownInCurrentOperation)
             {
                 _warningShownInCurrentOperation = true;
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(message + Environment.NewLine + "当前计算结果已保留，可直接手动修改。", "结构层计算提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(message + Environment.NewLine + "??????????????????", "???????", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -1436,7 +1441,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             for (int i = 0; i < _grid.Rows.Count; i++)
             {
                 string name = GetString(i, 0);
-                if (ContainsAny(name, "回填", "原土", "中粗砂")) candidate = i;
+                if (ContainsAny(name, "??", "??", "???")) candidate = i;
                 double h = ParseDouble(GetString(i, 1), 0.0);
                 if (h > maxHeight)
                 {
@@ -1450,7 +1455,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private ParsedStructureLayer ParseLayerLine(string raw)
         {
             string line = raw == null ? string.Empty : raw.Trim();
-            bool locked = ContainsAny(line, "锁定", "已锁") && !ContainsAny(line, "未锁", "不锁");
+            bool locked = ContainsAny(line, "??", "??") && !ContainsAny(line, "??", "??");
             double height = 0.0;
             string suffix = string.Empty;
             MatchCollection matches = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?");
@@ -1463,21 +1468,21 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 line = line.Substring(0, heightMatch.Index).Trim();
             }
 
-            string layerType = ContainsAny(suffix, "井下层", "井下方垫层", "垫层")
+            string layerType = ContainsAny(suffix, "???", "?????", "??")
                 ? LayerTypeCushion
-                : (ContainsAny(suffix, "管线层", "管道层", "管线所在层", "管道所在层") ? LayerTypePipe : LayerTypeGeneral);
+                : (ContainsAny(suffix, "???", "???", "?????", "?????") ? LayerTypePipe : LayerTypeGeneral);
 
             string name = line;
-            name = name.Replace("管线所在层", string.Empty).Replace("管道所在层", string.Empty)
-                       .Replace("井下方垫层", string.Empty).Replace("井下层", string.Empty)
-                       .Replace("管线层", string.Empty).Replace("管道层", string.Empty)
-                       .Replace("锁定", string.Empty).Replace("已锁", string.Empty)
-                       .Replace("未锁", string.Empty).Replace("不锁", string.Empty)
+            name = name.Replace("?????", string.Empty).Replace("?????", string.Empty)
+                       .Replace("?????", string.Empty).Replace("???", string.Empty)
+                       .Replace("???", string.Empty).Replace("???", string.Empty)
+                       .Replace("??", string.Empty).Replace("??", string.Empty)
+                       .Replace("??", string.Empty).Replace("??", string.Empty)
                        .Replace("[", string.Empty).Replace("]", string.Empty)
-                       .Replace("（", string.Empty).Replace("）", string.Empty)
+                       .Replace("?", string.Empty).Replace("?", string.Empty)
                        .Replace("(", string.Empty).Replace(")", string.Empty)
                        .Trim();
-            if (name.Length == 0) name = "结构层";
+            if (name.Length == 0) name = "???";
             return new ParsedStructureLayer(name, height, locked, layerType);
         }
 
@@ -1485,7 +1490,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (string.Equals(value, LayerTypePipe, StringComparison.CurrentCultureIgnoreCase)) return LayerTypePipe;
             if (string.Equals(value, LayerTypeCushion, StringComparison.CurrentCultureIgnoreCase)
-                || string.Equals(value, "井下层", StringComparison.CurrentCultureIgnoreCase)) return LayerTypeCushion;
+                || string.Equals(value, "???", StringComparison.CurrentCultureIgnoreCase)) return LayerTypeCushion;
             return LayerTypeGeneral;
         }
 
@@ -1504,8 +1509,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             try
             {
-                // CheckBox / ComboBox 单元格在点击后可能还停留在编辑态。
-                // 必须先提交 Dirty 值，再结束编辑，避免自动计算读取到上一状态。
+                // CheckBox / ComboBox ?????????????????
+                // ????? Dirty ??????????????????????
                 if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
                 if (_grid.IsCurrentCellInEditMode) _grid.EndEdit();
             }
@@ -1527,8 +1532,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             object value = cell.Value;
             if (IsTruthy(value)) return true;
 
-            // 当前正在编辑的 CheckBox 值有时还没写入 Value，尤其是在点击勾选后立刻点“自动计算”时。
-            // 这里同时读取 EditedFormattedValue / FormattedValue，避免界面显示已勾选但计算仍按未勾选处理。
+            // ??????? CheckBox ??????? Value?????????????????????
+            // ?????? EditedFormattedValue / FormattedValue?????????????????????
             try
             {
                 if (_grid.CurrentCell != null && _grid.CurrentCell.RowIndex == row && _grid.CurrentCell.ColumnIndex == col)
@@ -1557,9 +1562,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(text, "1", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(text, "是", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(text, "勾选", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(text, "选中", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(text, "?", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(text, "??", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(text, "??", StringComparison.OrdinalIgnoreCase);
         }
 
         private void SetCell(int row, int col, object value)
@@ -1603,8 +1608,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     {
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            // 安全处理：不再拦截底层 WndProc 消息，避免 AutoCAD 宿主环境下卡死/闪退。
-            // 未展开时不调用 base，尽量避免滚轮改变选项；展开时保留列表滚动。
+            // ??????????? WndProc ????? AutoCAD ???????/???
+            // ??????? base??????????????????????
             if (DroppedDown)
             {
                 base.OnMouseWheel(e);
@@ -1643,7 +1648,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch
             {
-                // AutoCAD 关闭窗体或命令切换时可能已经释放句柄，忽略即可。
+                // AutoCAD ????????????????????????
             }
         }
 
@@ -1665,7 +1670,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch
             {
-                // 只影响防滚轮误触，不应影响属性编辑功能。
+                // ????????????????????
             }
         }
     }

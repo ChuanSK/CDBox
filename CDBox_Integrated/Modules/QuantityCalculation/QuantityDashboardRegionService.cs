@@ -11,7 +11,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
     public static class QuantityDashboardRegionService
     {
-        public const string RegionLayerName = "CDBox-工程量统计区域";
+        public const string RegionLayerName = "CDBox-???????";
         public const string RegionRegAppName = "CDBoxQuantityRegion";
 
         public static List<QuantityDashboardRegionInfo> GetRegions(Document doc)
@@ -47,12 +47,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             Editor ed = doc.Editor;
-            PromptPointResult p1 = ed.GetPoint("\n指定工程量统计区域第一个角点：");
+            PromptPointResult p1 = ed.GetHudPoint("\n???????????????");
             if (p1.Status != PromptStatus.OK) return null;
-            PromptCornerOptions corner = new PromptCornerOptions("\n指定工程量统计区域对角点：", p1.Value);
-            PromptPointResult p2 = ed.GetCorner(corner);
+            PromptCornerOptions corner = new PromptCornerOptions("\n?????????????", p1.Value);
+            PromptPointResult p2 = ed.GetHudCorner(corner);
             if (p2.Status != PromptStatus.OK) return null;
-            string defaultName = "统计区域 " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
+            string defaultName = "???? " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
             string name = PromptRegionName(ed, defaultName);
             if (name == null) return null;
 
@@ -88,13 +88,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             Editor ed = doc.Editor;
-            PromptEntityOptions options = new PromptEntityOptions("\n选择已有闭合多段线作为工程量统计区域：");
-            options.SetRejectMessage("\n只能选择二维闭合多段线。");
+            PromptEntityOptions options = new PromptEntityOptions("\n???????????????????");
+            options.SetRejectMessage("\n????????????");
             options.AddAllowedClass(typeof(Polyline), true);
-            PromptEntityResult selected = ed.GetEntity(options);
+            PromptEntityResult selected = ed.GetHudEntity(options);
             if (selected.Status != PromptStatus.OK) return null;
 
-            string defaultName = "统计区域 " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
+            string defaultName = "???? " + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture);
             string name = PromptRegionName(ed, defaultName);
             if (name == null) return null;
             string regionId = Guid.NewGuid().ToString("N");
@@ -104,7 +104,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Polyline pl = tr.GetObject(selected.ObjectId, OpenMode.ForWrite, false) as Polyline;
-                if (pl == null || !pl.Closed || pl.NumberOfVertices < 3) throw new InvalidOperationException("选择的多段线必须闭合且至少包含三个顶点。");
+                if (pl == null || !pl.Closed || pl.NumberOfVertices < 3) throw new InvalidOperationException("????????????????????");
                 EnsureRegionLayer(db, tr);
                 EnsureRegApp(db, tr);
                 pl.Layer = RegionLayerName;
@@ -118,16 +118,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             string name = (newName ?? string.Empty).Trim();
-            if (name.Length == 0) throw new InvalidOperationException("区域名称不能为空。");
+            if (name.Length == 0) throw new InvalidOperationException("?????????");
             Database db = doc.Database;
             ObjectId id = FindRegionObjectId(doc, regionId);
-            if (id.IsNull) throw new InvalidOperationException("未找到统计区域。");
+            if (id.IsNull) throw new InvalidOperationException("????????");
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 Polyline pl = tr.GetObject(id, OpenMode.ForWrite, false) as Polyline;
                 QuantityDashboardRegionInfo info = ReadRegionInfo(pl);
-                if (info == null) throw new InvalidOperationException("统计区域元数据无效。");
+                if (info == null) throw new InvalidOperationException("??????????");
                 EnsureRegApp(db, tr);
                 WriteRegionInfo(pl, info.regionId, name, info.createdAt);
                 tr.Commit();
@@ -139,7 +139,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             ObjectId id = FindRegionObjectId(doc, regionId);
-            if (id.IsNull) throw new InvalidOperationException("未找到统计区域。");
+            if (id.IsNull) throw new InvalidOperationException("????????");
             using (doc.LockDocument())
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
@@ -321,9 +321,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static string PromptRegionName(Editor ed, string defaultName)
         {
-            PromptStringOptions options = new PromptStringOptions("\n输入统计区域名称 <" + defaultName + ">：");
+            PromptStringOptions options = new PromptStringOptions("\n???????? <" + defaultName + ">?");
             options.AllowSpaces = true;
-            PromptResult result = ed.GetString(options);
+            PromptResult result = ed.GetHudString(options);
             if (result.Status != PromptStatus.OK) return null;
             string name = (result.StringResult ?? defaultName).Trim();
             return name.Length == 0 ? defaultName : name;

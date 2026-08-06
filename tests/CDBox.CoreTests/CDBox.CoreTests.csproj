@@ -32,6 +32,7 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionSettings.cs" Link="Source\ShortCodeRecognitionSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionParser.cs" Link="Source\ShortCodeRecognitionParser.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileModels.cs" Link="Source\LongitudinalProfileModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileLayout.cs" Link="Source\LongitudinalProfileLayout.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileSettings.cs" Link="Source\LongitudinalProfileSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\NodeAnnotation\NodeAnnotationTextComposer.cs" Link="Source\NodeAnnotationTextComposer.cs" />

@@ -109,13 +109,13 @@ namespace TCPipeAutoDraw.Core.Startup
                 string sourceAssemblyPath = GetMainAssemblyPath();
                 if (string.IsNullOrWhiteSpace(sourceAssemblyPath) || !File.Exists(sourceAssemblyPath))
                 {
-                    return CDBoxInstallResult.Fail("未能定位当前加载的 CDBox.dll，无法安装。", installRoot);
+                    return CDBoxInstallResult.Fail("????????? CDBox.dll??????", installRoot);
                 }
 
                 CDBoxUpdateSourceValidationResult sourceValidation = CDBoxUpdateSourceValidator.Validate(sourceAssemblyPath);
                 if (!sourceValidation.Valid)
                 {
-                    return CDBoxInstallResult.Fail("当前加载目录不是完整 CDBox 构建输出，已拒绝安装。\r\n\r\n" + sourceValidation.Message, installRoot);
+                    return CDBoxInstallResult.Fail("?????????? CDBox ???????????\r\n\r\n" + sourceValidation.Message, installRoot);
                 }
 
                 Directory.CreateDirectory(contentsDir);
@@ -125,18 +125,18 @@ namespace TCPipeAutoDraw.Core.Startup
                 RegisterDemandLoad(GetInstalledDllPath());
 
                 string selfCheck = RunInstallSelfCheck(installRoot, GetMainAssemblyFileName());
-                CDBoxInstallLogger.Info("安装完成。安装目录：" + installRoot + "；源目录：" + (sourceDir ?? string.Empty));
-                CDBoxInstallLogger.Info("安装自检结果：" + selfCheck.Replace("\r\n", " | "));
+                CDBoxInstallLogger.Info("??????????" + installRoot + "?????" + (sourceDir ?? string.Empty));
+                CDBoxInstallLogger.Info("???????" + selfCheck.Replace("\r\n", " | "));
 
-                return CDBoxInstallResult.Ok(BuildInstallMessage("CDBox 已安装到 CAD 所在目录，之后启动 CAD 会自动加载。", selfCheck), installRoot, selfCheck);
+                return CDBoxInstallResult.Ok(BuildInstallMessage("CDBox ???? CAD ????????? CAD ??????", selfCheck), installRoot, selfCheck);
             }
             catch (UnauthorizedAccessException ex)
             {
-                return CDBoxInstallResult.Fail("没有权限写入 CAD 所在目录。请以管理员身份运行 CAD 后重试，或手动将 CDBox.bundle 放到 CAD 目录。\r\n\r\n" + ex.Message, installRoot);
+                return CDBoxInstallResult.Fail("?????? CAD ?????????????? CAD ???????? CDBox.bundle ?? CAD ???\r\n\r\n" + ex.Message, installRoot);
             }
             catch (Exception ex)
             {
-                return CDBoxInstallResult.Fail("安装失败：" + ex.Message, installRoot);
+                return CDBoxInstallResult.Fail("?????" + ex.Message, installRoot);
             }
         }
 
@@ -150,7 +150,7 @@ namespace TCPipeAutoDraw.Core.Startup
             }
             catch
             {
-                // 注册表清理失败不阻止后续删除，最终会在提示中说明。
+                // ?????????????????????????
             }
 
             bool deleted = false;
@@ -170,7 +170,7 @@ namespace TCPipeAutoDraw.Core.Startup
 
             if (deleted)
             {
-                return CDBoxInstallResult.Ok("CDBox 自动加载注册已移除，安装目录已删除。", installRoot);
+                return CDBoxInstallResult.Ok("CDBox ??????????????????", installRoot);
             }
 
             bool deferred = TryStartDeferredDelete(installRoot, out string deferredMessage);
@@ -181,11 +181,11 @@ namespace TCPipeAutoDraw.Core.Startup
                     Success = true,
                     InstallRoot = installRoot,
                     DeferredDeleteStarted = true,
-                    Message = "CDBox 自动加载注册已移除。当前 DLL 可能正被 CAD 占用，已安排在关闭 CAD 后自动删除安装目录。"
+                    Message = "CDBox ???????????? DLL ???? CAD ????????? CAD ??????????"
                 };
             }
 
-            return CDBoxInstallResult.Fail("CDBox 自动加载注册已移除，但安装目录暂时无法删除：" + deleteMessage + "\r\n" + deferredMessage + "\r\n请关闭 CAD 后手动删除：" + installRoot, installRoot);
+            return CDBoxInstallResult.Fail("CDBox ??????????????????????" + deleteMessage + "\r\n" + deferredMessage + "\r\n??? CAD ??????" + installRoot, installRoot);
         }
 
         public static CDBoxInstallResult ScheduleUpdateFromDll(string newDllPath)
@@ -197,13 +197,13 @@ namespace TCPipeAutoDraw.Core.Startup
             {
                 if (string.IsNullOrWhiteSpace(newDllPath) || !File.Exists(newDllPath))
                 {
-                    return CDBoxInstallResult.Fail("未找到选择的新版 CDBox.dll。", installRoot);
+                    return CDBoxInstallResult.Fail("???????? CDBox.dll?", installRoot);
                 }
 
                 string sourceDir = Path.GetDirectoryName(newDllPath);
                 if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
                 {
-                    return CDBoxInstallResult.Fail("未能定位新版 DLL 所在目录。", installRoot);
+                    return CDBoxInstallResult.Fail("?????? DLL ?????", installRoot);
                 }
 
                 string selectedName = Path.GetFileName(newDllPath);
@@ -211,13 +211,13 @@ namespace TCPipeAutoDraw.Core.Startup
                 if (!string.Equals(selectedName, currentName, StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(selectedName, "CDBox.dll", StringComparison.OrdinalIgnoreCase))
                 {
-                    return CDBoxInstallResult.Fail("请选择 CDBox 主 DLL 文件。当前选择：" + selectedName, installRoot);
+                    return CDBoxInstallResult.Fail("??? CDBox ? DLL ????????" + selectedName, installRoot);
                 }
 
                 CDBoxUpdateSourceValidationResult sourceValidation = CDBoxUpdateSourceValidator.Validate(newDllPath);
                 if (!sourceValidation.Valid)
                 {
-                    CDBoxInstallLogger.Warn("更新源校验失败：" + sourceValidation.Message.Replace("\r\n", " | "));
+                    CDBoxInstallLogger.Warn("????????" + sourceValidation.Message.Replace("\r\n", " | "));
                     return CDBoxInstallResult.Fail(sourceValidation.Message, installRoot);
                 }
 
@@ -239,12 +239,12 @@ namespace TCPipeAutoDraw.Core.Startup
 
                 bool stagingValid;
                 string selfCheck = RunInstallSelfCheck(stagingBundle, Path.GetFileName(newDllPath), out stagingValid);
-                CDBoxInstallLogger.Info("更新暂存目录准备完成。暂存目录：" + stagingBundle + "；源目录：" + sourceDir);
-                CDBoxInstallLogger.Info("更新暂存自检结果：" + selfCheck.Replace("\r\n", " | "));
+                CDBoxInstallLogger.Info("????????????????" + stagingBundle + "?????" + sourceDir);
+                CDBoxInstallLogger.Info("?????????" + selfCheck.Replace("\r\n", " | "));
 
                 if (!stagingValid)
                 {
-                    return CDBoxInstallResult.Fail("更新暂存包未通过完整性检查，现有安装不会被替换。\r\n\r\n" + selfCheck, installRoot);
+                    return CDBoxInstallResult.Fail("????????????????????????\r\n\r\n" + selfCheck, installRoot);
                 }
 
                 ZipFile.CreateFromDirectory(packageSourceRoot, packagePath, CompressionLevel.Optimal, false);
@@ -267,7 +267,7 @@ namespace TCPipeAutoDraw.Core.Startup
                     Sha256Expected = packageSha256,
                     Sha256Actual = packageSha256,
                     FilePath = packagePath,
-                    SourceName = "本地完整构建输出",
+                    SourceName = "????????",
                     SourceUrl = Path.GetFullPath(newDllPath),
                     FinishedAt = DateTime.Now
                 };
@@ -276,10 +276,10 @@ namespace TCPipeAutoDraw.Core.Startup
                 CDBoxStudioUpdaterLaunchResult launch = CDBoxStudioUpdaterLauncher.PrepareAndLaunch(download, sourceUpdater);
                 if (launch == null || !launch.Started)
                 {
-                    string launchError = launch == null ? "更新器未返回启动结果。" : launch.ErrorMessage;
+                    string launchError = launch == null ? "???????????" : launch.ErrorMessage;
                     return CDBoxInstallResult.Fail(
-                        "本地更新包已完成依赖收集和校验，但独立更新器启动失败：" + launchError
-                        + "\r\n\r\n已保留更新包：" + packagePath,
+                        "???????????????????????????" + launchError
+                        + "\r\n\r\n???????" + packagePath,
                         installRoot);
                 }
 
@@ -291,21 +291,21 @@ namespace TCPipeAutoDraw.Core.Startup
                     SelfCheckReport = selfCheck,
                     LogFilePath = CDBoxInstallLogger.LogFilePath,
                     Message = BuildInstallMessage(
-                        "本地更新包已完成全部依赖收集与校验，独立更新器已启动。请正常关闭 AutoCAD，并在更新完成提示出现前不要再次打开 CAD；安装阶段将显示与网络更新相同的进度窗口。",
+                        "???????????????????????????????? AutoCAD?????????????????? CAD?????????????????????",
                         selfCheck)
                 };
             }
             catch (Exception ex)
             {
-                CDBoxInstallLogger.Error("安排更新失败。", ex);
-                return CDBoxInstallResult.Fail("安排更新失败：" + ex.Message + "\r\n\r\n日志：" + CDBoxInstallLogger.LogFilePath, installRoot);
+                CDBoxInstallLogger.Error("???????", ex);
+                return CDBoxInstallResult.Fail("???????" + ex.Message + "\r\n\r\n???" + CDBoxInstallLogger.LogFilePath, installRoot);
             }
             finally
             {
                 if (!string.IsNullOrWhiteSpace(packageSourceRoot) && Directory.Exists(packageSourceRoot))
                 {
                     try { Directory.Delete(packageSourceRoot, true); }
-                    catch (Exception ex) { CDBoxInstallLogger.Warn("清理本地更新暂存目录失败：" + ex.Message); }
+                    catch (Exception ex) { CDBoxInstallLogger.Warn("?????????????" + ex.Message); }
                 }
             }
         }
@@ -338,7 +338,7 @@ namespace TCPipeAutoDraw.Core.Startup
 
         private static void CopyRuntimeFiles(string sourceDir, string contentsDir)
         {
-            if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir)) throw new DirectoryNotFoundException("源目录不存在：" + sourceDir);
+            if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir)) throw new DirectoryNotFoundException("???????" + sourceDir);
 
             var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -423,11 +423,11 @@ namespace TCPipeAutoDraw.Core.Startup
                 if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir)) return;
                 if (PathsEqual(sourceDir, targetDir)) return;
                 CopyDirectory(sourceDir, targetDir);
-                CDBoxInstallLogger.Info("复制资源目录：" + sourceDir + " -> " + targetDir);
+                CDBoxInstallLogger.Info("???????" + sourceDir + " -> " + targetDir);
             }
             catch (Exception ex)
             {
-                CDBoxInstallLogger.Warn("资源目录复制失败：" + sourceDir + " -> " + targetDir + "；" + ex.Message);
+                CDBoxInstallLogger.Warn("?????????" + sourceDir + " -> " + targetDir + "?" + ex.Message);
             }
         }
 
@@ -491,14 +491,14 @@ namespace TCPipeAutoDraw.Core.Startup
         private static void RegisterDemandLoad(string loaderPath)
         {
             string appKeyPath = GetCurrentUserApplicationsKeyPath();
-            if (string.IsNullOrWhiteSpace(appKeyPath)) throw new InvalidOperationException("未能获取当前 AutoCAD 注册表路径。可先打开任意图纸后再执行安装。 ");
+            if (string.IsNullOrWhiteSpace(appKeyPath)) throw new InvalidOperationException("?????? AutoCAD ????????????????????? ");
 
             using (RegistryKey appKey = Registry.CurrentUser.CreateSubKey(appKeyPath + "\\" + AppName))
             {
-                if (appKey == null) throw new InvalidOperationException("无法创建 CDBox 自动加载注册表项。 ");
+                if (appKey == null) throw new InvalidOperationException("???? CDBox ????????? ");
 
-                appKey.SetValue("DESCRIPTION", "CDBox 管线测绘辅助插件", RegistryValueKind.String);
-                appKey.SetValue("LOADCTRLS", 2, RegistryValueKind.DWord); // 2 = AutoCAD 启动时加载
+                appKey.SetValue("DESCRIPTION", "CDBox ????????", RegistryValueKind.String);
+                appKey.SetValue("LOADCTRLS", 2, RegistryValueKind.DWord); // 2 = AutoCAD ?????
                 appKey.SetValue("LOADER", loaderPath, RegistryValueKind.String);
                 appKey.SetValue("MANAGED", 1, RegistryValueKind.DWord);
             }
@@ -561,12 +561,12 @@ namespace TCPipeAutoDraw.Core.Startup
             string upgradeCode = "{E8BB42A0-7694-4C58-98D6-13C2D2814A1E}";
             if (string.IsNullOrWhiteSpace(assemblyFileName)) assemblyFileName = GetMainAssemblyFileName();
             string appVersion = string.IsNullOrWhiteSpace(CDBoxStudioUpdateService.CurrentVersion)
-                ? "3.3.0" : CDBoxStudioUpdateService.CurrentVersion;
+                ? "3.4.1" : CDBoxStudioUpdateService.CurrentVersion;
 
-            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "BMJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "CDPROFILE", "CDZDM", "CDPROFILESET", "CDZDMSZ", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD", "CDEXCEL", "GU_XL", "TCFRAMEADD", "TCFRAMECUT", "TCFRAMELAYOUT", "TCFRAMEPLACE", "TCFRAMESET", "CDSHORTCODE", "CDJMSB", "CDSHORTCODESET", "CDJMSZ" };
+            string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "MJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "ZDM", "ZDMSZ", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD", "CDEXCEL", "GU_XL", "TCFRAMEADD", "TCFRAMECUT", "TCFRAMELAYOUT", "TCFRAMEPLACE", "TCFRAMESET", "CDSHORTCODE", "CDJMSB", "CDSHORTCODESET", "CDJMSZ" };
             var xml = new StringBuilder();
             xml.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
-            xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"" + EscapeXml(appVersion) + "\" Name=\"CDBox\" Description=\"CDBox 管线测绘辅助插件\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");
+            xml.AppendLine("<ApplicationPackage SchemaVersion=\"1.0\" AppVersion=\"" + EscapeXml(appVersion) + "\" Name=\"CDBox\" Description=\"CDBox ????????\" Author=\"CDBox\" ProductCode=\"" + productCode + "\" UpgradeCode=\"" + upgradeCode + "\">");
             xml.AppendLine("  <CompanyDetails Name=\"CDBox\" />");
             xml.AppendLine("  <Components>");
             xml.AppendLine("    <ComponentEntry AppName=\"CDBox\" AppDescription=\"CDBox AutoCAD Plugin\" ModuleName=\"./Contents/" + EscapeXml(assemblyFileName) + "\" AppType=\".Net\" LoadOnAutoCADStartup=\"True\" LoadOnCommandInvocation=\"False\">");
@@ -592,10 +592,10 @@ namespace TCPipeAutoDraw.Core.Startup
             string message = mainMessage ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(selfCheck))
             {
-                message += "\r\n\r\n安装/更新自检：\r\n" + selfCheck;
+                message += "\r\n\r\n??/?????\r\n" + selfCheck;
             }
 
-            message += "\r\n\r\n日志：" + CDBoxInstallLogger.LogFilePath;
+            message += "\r\n\r\n???" + CDBoxInstallLogger.LogFilePath;
             return message;
         }
 
@@ -615,35 +615,35 @@ namespace TCPipeAutoDraw.Core.Startup
             {
                 if (string.IsNullOrWhiteSpace(bundleRoot))
                 {
-                    errors.Add("安装目录为空");
+                    errors.Add("??????");
                     passed = false;
                     return FormatSelfCheck(ok, warnings, errors);
                 }
 
                 string contentsDir = Path.Combine(bundleRoot, ContentsFolderName);
-                CheckDirectory(bundleRoot, "bundle 根目录", ok, errors);
-                CheckDirectory(contentsDir, "Contents 目录", ok, errors);
+                CheckDirectory(bundleRoot, "bundle ???", ok, errors);
+                CheckDirectory(contentsDir, "Contents ??", ok, errors);
                 CheckFile(Path.Combine(bundleRoot, "PackageContents.xml"), "PackageContents.xml", ok, errors);
-                CheckFile(Path.Combine(contentsDir, string.IsNullOrWhiteSpace(assemblyFileName) ? GetMainAssemblyFileName() : assemblyFileName), "CDBox 主 DLL", ok, errors);
+                CheckFile(Path.Combine(contentsDir, string.IsNullOrWhiteSpace(assemblyFileName) ? GetMainAssemblyFileName() : assemblyFileName), "CDBox ? DLL", ok, errors);
 
                 CheckFile(Path.Combine(contentsDir, "Microsoft.Web.WebView2.Core.dll"), "WebView2 Core DLL", ok, errors);
                 CheckFile(Path.Combine(contentsDir, "Microsoft.Web.WebView2.WinForms.dll"), "WebView2 WinForms DLL", ok, errors);
 
-                if (FindFileRecursive(contentsDir, "WebView2Loader.dll")) ok.Add("WebView2Loader.dll 已安装");
-                else errors.Add("缺少 WebView2Loader.dll（通常位于 runtimes\\win-x64\\native）");
+                if (FindFileRecursive(contentsDir, "WebView2Loader.dll")) ok.Add("WebView2Loader.dll ???");
+                else errors.Add("?? WebView2Loader.dll????? runtimes\\win-x64\\native?");
 
-                if (Directory.Exists(Path.Combine(contentsDir, "runtimes"))) ok.Add("runtimes 目录已安装");
-                else warnings.Add("未发现 runtimes 目录；若 Studio 无法启动，请确认 WebView2/NPOI 等 NuGet 运行时文件已随 DLL 输出");
+                if (Directory.Exists(Path.Combine(contentsDir, "runtimes"))) ok.Add("runtimes ?????");
+                else warnings.Add("??? runtimes ???? Studio ???????? WebView2/NPOI ? NuGet ??????? DLL ??");
 
-                if (HasFrontendAssets(contentsDir)) ok.Add("Studio/Web 前端资源目录已安装或已内置");
-                else warnings.Add("未发现独立 Studio/Web 前端资源目录；当前 Preview 内置 HTML 可忽略，后续使用前端构建产物时请确认已复制到输出目录");
+                if (HasFrontendAssets(contentsDir)) ok.Add("Studio/Web ?????????????");
+                else warnings.Add("????? Studio/Web ????????? Preview ?? HTML ??????????????????????????");
 
                 CheckFile(Path.Combine(contentsDir, "Updater", "CDBoxUpdater.exe"), "CDBoxUpdater.exe", ok, errors);
             }
             catch (Exception ex)
             {
-                errors.Add("自检异常：" + ex.Message);
-                CDBoxInstallLogger.Error("安装自检异常。", ex);
+                errors.Add("?????" + ex.Message);
+                CDBoxInstallLogger.Error("???????", ex);
             }
 
             passed = errors.Count == 0;
@@ -652,14 +652,14 @@ namespace TCPipeAutoDraw.Core.Startup
 
         private static void CheckDirectory(string path, string displayName, IList<string> ok, IList<string> errors)
         {
-            if (Directory.Exists(path)) ok.Add(displayName + "存在");
-            else errors.Add(displayName + "不存在：" + path);
+            if (Directory.Exists(path)) ok.Add(displayName + "??");
+            else errors.Add(displayName + "????" + path);
         }
 
         private static void CheckFile(string path, string displayName, IList<string> ok, IList<string> errors)
         {
-            if (File.Exists(path)) ok.Add(displayName + "存在");
-            else errors.Add(displayName + "不存在：" + path);
+            if (File.Exists(path)) ok.Add(displayName + "??");
+            else errors.Add(displayName + "????" + path);
         }
 
         private static bool FindFileRecursive(string root, string fileName)
@@ -700,20 +700,20 @@ namespace TCPipeAutoDraw.Core.Startup
                 }
             }
 
-            return true; // Preview 2.1 仍以内置 HTML 字符串为主，未提供独立前端目录时不阻断安装。
+            return true; // Preview 2.1 ???? HTML ??????????????????????
         }
 
         private static string FormatSelfCheck(IList<string> ok, IList<string> warnings, IList<string> errors)
         {
             var sb = new StringBuilder();
-            sb.Append(errors.Count == 0 ? "通过" : "存在问题");
-            sb.Append("；通过 ").Append(ok.Count).Append(" 项");
-            if (warnings.Count > 0) sb.Append("，警告 ").Append(warnings.Count).Append(" 项");
-            if (errors.Count > 0) sb.Append("，错误 ").Append(errors.Count).Append(" 项");
-            sb.Append("。");
+            sb.Append(errors.Count == 0 ? "??" : "????");
+            sb.Append("??? ").Append(ok.Count).Append(" ?");
+            if (warnings.Count > 0) sb.Append("??? ").Append(warnings.Count).Append(" ?");
+            if (errors.Count > 0) sb.Append("??? ").Append(errors.Count).Append(" ?");
+            sb.Append("?");
 
-            foreach (string item in errors) sb.Append("\r\n[错误] ").Append(item);
-            foreach (string item in warnings) sb.Append("\r\n[提示] ").Append(item);
+            foreach (string item in errors) sb.Append("\r\n[??] ").Append(item);
+            foreach (string item in warnings) sb.Append("\r\n[??] ").Append(item);
             return sb.ToString();
         }
 

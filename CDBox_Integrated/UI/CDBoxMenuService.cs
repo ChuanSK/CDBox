@@ -8,20 +8,20 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 namespace TCPipeAutoDraw.UI
 {
     /// <summary>
-    /// CAD 菜单栏入口。使用 AutoCAD ActiveX COM 后期绑定，避免增加 Interop 引用。
+    /// CAD ???????? AutoCAD ActiveX COM ????????? Interop ???
     ///
-    /// 本版修复重点：
-    /// 1. 子菜单创建同时兼容 AddSubMenu(Index, Label) 与 AddSubMenu(Index, Label, Tag)，并优先尝试空字符串索引追加。
-    /// 2. 旧菜单项清理改为“逐个删除直到 Count 下降”的方式，兼容 CASS 菜单集合 0/1 基索引差异。
-    /// 3. 不再依赖删除整个 PopupMenu。CASS/AutoCAD 对已经写入 CUI 的 PopupMenu 删除并不稳定；优先清空旧菜单内容后原位重建。
-    /// 4. CDMENUDUMP 会输出一级、二级菜单明细，用于确认真实菜单结构。
+    /// ???????
+    /// 1. ????????? AddSubMenu(Index, Label) ? AddSubMenu(Index, Label, Tag)???????????????
+    /// 2. ??????????????? Count ????????? CASS ???? 0/1 ??????
+    /// 3. ???????? PopupMenu?CASS/AutoCAD ????? CUI ? PopupMenu ??????????????????????
+    /// 4. CDMENUDUMP ????????????????????????
     /// </summary>
     internal static class CDBoxMenuService
     {
-        private const string TopMenuName = "超重氢工具箱";
-        private const string EmptyText = "暂无功能";
+        private const string TopMenuName = "??????";
+        private const string EmptyText = "????";
 
-        // 使用真实 Ctrl+C 控制字符，避免 CASS 将 "^C^C" 当作普通命令文本执行。
+        // ???? Ctrl+C ??????? CASS ? "^C^C" ???????????
         private const string CancelMacroPrefix = "\x03\x03";
 
         private static bool _menuBuiltInCurrentSession;
@@ -51,7 +51,7 @@ namespace TCPipeAutoDraw.UI
                 object popupMenus = GetProperty(primaryMenuGroup, "Menus");
                 if (popupMenus == null) return;
 
-                // 先从菜单栏摘下旧入口，避免重建过程中显示旧对象。
+                // ????????????????????????
                 RemoveTopMenusFromMenuBar(acad);
 
                 object topMenu = FindPopupMenu(popupMenus, TopMenuName);
@@ -62,12 +62,12 @@ namespace TCPipeAutoDraw.UI
 
                 if (topMenu == null) return;
 
-                // 核心：不要继续追加到旧菜单，必须先清空旧项。
+                // ??????????????????????
                 bool cleared = ClearPopupMenuItems(topMenu);
                 if (!cleared && GetCount(topMenu) > 0)
                 {
-                    // 如果旧对象仍无法清空，改名隔离后重新 Add 一个干净菜单。
-                    // 有些 CASS 环境禁止删除主菜单对象，但允许改名；若改名失败，则保留诊断信息，不继续追加造成更乱的结构。
+                    // ?????????????????? Add ???????
+                    // ?? CASS ?????????????????????????????????????????????
                     TryInvoke(topMenu, "RemoveFromMenuBar");
                     bool renamed = TryRenameMenu(topMenu, "_CDBox_OldMenu_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
                     if (renamed)
@@ -87,7 +87,7 @@ namespace TCPipeAutoDraw.UI
                 TryShowMenuBar();
                 TryUpdateAcad(acad);
 
-                // 保存菜单组。若 CUI 只读或 CASS 拒绝保存，忽略，不影响当前会话。
+                // ??????? CUI ??? CASS ????????????????
                 TrySaveMenuGroup(primaryMenuGroup);
 
                 _menuBuiltInCurrentSession = true;
@@ -114,7 +114,7 @@ namespace TCPipeAutoDraw.UI
                 object primaryMenuGroup = GetPrimaryMenuGroup(acad);
                 RemoveTopMenusFromMenuBar(acad);
 
-                // 卸载时只从菜单栏移除，不强行删除 CUI 内对象，避免破坏 CASS/ACAD 主菜单组。
+                // ???????????????? CUI ???????? CASS/ACAD ?????
                 TryUpdateAcad(acad);
                 if (saveMenuGroup && primaryMenuGroup != null) TrySaveMenuGroup(primaryMenuGroup);
                 _menuBuiltInCurrentSession = false;
@@ -130,9 +130,9 @@ namespace TCPipeAutoDraw.UI
             try
             {
                 object acad = GetAcadApplication();
-                if (acad == null) return "未获取到 AutoCAD Application。";
+                if (acad == null) return "???? AutoCAD Application?";
 
-                sb.AppendLine("[CDBox 菜单诊断]");
+                sb.AppendLine("[CDBox ????]");
 
                 object menuBar = GetProperty(acad, "MenuBar");
                 sb.AppendLine("MenuBar.Count=" + GetCount(menuBar));
@@ -155,7 +155,7 @@ namespace TCPipeAutoDraw.UI
             }
             catch (Exception ex)
             {
-                sb.AppendLine("诊断失败：" + ex.Message);
+                sb.AppendLine("?????" + ex.Message);
             }
 
             return sb.ToString();
@@ -206,7 +206,7 @@ namespace TCPipeAutoDraw.UI
                 int beforeCount = GetCount(menuBar);
                 bool touched = false;
 
-                // AutoCAD ActiveX 支持直接按名称取菜单。
+                // AutoCAD ActiveX ???????????
                 object byName = Invoke(menuBar, "Item", TopMenuName);
                 if (IsTopMenu(byName))
                 {
@@ -238,7 +238,7 @@ namespace TCPipeAutoDraw.UI
                 if (IsSameMenuName(GetMenuDisplayText(menu), menuName)) result.Add(menu);
             }
 
-            // 部分环境支持名称索引但索引枚举不完整。
+            // ???????????????????
             object byName = Invoke(popupMenus, "Item", menuName);
             if (IsSameMenuName(GetMenuDisplayText(byName), menuName) && !ContainsSameComObject(result, byName)) result.Add(byName);
 
@@ -294,7 +294,7 @@ namespace TCPipeAutoDraw.UI
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             return text.Replace("&", string.Empty)
                        .Replace("...", string.Empty)
-                       .Replace("…", string.Empty)
+                       .Replace("?", string.Empty)
                        .Replace("\t", string.Empty)
                        .Replace("\r", string.Empty)
                        .Replace("\n", string.Empty)
@@ -325,7 +325,7 @@ namespace TCPipeAutoDraw.UI
         {
             if (popupMenu == null || countBefore <= 0) return false;
 
-            // 覆盖 0 基、1 基、官方示例中的 count/count+1 等差异。每轮只删一个，删完后重新取 Count。
+            // ?? 0 ??1 ???????? count/count+1 ????????????????? Count?
             int[] candidateIndexes = { 0, 1, countBefore - 1, countBefore, countBefore + 1 };
             for (int i = 0; i < candidateIndexes.Length; i++)
             {
@@ -346,57 +346,57 @@ namespace TCPipeAutoDraw.UI
 
         private static void BuildMenu(object topMenu)
         {
-            object survey = AddSubMenu(topMenu, "测绘工具",
+            object survey = AddSubMenu(topMenu, "????",
                 "CDBox_Survey");
-            AddCommandItem(survey, "简码识别", "CDJMSB");
-            AddCommandItem(survey, "简码识别设置", "CDJMSZ");
+            AddCommandItem(survey, "????", "CDJMSB");
+            AddCommandItem(survey, "??????", "CDJMSZ");
             AddSeparator(topMenu);
 
-            // ActiveX PopupMenu 在不同 AutoCAD/CASS 版本中没有稳定的位图图标接口，
-            // 使用菜单字体可直接显示的单色符号作为兼容图标。
-            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
+            // ActiveX PopupMenu ??? AutoCAD/CASS ???????????????
+            // ???????????????????????
+            AddCommandItem(topMenu, "? ?????", "CDLAYER");
             AddSeparator(topMenu);
 
-            object annotation = AddSubMenu(topMenu, "✎ 标注", "CDBox_Annotation");
-            AddCommandItem(annotation, "▱ 表面积标注", "CDSURF");
-            AddCommandItem(annotation, "⌁ 管线长度标注", "CDLEN");
-            AddCommandItem(annotation, "◇ 节点标注", "CDNODE");
+            object annotation = AddSubMenu(topMenu, "? ??", "CDBox_Annotation");
+            AddCommandItem(annotation, "? ?????", "CDSURF");
+            AddCommandItem(annotation, "? ??????", "CDLEN");
+            AddCommandItem(annotation, "? ????", "CDNODE");
             AddSeparator(annotation);
-            AddCommandItem(annotation, "⚙ 标注设置", "CDBZSET");
+            AddCommandItem(annotation, "? ????", "CDBZSET");
 
-            object section = AddSubMenu(topMenu, "◫ 断面", "CDBox_Section");
-            AddCommandItem(section, "▧ 断面图生成", "CDSEC");
-            AddCommandItem(section, "▦ 批量断面生成", "PLDM");
+            object section = AddSubMenu(topMenu, "? ??", "CDBox_Section");
+            AddCommandItem(section, "? ?????", "CDSEC");
+            AddCommandItem(section, "? ??????", "PLDM");
             AddSeparator(section);
-            AddCommandItem(section, "▥ 纵断面生成", "CDZDM");
-            AddCommandItem(section, "⚙ 纵断面设置", "CDZDMSZ");
+            AddCommandItem(section, "? ?????", "ZDM");
+            AddCommandItem(section, "? ?????", "ZDMSZ");
 
-            object pipeAttribute = AddSubMenu(topMenu, "◇ 管线属性", "CDBox_PipeAttribute");
-            AddCommandItem(pipeAttribute, "✎ 属性编辑器", "SX");
-            AddCommandItem(pipeAttribute, "× 属性清除", "SXQC");
+            object pipeAttribute = AddSubMenu(topMenu, "? ????", "CDBox_PipeAttribute");
+            AddCommandItem(pipeAttribute, "? ?????", "SX");
+            AddCommandItem(pipeAttribute, "? ????", "SXQC");
             AddSeparator(pipeAttribute);
-            AddCommandItem(pipeAttribute, "▤ 属性默认表", "SXMRB");
+            AddCommandItem(pipeAttribute, "? ?????", "SXMRB");
             AddSeparator(topMenu);
 
-            object quantity = AddSubMenu(topMenu, "Σ 工程量", "CDBox_Quantity");
-            AddCommandItem(quantity, "▣ 工程量看板", "CDQBOARD");
-            AddCommandItem(quantity, "▤ 工程量表格生成", "GCL");
+            object quantity = AddSubMenu(topMenu, "? ???", "CDBox_Quantity");
+            AddCommandItem(quantity, "? ?????", "CDQBOARD");
+            AddCommandItem(quantity, "? ???????", "GCL");
 
-            object frame = AddSubMenu(topMenu, "▣ 图框工具", "CDBox_Frame");
-            AddCommandItem(frame, "＋ 添加图框模版", "TCFRAMEADD");
-            AddCommandItem(frame, "▱ 布置裁图区域", "TCFRAMECUT");
-            AddCommandItem(frame, "▦ 裁图区域布框", "TCFRAMELAYOUT");
-            AddCommandItem(frame, "□ 直接布置图框", "TCFRAMEPLACE");
-            AddCommandItem(frame, "⚙ 图框设置", "TCFRAMESET");
+            object frame = AddSubMenu(topMenu, "? ????", "CDBox_Frame");
+            AddCommandItem(frame, "? ??????", "TCFRAMEADD");
+            AddCommandItem(frame, "? ??????", "TCFRAMECUT");
+            AddCommandItem(frame, "? ??????", "TCFRAMELAYOUT");
+            AddCommandItem(frame, "? ??????", "TCFRAMEPLACE");
+            AddCommandItem(frame, "? ????", "TCFRAMESET");
 
-            object table = AddSubMenu(topMenu, "▤ 表格工具", "CDBox_Table");
-            AddCommandItem(table, "▦ Excel 转 CAD 表格", "CDEXCEL");
+            object table = AddSubMenu(topMenu, "? ????", "CDBox_Table");
+            AddCommandItem(table, "? Excel ? CAD ??", "CDEXCEL");
             AddSeparator(topMenu);
 
-            AddCommandItem(topMenu, "▦ CDBox 工作台", "CDSTUDIO");
-            AddCommandItem(topMenu, "⚙ CDBox设置", "CDSET");
+            AddCommandItem(topMenu, "? CDBox ???", "CDSTUDIO");
+            AddCommandItem(topMenu, "? CDBox??", "CDSET");
             AddSeparator(topMenu);
-            AddCommandItem(topMenu, "ⓘ 关于超重氢工具箱", "CDABOUT");
+            AddCommandItem(topMenu, "? ????????", "CDABOUT");
         }
 
         private static object AddSubMenu(object parent, string label, string tag)
@@ -406,11 +406,11 @@ namespace TCPipeAutoDraw.UI
             object result = InvokeSubMenuAdd(parent, label, tag);
             if (result == null) return null;
 
-            // AddSubMenu 标准返回值是 PopupMenuItem，真正的子菜单在 SubMenu 属性中。
+            // AddSubMenu ?????? PopupMenuItem???????? SubMenu ????
             object subMenu = GetProperty(result, "SubMenu") ?? GetProperty(result, "Submenu");
             if (subMenu != null) return subMenu;
 
-            // 某些包装器可能直接返回子 PopupMenu。
+            // ???????????? PopupMenu?
             if (GetProperty(result, "Count") != null) return result;
 
             return null;
@@ -444,11 +444,11 @@ namespace TCPipeAutoDraw.UI
 
             int count = GetCount(parent);
 
-            // CASS/AutoCAD 不同版本的 ActiveX 包装表现不完全一致：
-            // - 有的版本 AddSubMenu 使用 Index + Label；
-            // - 有的版本支持 Index + Label + Tag；
-            // - 部分 CASS 环境对“追加到末尾”更接受空字符串索引。
-            // 因此这里按“最少破坏、最大兼容”的顺序逐一尝试。
+            // CASS/AutoCAD ????? ActiveX ??????????
+            // - ???? AddSubMenu ?? Index + Label?
+            // - ?????? Index + Label + Tag?
+            // - ?? CASS ????????????????????
+            // ????????????????????????
             object[] indexes = { string.Empty, count, count + 1, Math.Max(0, count - 1), 0, 1 };
             for (int i = 0; i < indexes.Length; i++)
             {
@@ -461,14 +461,14 @@ namespace TCPipeAutoDraw.UI
 
         private static object TryAddSubMenuWithAllSignatures(object parent, object index, string label, string tag)
         {
-            // 先尝试两参数写法。当前南方 CASS11 环境中，三参数写法会失败，导致只剩一级命令项。
+            // ????????????? CASS11 ???????????????????????
             object result = Invoke(parent, "AddSubMenu", index, label);
             if (result != null) return result;
 
             result = Invoke(parent, "AddSubmenu", index, label);
             if (result != null) return result;
 
-            // 再兼容需要 Tag 的版本。
+            // ????? Tag ????
             result = Invoke(parent, "AddSubMenu", index, label, tag);
             if (result != null) return result;
 

@@ -50,10 +50,10 @@ namespace TCPipeAutoDraw.UI
             Controls.Add(_content);
 
             _content.Controls.Add(BuildHeader());
-            _currentCard = CreateCard("当前对象");
-            _actionsCard = CreateCard("快捷操作");
-            _issuesCard = CreateCard("问题摘要");
-            _quickCard = CreateCard("收藏 / 最近");
+            _currentCard = CreateCard("????");
+            _actionsCard = CreateCard("????");
+            _issuesCard = CreateCard("????");
+            _quickCard = CreateCard("?? / ??");
             _content.Controls.Add(_currentCard);
             _content.Controls.Add(_actionsCard);
             _content.Controls.Add(_issuesCard);
@@ -101,13 +101,13 @@ namespace TCPipeAutoDraw.UI
                 ForeColor = Fore,
                 Font = new Font(Font.FontFamily, 13F, FontStyle.Bold)
             };
-            var refresh = CreateTextButton("刷新", false);
+            var refresh = CreateTextButton("??", false);
             refresh.Width = 54;
             refresh.Height = 30;
             refresh.MinimumSize = Size.Empty;
             refresh.Dock = DockStyle.Top;
             refresh.Click += delegate { RefreshContext(true); };
-            var settings = CreateTextButton("设置", false);
+            var settings = CreateTextButton("??", false);
             settings.Width = 54;
             settings.Height = 30;
             settings.MinimumSize = Size.Empty;
@@ -185,7 +185,7 @@ namespace TCPipeAutoDraw.UI
             }
             catch
             {
-                // CAD 正在切换文档或执行命令时，保留上一次稳定摘要。
+                // CAD ???????????????????????
             }
         }
 
@@ -243,7 +243,7 @@ namespace TCPipeAutoDraw.UI
             ClearBody(body);
             foreach (string issue in context.Issues)
             {
-                body.Controls.Add(CreateLabel("● " + issue, 8.5F, FontStyle.Regular, Issue, new Padding(0, 0, 0, 4)));
+                body.Controls.Add(CreateLabel("? " + issue, 8.5F, FontStyle.Regular, Issue, new Padding(0, 0, 0, 4)));
             }
         }
 
@@ -294,7 +294,7 @@ namespace TCPipeAutoDraw.UI
                 }
                 flow.Controls.Add(button);
             }
-            Button studio = CreateWideButton("打开全部功能");
+            Button studio = CreateWideButton("??????");
             studio.Click += delegate { RunAcadCommand("CDSTUDIO"); };
             flow.Controls.Add(studio);
             body.Controls.Add(flow);
@@ -330,7 +330,7 @@ namespace TCPipeAutoDraw.UI
         {
             return new Label
             {
-                Text = string.IsNullOrWhiteSpace(text) ? "—" : text,
+                Text = string.IsNullOrWhiteSpace(text) ? "?" : text,
                 AutoSize = true,
                 MaximumSize = new Size(220, 0),
                 Margin = margin,
@@ -385,10 +385,10 @@ namespace TCPipeAutoDraw.UI
         {
             switch ((command ?? string.Empty).ToUpperInvariant())
             {
-                case "PLDM": return "批量生成断面";
-                case "SXMRB": return "属性默认表";
-                case "SXQC": return "属性清除";
-                case "CDSET": return "CDBox 设置";
+                case "PLDM": return "??????";
+                case "SXMRB": return "?????";
+                case "SXQC": return "????";
+                case "CDSET": return "CDBox ??";
                 default: return command;
             }
         }
@@ -403,7 +403,9 @@ namespace TCPipeAutoDraw.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(new AcadMainWindow(), ex.Message, module.Name + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
+                    module.Name + "????", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
@@ -415,7 +417,9 @@ namespace TCPipeAutoDraw.UI
                 Document doc = AcadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    CDBoxMessageBox.Show(new AcadMainWindow(),
+                        "????????", "CDBox", MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
                     return;
                 }
                 string stateActionId = GetStateActionId(commandName);
@@ -424,7 +428,9 @@ namespace TCPipeAutoDraw.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(new AcadMainWindow(), ex.Message, "CDBox 命令执行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
+                    "CDBox ??????", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 

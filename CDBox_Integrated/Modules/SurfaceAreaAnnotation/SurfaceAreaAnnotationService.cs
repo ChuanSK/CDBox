@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -17,9 +17,9 @@ using TCPipeAutoDraw.Modules.AnnotationHud;
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
     /// <summary>
-    /// 表面积标注核心服务。
-    /// 正式模式：自动调用 CASS surfacearea 命令，使用 CASS 结果注记，并可删除 CASS 自动生成的三角网/三角面积文字。
-    /// 插件内置 TIN 估算入口已移除，避免与 CASS 成果不一致。
+    /// ??????????
+    /// ????????? CASS surfacearea ????? CASS ????????? CASS ????????/???????
+    /// ???? TIN ??????????? CASS ??????
     /// </summary>
     public static class SurfaceAreaAnnotationService
     {
@@ -35,7 +35,6 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         {
             if (doc == null) throw new ArgumentNullException("doc");
             options = NormalizeOptions(options);
-            options.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
 
             if (options.CalculationMode == SurfaceAreaCalculationMode.CassCommand)
             {
@@ -43,33 +42,48 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
 
             Editor ed = doc.Editor;
-            PromptEntityOptions peo = new PromptEntityOptions("\n请选择一个闭合区域边界（闭合多段线/圆/闭合曲线）");
-            peo.SetRejectMessage("\n必须选择闭合曲线对象。 ");
+            PromptEntityOptions peo = new PromptEntityOptions("\n?????????????????/?/?????");
+            peo.SetRejectMessage("\n??????????? ");
             peo.AddAllowedClass(typeof(Curve), false);
 
             PromptEntityResult per = ed.GetEntity(peo);
             if (per.Status != PromptStatus.OK)
             {
-                return new SurfaceAreaAnnotationResult { Success = false, Message = "已取消选择。" };
+                return new SurfaceAreaAnnotationResult { Success = false, Message = "??????" };
             }
 
-            PromptPointOptions ppoStart = new PromptPointOptions("\n请指定引线拉出位置");
+            SurfaceAreaAnnotationResult previewResult;
+            string previewMessage;
+            if (!TryBuildBoundaryAreaCheck(doc, per.ObjectId, options,
+                out previewResult, out previewMessage))
+            {
+                return new SurfaceAreaAnnotationResult
+                {
+                    Success = false,
+                    CalculationMode = options.CalculationMode,
+                    BoundaryObjectId = per.ObjectId,
+                    Message = previewMessage
+                };
+            }
+            previewResult.CalculationMode = options.CalculationMode;
+
+            PromptPointOptions ppoStart = new PromptPointOptions("\n?????????");
             PromptPointResult pprStart = ed.GetPoint(ppoStart);
             if (pprStart.Status != PromptStatus.OK)
             {
-                return new SurfaceAreaAnnotationResult { Success = false, Message = "已取消引线拉出位置。" };
+                return new SurfaceAreaAnnotationResult { Success = false, Message = "??????????" };
             }
 
-            PromptPointOptions ppoEnd = new PromptPointOptions("\n请指定引线结束位置（注记位置）");
-            ppoEnd.UseBasePoint = true;
-            ppoEnd.BasePoint = pprStart.Value;
-            PromptPointResult pprEnd = ed.GetPoint(ppoEnd);
-            if (pprEnd.Status != PromptStatus.OK)
+            string previewText = BuildAnnotationText(options, previewResult);
+            Point3d annotationPoint;
+            if (!TryPromptAnnotationPointWithPreview(doc, pprStart.Value,
+                previewText, options, out annotationPoint))
             {
-                return new SurfaceAreaAnnotationResult { Success = false, Message = "已取消注记位置。" };
+                return new SurfaceAreaAnnotationResult { Success = false, Message = "????????" };
             }
 
-            return CalculateAndAnnotate(doc, per.ObjectId, pprStart.Value, pprEnd.Value, true, options);
+            return CalculateAndAnnotate(doc, per.ObjectId, pprStart.Value,
+                annotationPoint, true, options);
         }
 
         private static SurfaceAreaAnnotationResult StartCassCommandCalculateAndAnnotate(Document doc, SurfaceAreaAnnotationOptions options)
@@ -86,15 +100,15 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 {
                     Success = false,
                     CalculationMode = SurfaceAreaCalculationMode.CassCommand,
-                    Message = "已有一个 CASS 表面积标注流程正在执行，请完成或取消后再试。"
+                    Message = "???? CASS ??????????????????????"
                 };
             }
 
-            // 关键修正：不再使用 SendStringToExecute 排队执行 CASS，也不再在 Idle 中继续流程。
-            // SendStringToExecute / Idle 在当前 CASS 组合中会留下额外空回车，导致 AutoCAD 自动重复上一次命令（TCSURF）。
-            // 这里改为 Editor.Command 同步调用 surfacearea，CASS 结束后立即由插件读取结果、清理生成物、提示两点注记。
-            PromptEntityOptions peo = new PromptEntityOptions("\n请选择闭合边界");
-            peo.SetRejectMessage("\n必须选择闭合曲线对象。 ");
+            // ????????? SendStringToExecute ???? CASS????? Idle ??????
+            // SendStringToExecute / Idle ??? CASS ?????????????? AutoCAD ??????????TCSURF??
+            // ???? Editor.Command ???? surfacearea?CASS ??????????????????????????
+            PromptEntityOptions peo = new PromptEntityOptions("\n???????");
+            peo.SetRejectMessage("\n??????????? ");
             peo.AddAllowedClass(typeof(Curve), false);
 
             PromptEntityResult per = ed.GetEntity(peo);
@@ -104,7 +118,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 {
                     Success = false,
                     CalculationMode = SurfaceAreaCalculationMode.CassCommand,
-                    Message = "已取消选择闭合边界。"
+                    Message = "??????????"
                 };
             }
 
@@ -124,9 +138,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 return boundaryCheck;
             }
 
-            // 不再用插件自己的高程点识别结果决定是否调用 CASS。
-            // CASS 对“图上高程点”的识别规则与插件读取 DBText/块/Z 值的规则可能不完全一致，
-            // 因此这里始终先调用 CASS surfacearea；若 CASS 未生成本次 surface.log，再自动降级为普通面积标注。
+            // ????????????????????? CASS?
+            // CASS ?????????????????? DBText/?/Z ????????????
+            // ????????? CASS surfacearea?? CASS ????? surface.log??????????????
 
             string previousUsers5 = string.Empty;
             try
@@ -156,16 +170,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             {
                 try { Application.SetSystemVariable("USERS5", boundaryHandle ?? string.Empty); } catch { }
 
-                // 双保险记录 CASS 生成物：
-                // 1) ObjectAppended 事件记录；
-                // 2) 调用前后扫描当前空间差集。
-                // COM SendCommand 在 CASS11 中可能是异步排队执行，不能在发送后立刻读取结果。
-                // 因此把“调用前快照”保存到 session，等 CASS 完成后由 TCBMJ_CASS_FINISH 统一收尾。
+                // ????? CASS ????
+                // 1) ObjectAppended ?????
+                // 2) ?????????????
+                // COM SendCommand ? CASS11 ????????????????????????
+                // ????????????? session?? CASS ???? TCBMJ_CASS_FINISH ?????
                 session.BeforeObjectIds = SnapshotCurrentSpaceEntityIds(doc);
                 try { doc.Database.ObjectAppended += CassDatabase_ObjectAppended; } catch { }
 
-                ed.WriteMessage("\n[表面积标注] 已选择边界，正在通过 LISP 调用 CASS surfacearea 计算。边界图层：" + boundaryLayer);
-                ed.WriteMessage("\n[表面积标注] CASS 完成后将自动进入引线/注记位置选择。\n");
+                ed.WriteMessage("\n[?????] ?????????? LISP ?? CASS surfacearea ????????" + boundaryLayer);
+                ed.WriteMessage("\n[?????] CASS ??????????/???????\n");
 
                 RunCassSurfaceAreaCommandSynchronously(doc, per.ObjectId, options.BoundaryInterval, boundaryHandle);
 
@@ -176,7 +190,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     AsyncStarted = true,
                     BoundaryObjectId = per.ObjectId,
                     BoundaryLayerName = boundaryLayer,
-                    Message = "已启动 CASS surfacearea 计算，等待 CASS 完成后自动继续注记。"
+                    Message = "??? CASS surfacearea ????? CASS ??????????"
                 };
             }
             catch (System.Exception ex)
@@ -190,7 +204,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     CalculationMode = SurfaceAreaCalculationMode.CassCommand,
                     BoundaryObjectId = per.ObjectId,
                     BoundaryLayerName = boundaryLayer,
-                    Message = "调用 CASS surfacearea 失败：" + ex.Message
+                    Message = "?? CASS surfacearea ???" + ex.Message
                 };
             }
         }
@@ -198,13 +212,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         private static void RunCassSurfaceAreaCommandSynchronously(Document doc, ObjectId boundaryId, double interval, string boundaryHandle)
         {
             if (doc == null) throw new ArgumentNullException("doc");
-            if (string.IsNullOrWhiteSpace(boundaryHandle)) throw new ArgumentException("边界对象句柄为空。", "boundaryHandle");
+            if (string.IsNullOrWhiteSpace(boundaryHandle)) throw new ArgumentException("?????????", "boundaryHandle");
 
-            // Editor.Command 直接传 ObjectId / SelectionSet 时，CASS11 的 surfacearea 可能只启动命令，
-            // 但没有真正接收到边界对象，因此不会生成三角网，也不会输出表面积。
-            // 这里改为调用你已实测成功的同款 LISP，并在 CASS 计算完成后由 LISP 继续调用插件收尾命令：
-            // (progn (command "surfacearea" "2" (handent "边界Handle") 5) (command "TCBMJ_CASS_FINISH") (princ))
-            // 这样不会在 SendCommand 返回后过早读取 surface.log / 处理注记。
+            // Editor.Command ??? ObjectId / SelectionSet ??CASS11 ? surfacearea ????????
+            // ????????????????????????????????
+            // ??????????????? LISP??? CASS ?????? LISP ???????????
+            // (progn (command "surfacearea" "2" (handent "??Handle") 5) (command "TCBMJ_CASS_FINISH") (princ))
+            // ????? SendCommand ??????? surface.log / ?????
             string intervalText = interval.ToString(CultureInfo.InvariantCulture);
             string safeHandle = EscapeLispString(boundaryHandle);
             string lisp = "(progn (command \"" + CassSurfaceAreaCommandName + "\" \"2\" (handent \"" + safeHandle + "\") " + intervalText + ") (command \"" + CassFinishCommandName + "\") (princ))";
@@ -214,7 +228,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 object acadDocument = doc.GetAcadDocument();
                 if (acadDocument == null)
                 {
-                    throw new InvalidOperationException("无法取得 AutoCAD COM 文档对象。");
+                    throw new InvalidOperationException("???? AutoCAD COM ?????");
                 }
 
                 acadDocument.GetType().InvokeMember(
@@ -226,7 +240,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                throw new InvalidOperationException("无法通过 LISP 调用 CASS surfacearea。发送内容：" + lisp + "；错误：" + ex.Message, ex);
+                throw new InvalidOperationException("???? LISP ?? CASS surfacearea??????" + lisp + "????" + ex.Message, ex);
             }
         }
 
@@ -310,13 +324,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         Curve boundary = tr.GetObject(boundaryId, OpenMode.ForRead, false) as Curve;
                         if (boundary == null)
                         {
-                            result.Message = "选择对象不是曲线边界。";
+                            result.Message = "???????????";
                             return result;
                         }
 
                         if (!IsClosedCurve(boundary))
                         {
-                            result.Message = "选择对象不是闭合边界。请先闭合多段线，或选择圆/闭合曲线。";
+                            result.Message = "???????????????????????/?????";
                             return result;
                         }
 
@@ -329,7 +343,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
                 if (string.IsNullOrWhiteSpace(handleText))
                 {
-                    result.Message = "无法取得边界对象句柄，不能传递给 CASS surfacearea。";
+                    result.Message = "???????????????? CASS surfacearea?";
                     return result;
                 }
 
@@ -338,7 +352,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                result.Message = "读取边界对象失败：" + ex.Message;
+                result.Message = "?????????" + ex.Message;
                 return result;
             }
         }
@@ -411,7 +425,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (!IsSurfaceAreaCommand(e.GlobalCommandName)) return;
 
             CleanupCassSession(session, true);
-            session.Doc.Editor.WriteMessage("\n[表面积标注] CASS surfacearea 已取消。\n");
+            session.Doc.Editor.WriteHudMessage("\n[?????] CASS surfacearea ????\n");
         }
 
         private static void CassDocument_CommandFailed(object sender, CommandEventArgs e)
@@ -421,7 +435,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (!IsSurfaceAreaCommand(e.GlobalCommandName)) return;
 
             CleanupCassSession(session, true);
-            session.Doc.Editor.WriteMessage("\n[表面积标注] CASS surfacearea 执行失败。\n");
+            session.Doc.Editor.WriteHudMessage("\n[?????] CASS surfacearea ?????\n");
         }
 
         private static void CassDocument_LispEnded(object sender, EventArgs e)
@@ -429,9 +443,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             CassCommandSession session = _pendingCassSession;
             if (session == null) return;
 
-            // CASS surfacearea 是通过 (command ...) 在 LISP 中执行的。
-            // 有些 CASS/AutoCAD 组合不会稳定触发 surfacearea 的 CommandEnded，
-            // 但 LISP 结束时 CASS 计算通常已经完成，因此这里也安排收尾流程。
+            // CASS surfacearea ??? (command ...) ? LISP ?????
+            // ?? CASS/AutoCAD ???????? surfacearea ? CommandEnded?
+            // ? LISP ??? CASS ?????????????????????
             if (!session.FinishScheduled)
             {
                 ScheduleCassFinish(session);
@@ -450,13 +464,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (session == null || session.Doc == null || session.FinishScheduled) return;
             session.FinishScheduled = true;
 
-            // 先停止记录，避免插件后续注记对象也被当作 CASS 生成物删除。
+            // ???????????????????? CASS ??????
             DetachCassSessionEvents(session);
 
-            // 不再通过 SendStringToExecute 排队执行 TCBMJ_CASS_FINISH。
-            // 在某些 AutoCAD/CASS 组合中，从 LispEnded/CommandEnded 事件里发送命令会停在队列中，
-            // 直到用户再次输入 TCSURF 或其他命令后才继续，表现为“需要再次点击开始计算并标注”。
-            // 改为在 WinForms Idle 中直接进入收尾流程：读取 CASS 结果、删除生成物、提示两点注记。
+            // ???? SendStringToExecute ???? TCBMJ_CASS_FINISH?
+            // ??? AutoCAD/CASS ????? LispEnded/CommandEnded ??????????????
+            // ???????? TCSURF ?????????????????????????????
+            // ??? WinForms Idle ???????????? CASS ????????????????
             QueueCassFinishOnIdle();
         }
 
@@ -478,7 +492,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 {
                     try
                     {
-                        // 兜底：如果 Idle 事件不可用，再使用内部收尾命令。
+                        // ????? Idle ????????????????
                         session.Doc.SendStringToExecute(CassFinishCommandName + " ", true, false, false);
                     }
                     catch
@@ -504,7 +518,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             try
             {
-                // 如果 AutoCAD 仍有命令在执行，继续等待下一次空闲，避免在 CASS 命令尚未完全退出时弹出 GetPoint。
+                // ?? AutoCAD ????????????????????? CASS ??????????? GetPoint?
                 string activeCommand = session.Doc.CommandInProgress;
                 if (!string.IsNullOrWhiteSpace(activeCommand))
                 {
@@ -525,7 +539,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (session == null || session.Doc == null)
             {
                 Document current = Application.DocumentManager.MdiActiveDocument;
-                if (current != null) current.Editor.WriteMessage("\n[表面积标注] 没有待完成的 CASS 表面积标注流程。\n");
+                if (current != null) current.Editor.WriteHudMessage("\n[?????] ?????? CASS ????????\n");
                 return;
             }
 
@@ -542,9 +556,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 double cassArea;
                 string message;
 
-                // 正式调用模式：CASS 负责计算，插件读取本次生成/更新的 surface.log。
-                // 不再读取图上三角面积文字，因为 CASS 可能把文字生成在特殊对象/块中，插件不一定能稳定识别。
-                // 这里要求 surface.log 的修改时间晚于本次流程启动时间，避免误读旧日志。
+                // ???????CASS ?????????????/??? surface.log?
+                // ??????????????? CASS ????????????/??????????????
+                // ???? surface.log ????????????????????????
                 string cassLogPath;
                 string cassLogLine;
                 DateTime minLogTime = session.StartTime.AddSeconds(-2);
@@ -560,25 +574,25 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     string planMessage;
                     if (!TryBuildBoundaryAreaCheck(doc, boundaryId, options, out planCheck, out planMessage))
                     {
-                        ed.WriteMessage("\n[表面积标注] CASS 已执行，但未能读取本次生成的 surface.log 结果：" + message);
-                        if (deletedOnFail > 0) ed.WriteMessage(" 已删除 CASS 生成对象 " + deletedOnFail + " 个。");
-                        ed.WriteMessage(" 同时普通面积读取失败：" + planMessage + "\n");
+                        ed.WriteHudMessage("\n[?????] CASS ?????????????? surface.log ???" + message);
+                        if (deletedOnFail > 0) ed.WriteHudMessage(" ??? CASS ???? " + deletedOnFail + " ??");
+                        ed.WriteHudMessage(" ???????????" + planMessage + "\n");
                         return;
                     }
 
-                    ed.WriteMessage("\n[表面积标注] CASS 未生成/未更新本次 surface.log，已自动改为普通面积标注。原因：" + message);
-                    if (deletedOnFail > 0) ed.WriteMessage(" 已删除 CASS 生成对象 " + deletedOnFail + " 个。");
-                    ed.WriteMessage("\n");
+                    ed.WriteHudMessage("\n[?????] CASS ???/????? surface.log????????????????" + message);
+                    if (deletedOnFail > 0) ed.WriteHudMessage(" ??? CASS ???? " + deletedOnFail + " ??");
+                    ed.WriteHudMessage("\n");
 
                     SurfaceAreaAnnotationResult fallbackResult = AnnotatePlanAreaFallback(
                         doc,
                         boundaryId,
                         planCheck,
                         options,
-                        "CASS 未生成/未更新本次 surface.log，已改为面积标注。",
+                        "CASS ???/????? surface.log?????????",
                         session.AppendedObjectIds.Count,
                         deletedOnFail);
-                    ed.WriteMessage(fallbackResult.ToEditorMessage());
+                    ed.WriteHudMessage(fallbackResult.ToEditorMessage());
                     return;
                 }
 
@@ -589,11 +603,11 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 }
 
                 SurfaceAreaAnnotationResult result = AnnotateCassCommandResult(doc, boundaryId, cassArea, cassLogPath, cassLogLine, session.AppendedObjectIds.Count, deleted, options);
-                ed.WriteMessage(result.ToEditorMessage());
+                ed.WriteHudMessage(result.ToEditorMessage());
             }
             catch (System.Exception ex)
             {
-                ed.WriteMessage("\n[表面积标注] CASS 表面积注记失败：" + ex.Message + "\n");
+                ed.WriteHudMessage("\n[?????] CASS ????????" + ex.Message + "\n");
             }
             finally
             {
@@ -636,11 +650,11 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (string.IsNullOrWhiteSpace(result.BoundaryLayerName)) result.BoundaryLayerName = "";
 
-            PromptPointOptions ppoStart = new PromptPointOptions("\n请指定引线拉出位置");
+            PromptPointOptions ppoStart = new PromptPointOptions("\n?????????");
             PromptPointResult pprStart = doc.Editor.GetPoint(ppoStart);
             if (pprStart.Status != PromptStatus.OK)
             {
-                result.Message = "已取消引线拉出位置。";
+                result.Message = "??????????";
                 return result;
             }
 
@@ -652,7 +666,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             Point3d previewAnnotationPoint;
             if (!TryPromptAnnotationPointWithPreview(doc, pprStart.Value, previewText, options, out previewAnnotationPoint))
             {
-                result.Message = "已取消注记位置。";
+                result.Message = "????????";
                 return result;
             }
 
@@ -684,7 +698,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
 
             result.Success = true;
-            result.Message = "CASS 表面积计算并注记完成。";
+            result.Message = "CASS ???????????";
             return result;
         }
 
@@ -705,13 +719,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         Curve boundary = tr.GetObject(boundaryId, OpenMode.ForRead, false) as Curve;
                         if (boundary == null)
                         {
-                            message = "选择对象不是曲线边界。";
+                            message = "???????????";
                             return false;
                         }
 
                         if (!IsClosedCurve(boundary))
                         {
-                            message = "选择对象不是闭合边界。请先闭合多段线，或选择圆/闭合曲线。";
+                            message = "???????????????????????/?????";
                             return false;
                         }
 
@@ -719,7 +733,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         List<Point2d> boundary2d = SampleBoundary(boundary, options.BoundaryInterval);
                         if (boundary2d.Count < 3)
                         {
-                            message = "边界采样失败，无法形成有效闭合区域。";
+                            message = "??????????????????";
                             return false;
                         }
 
@@ -739,14 +753,14 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                message = "读取边界面积和高程点失败：" + ex.Message;
+                message = "?????????????" + ex.Message;
                 return false;
             }
         }
 
         private static SurfaceAreaAnnotationResult AnnotatePlanAreaFallback(Document doc, ObjectId boundaryId, SurfaceAreaAnnotationResult areaCheck, SurfaceAreaAnnotationOptions options)
         {
-            return AnnotatePlanAreaFallback(doc, boundaryId, areaCheck, options, "无有效高程，已改为面积标注。", 0, 0);
+            return AnnotatePlanAreaFallback(doc, boundaryId, areaCheck, options, "??????????????", 0, 0);
         }
 
         private static SurfaceAreaAnnotationResult AnnotatePlanAreaFallback(Document doc, ObjectId boundaryId, SurfaceAreaAnnotationResult areaCheck, SurfaceAreaAnnotationOptions options, string fallbackMessage, int cassGeneratedCount, int cassDeletedCount)
@@ -765,14 +779,14 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (string.IsNullOrWhiteSpace(fallbackMessage))
             {
-                fallbackMessage = "已改为面积标注。";
+                fallbackMessage = "????????";
             }
 
-            PromptPointOptions ppoStart = new PromptPointOptions("\n请指定引线拉出位置");
+            PromptPointOptions ppoStart = new PromptPointOptions("\n?????????");
             PromptPointResult pprStart = doc.Editor.GetPoint(ppoStart);
             if (pprStart.Status != PromptStatus.OK)
             {
-                result.Message = fallbackMessage + "但已取消引线拉出位置。";
+                result.Message = fallbackMessage + "???????????";
                 return result;
             }
 
@@ -784,7 +798,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             Point3d previewAnnotationPoint;
             if (!TryPromptAnnotationPointWithPreview(doc, pprStart.Value, previewText, options, out previewAnnotationPoint))
             {
-                result.Message = fallbackMessage + "但已取消注记位置。";
+                result.Message = fallbackMessage + "?????????";
                 return result;
             }
 
@@ -850,13 +864,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (doc == null)
             {
-                message = "当前文档为空。";
+                message = "???????";
                 return false;
             }
 
             if (objectIds == null || objectIds.Count == 0)
             {
-                message = "没有记录到 CASS 新增对象。";
+                message = "????? CASS ?????";
                 return false;
             }
 
@@ -908,7 +922,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (values.Count == 0)
             {
-                message = "本次 CASS 生成对象中没有找到可识别的三角面积文字。";
+                message = "?? CASS ????????????????????";
                 return false;
             }
 
@@ -917,13 +931,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (sum <= Eps)
             {
-                message = "已识别三角面积文字，但合计值无效。";
+                message = "?????????????????";
                 return false;
             }
 
             area = sum;
             areaTextCount = values.Count;
-            sourceLine = "CASS 本次生成三角面积文字合计：" + sum.ToString("0.###", CultureInfo.InvariantCulture) + "（" + values.Count + " 个面积文字）";
+            sourceLine = "CASS ?????????????" + sum.ToString("0.###", CultureInfo.InvariantCulture) + "?" + values.Count + " ??????";
             return true;
         }
 
@@ -933,16 +947,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (string.IsNullOrWhiteSpace(rawText)) return false;
 
             string text = StripMTextCodes(rawText)
-                .Replace("㎡", "")
-                .Replace("平方米", "")
-                .Replace("平方", "")
-                .Replace("米", "")
+                .Replace("?", "")
+                .Replace("???", "")
+                .Replace("??", "")
+                .Replace("?", "")
                 .Trim();
 
             if (string.IsNullOrWhiteSpace(text)) return false;
 
-            // CASS 三角面积标注通常是纯小数，如 6.009。这里要求整段文本只含一个数值，
-            // 避免把图名、说明文字或插件注记误当作面积。优先要求有小数点，避免三角编号类整数被误加。
+            // CASS ?????????????? 6.009????????????????
+            // ???????????????????????????????????????????
             Match exact = Regex.Match(text, @"^\s*([+-]?\d+(?:[\.,]\d+)?)\s*$");
             if (!exact.Success) return false;
 
@@ -955,7 +969,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (!TryParseFlexibleDouble(number, out value)) return false;
             if (value <= 0) return false;
 
-            // 单个三角面积不应大到离谱。这里不做强边界限制，只排除明显异常数值。
+            // ?????????????????????????????????
             if (value > 1000000000) return false;
             return true;
         }
@@ -1032,13 +1046,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     Curve boundary = tr.GetObject(boundaryId, OpenMode.ForRead, false) as Curve;
                     if (boundary == null)
                     {
-                        result.Message = "选择对象不是曲线边界。";
+                        result.Message = "???????????";
                         return result;
                     }
 
                     if (!IsClosedCurve(boundary))
                     {
-                        result.Message = "选择对象不是闭合边界。请先闭合多段线，或选择圆/闭合曲线。";
+                        result.Message = "???????????????????????/?????";
                         return result;
                     }
 
@@ -1047,7 +1061,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     List<Point2d> boundary2d = SampleBoundary(boundary, options.BoundaryInterval);
                     if (boundary2d.Count < 3)
                     {
-                        result.Message = "边界采样失败，无法形成有效闭合区域。";
+                        result.Message = "??????????????????";
                         return result;
                     }
 
@@ -1056,7 +1070,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
                     result.CalculationMode = options.CalculationMode;
 
-                    if (options.CalculationMode == SurfaceAreaCalculationMode.CassSurfaceLog)
+                    if (options.CalculationMode == SurfaceAreaCalculationMode.PlanArea)
+                    {
+                        result.SurfaceArea = result.PlanArea;
+                        result.ElevationPointCount = 0;
+                        result.TriangleCount = 0;
+                        result.AnnotationPoint = useUserAnnotationPoint
+                            ? annotationPoint
+                            : GetSimpleAnnotationPoint(boundary2d);
+                    }
+                    else if (options.CalculationMode == SurfaceAreaCalculationMode.CassSurfaceLog)
                     {
                         double cassArea;
                         string cassLogPath;
@@ -1083,7 +1106,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         result.ElevationPointCount = elevations.Count;
                         if (elevations.Count < 3)
                         {
-                            result.Message = "闭合区域内可识别的高程点少于 3 个。请确认图上有 DBPoint、带 Z 值块，或纯数字高程文字。";
+                            result.Message = "?????????????? 3 ???????? DBPoint?? Z ????????????";
                             return result;
                         }
 
@@ -1091,7 +1114,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         List<TinPoint> tinPoints = BuildTinPoints(boundary2d, elevations, terrainTriangles);
                         if (tinPoints.Count < 3)
                         {
-                            result.Message = "有效三角网点不足，无法计算表面积。";
+                            result.Message = "?????????????????";
                             return result;
                         }
 
@@ -1109,7 +1132,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
                         if (surfaceArea <= Eps || usedTriangleCount == 0)
                         {
-                            result.Message = "三角网生成失败，未得到有效表面积。";
+                            result.Message = "?????????????????";
                             return result;
                         }
 
@@ -1143,7 +1166,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
 
             result.Success = true;
-            result.Message = "表面积计算并注记完成。";
+            result.Message = options.CalculationMode == SurfaceAreaCalculationMode.PlanArea
+                ? "??????????"
+                : "???????????";
             return result;
         }
 
@@ -1158,8 +1183,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             {
                 options.AnnotationTemplate = SurfaceAreaAnnotationOptions.Default.AnnotationTemplate;
             }
-            // 正式版不再开放插件内置估算，所有主流程统一走 CASS surfacearea。
-            if (options.CalculationMode != SurfaceAreaCalculationMode.CassCommand)
+            // ???? TIN / surface.log ?????????
+            if (options.CalculationMode != SurfaceAreaCalculationMode.CassCommand
+                && options.CalculationMode != SurfaceAreaCalculationMode.PlanArea)
             {
                 options.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
             }
@@ -1190,7 +1216,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch
             {
-                // 某些曲线类型可能不可靠，继续用首尾点兜底。
+                // ?????????????????????
             }
 
             try
@@ -1213,7 +1239,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             distances.Add(0.0);
             distances.Add(length);
 
-            // 按指定间隔补充边界插值点。
+            // ?????????????
             double d = interval;
             while (d < length - DuplicateTolerance)
             {
@@ -1221,9 +1247,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 d += interval;
             }
 
-            // 对闭合多段线额外加入所有顶点距离。
-            // 旧版本只按周长等分采样，矩形/折线边界会漏掉角点，平面面积和表面积都会偏小；
-            // CASS 计算通常会保留边界顶点，因此这里也强制保留，以尽量贴近 CASS 结果。
+            // ?????????????????
+            // ??????????????/???????????????????????
+            // CASS ??????????????????????????? CASS ???
             Polyline pl = curve as Polyline;
             if (pl != null)
             {
@@ -1235,7 +1261,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     }
                     catch
                     {
-                        // 个别异常顶点忽略，不影响整体采样。
+                        // ?????????????????
                     }
                 }
             }
@@ -1367,7 +1393,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     }
                     catch
                     {
-                        // 无属性或读取失败时，尝试用块插入点 Z 值。
+                        // ????????????????? Z ??
                     }
 
                     if (!addedFromAttribute && Math.Abs(block.Position.Z) > Eps)
@@ -1399,9 +1425,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             string value = text.Replace("\\P", " ").Replace("\r", " ").Replace("\n", " ").Trim();
             value = Regex.Replace(value, "[{}]", string.Empty);
-            value = value.Replace("，", ".");
+            value = value.Replace("?", ".");
 
-            Match match = Regex.Match(value, @"^\s*([+-]?\d+(?:\.\d+)?)\s*(?:m|M|米)?\s*$");
+            Match match = Regex.Match(value, @"^\s*([+-]?\d+(?:\.\d+)?)\s*(?:m|M|?)?\s*$");
             if (!match.Success) return false;
 
             string number = match.Groups[1].Value;
@@ -1586,8 +1612,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 .Select(x => x.Path)
                 .FirstOrDefault();
 
-            // CASS 命令自动调用模式必须读取“本次”生成/更新的日志，不能回退读取旧 surface.log。
-            // 只有手动指定读取旧日志的备用模式才允许使用已有文件。
+            // CASS ??????????????????/????????????? surface.log?
+            // ??????????????????????????
             if (string.IsNullOrWhiteSpace(filePath) && minWriteTime <= DateTime.MinValue)
             {
                 filePath = existingCandidates.Select(x => x.Path).FirstOrDefault();
@@ -1595,7 +1621,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             if (string.IsNullOrWhiteSpace(filePath))
             {
-                message = "未找到 CASS 输出的 surface.log。请先用 CASS 执行“工程应用 → 计算表面积 → 根据图上高程点”，或在界面中手动指定 surface.log 路径。";
+                message = "??? CASS ??? surface.log???? CASS ??????? ? ????? ? ?????????????????? surface.log ???";
                 return false;
             }
 
@@ -1606,13 +1632,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                message = "读取 CASS surface.log 失败：" + ex.Message;
+                message = "?? CASS surface.log ???" + ex.Message;
                 return false;
             }
 
             if (!TryParseSurfaceAreaFromCassLog(text, out area, out resultLine))
             {
-                message = "已找到 surface.log，但无法解析表面积数值：" + filePath;
+                message = "??? surface.log????????????" + filePath;
                 return false;
             }
 
@@ -1674,8 +1700,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             string[] lines = logText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
 
-            // 优先解析“表面积 = 741.520 平方米”这类总结果行。
-            Regex directTotal = new Regex(@"(?:表\s*面\s*积|surface\s*area)\s*[=＝]\s*([+-]?\d+(?:[\.,]\d+)?)", RegexOptions.IgnoreCase);
+            // ???????? = 741.520 ???????????
+            Regex directTotal = new Regex(@"(?:?\s*?\s*?|surface\s*area)\s*[=?]\s*([+-]?\d+(?:[\.,]\d+)?)", RegexOptions.IgnoreCase);
             for (int i = lines.Length - 1; i >= 0; i--)
             {
                 string line = lines[i] ?? string.Empty;
@@ -1687,9 +1713,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 }
             }
 
-            // CASS11 的 surface.log 常见情况：只列每个三角形的“表面积: x.xxx”，没有最终总面积。
-            // 这里汇总所有三角面积；默认保留 2 位时与命令行“表面积 = xxx 平方米”一致。
-            Regex triangleArea = new Regex(@"^\s*表\s*面\s*积\s*[:：]\s*([+-]?\d+(?:[\.,]\d+)?)\s*$", RegexOptions.IgnoreCase);
+            // CASS11 ? surface.log ?????????????????: x.xxx??????????
+            // ??????????????? 2 ?????????? = xxx ???????
+            Regex triangleArea = new Regex(@"^\s*?\s*?\s*?\s*[:?]\s*([+-]?\d+(?:[\.,]\d+)?)\s*$", RegexOptions.IgnoreCase);
             double sum = 0.0;
             int count = 0;
             foreach (string rawLine in lines)
@@ -1709,16 +1735,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             if (count > 0 && sum > 0)
             {
                 area = sum;
-                resultLine = "surface.log 三角面积合计：" + sum.ToString("0.###", CultureInfo.InvariantCulture) + "（" + count + " 个三角）";
+                resultLine = "surface.log ???????" + sum.ToString("0.###", CultureInfo.InvariantCulture) + "?" + count + " ????";
                 return true;
             }
 
-            Regex withUnit = new Regex(@"([+-]?\d+(?:[\.,]\d+)?)\s*(?:平方\s*米|平方米|m2|㎡)", RegexOptions.IgnoreCase);
+            Regex withUnit = new Regex(@"([+-]?\d+(?:[\.,]\d+)?)\s*(?:??\s*?|???|m2|?)", RegexOptions.IgnoreCase);
             for (int i = lines.Length - 1; i >= 0; i--)
             {
                 string line = lines[i] ?? string.Empty;
-                if (line.IndexOf("平方", StringComparison.CurrentCultureIgnoreCase) >= 0
-                    || line.IndexOf("㎡", StringComparison.CurrentCultureIgnoreCase) >= 0
+                if (line.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0
+                    || line.IndexOf("?", StringComparison.CurrentCultureIgnoreCase) >= 0
                     || line.IndexOf("m2", StringComparison.CurrentCultureIgnoreCase) >= 0)
                 {
                     Match m = withUnit.Match(line);
@@ -1754,19 +1780,20 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             string layerName = string.IsNullOrWhiteSpace(result.BoundaryLayerName) ? "" : result.BoundaryLayerName;
 
             string text = options.AnnotationTemplate
-                .Replace("{图层名}", layerName)
-                .Replace("{层名}", layerName)
+                .Replace("{???}", layerName)
+                .Replace("{??}", layerName)
                 .Replace("{LayerName}", layerName)
-                .Replace("{表面积}", surfaceAreaText)
+                .Replace("{???}", surfaceAreaText)
                 .Replace("{SurfaceArea}", surfaceAreaText)
-                .Replace("{平面面积}", planAreaText)
+                .Replace("{????}", planAreaText)
                 .Replace("{PlanArea}", planAreaText);
 
-            // 无有效高程时会降级为平面面积标注。
-            // 此时沿用用户原模板的数值格式，但注记名称不再显示“表面积”。
-            if (result != null && result.PlanAreaFallback)
+            // ?????????????????
+            // ??????????????????????????????
+            if (result != null && (result.PlanAreaFallback
+                || result.CalculationMode == SurfaceAreaCalculationMode.PlanArea))
             {
-                text = text.Replace("表面积", "面积");
+                text = text.Replace("???", "??");
             }
 
             return text;
@@ -1780,8 +1807,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
         private static AttachmentPoint GetTextAttachment(Point3d annotationPoint, Point3d leaderStartPoint)
         {
-            // 引线拉出点在注记左侧时，文字向右排；在注记右侧时，文字向左排。
-            // 这样引线始终接到注记横线靠近边界的一侧，避免穿过文字。
+            // ???????????????????????????????
+            // ???????????????????????????
             return leaderStartPoint.X <= annotationPoint.X ? AttachmentPoint.BottomLeft : AttachmentPoint.BottomRight;
         }
 
@@ -1833,7 +1860,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             {
                 _database = database;
                 _leaderStartPoint = leaderStartPoint;
-                _text = string.IsNullOrWhiteSpace(text) ? "表面积标注" : text;
+                _text = string.IsNullOrWhiteSpace(text) ? "?????" : text;
                 _textHeight = textHeight <= 0 ? 1.0 : textHeight;
                 _textStyleId = textStyleId;
                 _metrics = metrics ?? CreateEstimatedSurfaceTextLayoutMetrics(_text, _textHeight);
@@ -1848,7 +1875,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                var options = new JigPromptPointOptions("\n请指定注记位置，按 ESC 退出");
+                var options = new JigPromptPointOptions("\n????????? ESC ???");
                 options.UseBasePoint = true;
                 options.BasePoint = _leaderStartPoint;
                 options.UserInputControls = UserInputControls.Accept3dCoordinates
@@ -1924,7 +1951,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             double lineStartX;
             double lineEndX;
 
-            // annotationPoint 始终作为横线靠近引线一侧的端点，保持预览与正式成图一致。
+            // annotationPoint ????????????????????????????
             if (IsRightAttachment(attachment))
             {
                 lineStartX = annotationPoint.X - lineWidth;
@@ -2073,8 +2100,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             var dbText = new DBText();
             try { dbText.SetDatabaseDefaults(db); } catch { }
-            // 注意：必须先设置 HorizontalMode，再设置 AlignmentPoint。
-            // 否则部分 AutoCAD 环境会在 AlignmentPoint 处抛出 eNotApplicable。
+            // ???????? HorizontalMode???? AlignmentPoint?
+            // ???? AutoCAD ???? AlignmentPoint ??? eNotApplicable?
             dbText.HorizontalMode = TextHorizontalMode.TextCenter;
             dbText.Position = centerBaselinePoint;
             dbText.AlignmentPoint = centerBaselinePoint;
@@ -2120,8 +2147,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             dbText.Layer = layerName;
             if (!textStyleId.IsNull) dbText.TextStyleId = textStyleId;
 
-            // 注记实体改为 AutoCAD 单行“文字”(DBText)，不再使用“多行文字”(MText)。
-            // 引线在注记左侧时采用左对齐，文字向右排；引线在注记右侧时采用右对齐，文字向左排。
+            // ?????? AutoCAD ??????(DBText)???????????(MText)?
+            // ????????????????????????????????????????
             if (IsRightAttachment(attachment))
             {
                 dbText.HorizontalMode = TextHorizontalMode.TextRight;
@@ -2141,7 +2168,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch
             {
-                // 个别文字样式可能不需要或不支持调整，对注记生成无影响。
+                // ???????????????????????????
             }
 
             return id;
@@ -2175,7 +2202,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
 
-            // DBText 是单行文字，模板中的换行统一压成空格，避免生成 MText 特有的 \P 控制符。
+            // DBText ??????????????????????? MText ??? \P ????
             string normalized = text.Replace("\\P", " ").Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
             return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
@@ -2242,15 +2269,15 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             double minY = Math.Min(extents.MinPoint.Y, extents.MaxPoint.Y);
             double z = extents.MinPoint.Z;
 
-            // 横线长度直接取文字实体的实际几何范围，避免用户修改字高、文字样式后仍按估算长度绘制。
-            // 向下留出约 0.22 倍字高的距离，让横线不贴文字。
+            // ??????????????????????????????????????????
+            // ????? 0.22 ???????????????
             double underlineGap = Math.Max(textHeight * 0.22, 0.05);
             double y = minY - underlineGap;
 
             underlineStart = new Point3d(minX, y, z);
             underlineEnd = new Point3d(maxX, y, z);
 
-            // 极端情况下部分 CAD 文字样式可能返回零宽范围，兜底给一段最小横线，避免引线退化。
+            // ??????? CAD ??????????????????????????????
             if (underlineStart.DistanceTo(underlineEnd) < DuplicateTolerance)
             {
                 double fallbackWidth = Math.Max(textHeight * 6.0, 1.0);

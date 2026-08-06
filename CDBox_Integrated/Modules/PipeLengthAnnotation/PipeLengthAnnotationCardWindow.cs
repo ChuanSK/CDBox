@@ -65,7 +65,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         public PipeLengthAnnotationCardWindow()
         {
-            Title = "管线长度标注";
+            Title = "??????";
             Width = 330;
             SizeToContent = SizeToContent.Height;
             MaxHeight = 680;
@@ -116,7 +116,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 Padding = new Thickness(0, 1, 0, 2),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.SizeAll,
-                ToolTip = "拖动浮窗"
+                ToolTip = "????"
             };
             _bindingInfo.MouseLeftButtonDown += DragHud;
             root.Children.Add(_bindingInfo);
@@ -136,7 +136,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = Brush("#244A84"),
                 Background = Brush("#EAF1FB"),
-                ToolTip = "系统长度随绑定对象自动更新"
+                ToolTip = "?????????????"
             };
             Grid.SetColumn(_systemLength, 1);
             topRow.Children.Add(_systemLength);
@@ -145,18 +145,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             _bottomRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
             _bottomRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             _bottomText = CreateTextBox();
-            _bottomText.ToolTip = "下侧补充标注";
+            _bottomText.ToolTip = "??????";
+            _bottomText.AcceptsReturn = true;
+            _bottomText.TextWrapping = TextWrapping.Wrap;
+            _bottomText.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            _bottomText.VerticalContentAlignment = VerticalAlignment.Top;
+            _bottomText.MinHeight = 52;
+            _bottomText.MaxHeight = 112;
             _bottomRow.Children.Add(_bottomText);
             root.Children.Add(_bottomRow);
 
             var actions = new Grid { Margin = new Thickness(0, 1, 0, 0) };
             actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _moreToggle = CreateLinkButton("更多编辑  ▾");
+            _moreToggle = CreateLinkButton("????  ?");
             _moreToggle.HorizontalAlignment = HorizontalAlignment.Left;
             _moreToggle.Click += ToggleMore;
             actions.Children.Add(_moreToggle);
-            _bindingAction = CreateLinkButton("解除绑定");
+            _bindingAction = CreateLinkButton("????");
             _bindingAction.HorizontalAlignment = HorizontalAlignment.Right;
             _bindingAction.Click += BindingActionClick;
             Grid.SetColumn(_bindingAction, 1);
@@ -183,16 +189,16 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             for (int i = 0; i < 8; i++) options.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _morePanel.Children.Add(options);
 
-            _textStyle = AddComboRow(options, 0, "文字样式");
-            _textHeight = AddTextBoxRow(options, 1, "文字高度");
-            _textColor = AddColorPickerRow(options, 2, "文字颜色");
-            _leaderColor = AddColorPickerRow(options, 3, "引线颜色");
-            _linetype = AddComboRow(options, 4, "引线线型");
-            _lineWeight = AddComboRow(options, 5, "引线线宽");
-            _layer = AddComboRow(options, 6, "标注图层");
+            _textStyle = AddComboRow(options, 0, "????");
+            _textHeight = AddTextBoxRow(options, 1, "????");
+            _textColor = AddColorPickerRow(options, 2, "????");
+            _leaderColor = AddColorPickerRow(options, 3, "????");
+            _linetype = AddComboRow(options, 4, "????");
+            _lineWeight = AddComboRow(options, 5, "????");
+            _layer = AddComboRow(options, 6, "????");
             _bottomEnabled = new CheckBox
             {
-                Content = "启用下侧标注",
+                Content = "??????",
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 3, 0, 2),
                 Foreground = Brush("#31415A")
@@ -406,15 +412,15 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (!model.IsBound)
             {
-                _bindingInfo.Text = "未绑定对象";
+                _bindingInfo.Text = "?????";
                 _bindingInfo.Foreground = Brush("#7A5A30");
-                _bindingAction.Content = "重新绑定";
+                _bindingAction.Content = "????";
                 return;
             }
-            string layer = string.IsNullOrWhiteSpace(model.SourceLayerName) ? "不可用" : model.SourceLayerName;
-            _bindingInfo.Text = "绑定对象：" + layer;
+            string layer = string.IsNullOrWhiteSpace(model.SourceLayerName) ? "???" : model.SourceLayerName;
+            _bindingInfo.Text = "?????" + layer;
             _bindingInfo.Foreground = model.BindingIsValid ? Brush("#53637A") : Brush("#B43A3A");
-            _bindingAction.Content = "解除绑定";
+            _bindingAction.Content = "????";
         }
 
         private void DragHud(object sender, MouseButtonEventArgs e)
@@ -490,7 +496,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             bool expanded = _morePanel.Visibility != System.Windows.Visibility.Visible;
             _morePanel.Visibility = expanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
-            _moreToggle.Content = expanded ? "收起编辑  ▴" : "更多编辑  ▾";
+            _moreToggle.Content = expanded ? "????  ?" : "????  ?";
         }
 
         private void BindingActionClick(object sender, RoutedEventArgs e)
@@ -551,6 +557,11 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (e.Key == Key.Enter)
             {
+                if (ReferenceEquals(sender, _bottomText)
+                    && (Keyboard.Modifiers & ModifierKeys.Control) == 0)
+                {
+                    return;
+                }
                 e.Handled = true;
                 CommitCurrentModel();
                 Keyboard.ClearFocus();
@@ -610,7 +621,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             string rawHeight = (_textHeight.Text ?? string.Empty).Trim().Replace(',', '.');
             if (!double.TryParse(rawHeight, NumberStyles.Float, CultureInfo.InvariantCulture, out height) || height <= 0.0)
             {
-                throw new InvalidOperationException("请输入有效的文字高度。 ");
+                throw new InvalidOperationException("??????????? ");
             }
             CDBoxColor textColor = _textColor.SelectedColor;
             CDBoxColor leaderColor = _leaderColor.SelectedColor;
@@ -772,9 +783,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             return new[]
             {
-                new LineWeightOption("随层", LineWeight.ByLayer),
-                new LineWeightOption("随块", LineWeight.ByBlock),
-                new LineWeightOption("默认", LineWeight.ByLineWeightDefault),
+                new LineWeightOption("??", LineWeight.ByLayer),
+                new LineWeightOption("??", LineWeight.ByBlock),
+                new LineWeightOption("??", LineWeight.ByLineWeightDefault),
                 new LineWeightOption("0.00 mm", LineWeight.LineWeight000),
                 new LineWeightOption("0.05 mm", LineWeight.LineWeight005),
                 new LineWeightOption("0.09 mm", LineWeight.LineWeight009),

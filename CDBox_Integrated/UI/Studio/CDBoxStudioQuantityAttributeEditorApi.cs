@@ -20,8 +20,8 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             CDBoxStudioQuantityAttributeEditorRequest request = Deserialize<CDBoxStudioQuantityAttributeEditorRequest>(payload) ?? new CDBoxStudioQuantityAttributeEditorRequest();
             Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
-            if (doc == null) return Empty("未找到当前图纸。");
-            if (string.IsNullOrWhiteSpace(request.handle)) return Empty("请选择主管、支管或节点/检查井对象。", doc);
+            if (doc == null) return Empty("????????");
+            if (string.IsNullOrWhiteSpace(request.handle)) return Empty("???????????/??????", doc);
             return FromInfo(doc, QuantityPipeAttributeService.ReadPipe(doc, ResolveObjectId(doc, request.handle)));
         }
 
@@ -29,9 +29,9 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             CDBoxStudioQuantityAttributeEditorRequest request = Deserialize<CDBoxStudioQuantityAttributeEditorRequest>(payload) ?? new CDBoxStudioQuantityAttributeEditorRequest();
             Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
-            if (doc == null) return Empty("未找到当前图纸。");
+            if (doc == null) return Empty("????????");
             QuantityPipeSelectionInfo info = QuantityPipeAttributeService.SelectQuantityObjectAndRead(doc);
-            return info == null ? Empty("未选择对象。", doc) : FromInfo(doc, info);
+            return info == null ? Empty("??????", doc) : FromInfo(doc, info);
         }
 
         public static CDBoxStudioQuantityAttributeEditorContext Save(string payload)
@@ -40,7 +40,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Document doc = RequiredDocument(request);
             ObjectId id = ResolveObjectId(doc, request.handle);
             QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, id);
-            if (info == null) throw new InvalidOperationException("对象已删除或不再支持属性编辑。");
+            if (info == null) throw new InvalidOperationException("???????????????");
             QuantityPipeAttributes attrs = PrepareAttributes(request, info);
             QuantityDependencyResult normalized = QuantityPipeAttributeService.CalculateDraft(doc, id, attrs, request.layers, "Save");
             QuantityPipeWriteResult write;
@@ -59,7 +59,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Document doc = RequiredDocument(request);
             ObjectId id = ResolveObjectId(doc, request.handle);
             QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, id);
-            if (info == null) throw new InvalidOperationException("对象已删除或不再支持属性编辑。");
+            if (info == null) throw new InvalidOperationException("???????????????");
             QuantityPipeAttributes attrs = PrepareAttributes(request, info);
 
             if (string.Equals(request.changedField, "SwapEndpoints", StringComparison.OrdinalIgnoreCase))
@@ -75,7 +75,7 @@ namespace TCPipeAutoDraw.UI.Studio
             QuantityDependencyResult normalized = QuantityPipeAttributeService.CalculateDraft(
                 doc, id, attrs, request.layers, request.changedField, request.attributes);
             CDBoxStudioQuantityAttributeEditorContext context = FromDraft(doc, info, normalized);
-            context.message = "派生值已联动更新。";
+            context.message = "?????????";
             context.requestId = request.requestId;
             return context;
         }
@@ -85,7 +85,7 @@ namespace TCPipeAutoDraw.UI.Studio
             return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
             {
                 using (doc.LockDocument()) return QuantityPipeAttributeService.RefreshAttributesForObject(doc, id, attrs);
-            }, "已刷新自动识别规格、节点和派生数值。");
+            }, "??????????????????");
         }
 
         public static CDBoxStudioQuantityAttributeEditorContext ReloadDefault(string payload)
@@ -93,16 +93,24 @@ namespace TCPipeAutoDraw.UI.Studio
             return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
             {
                 using (doc.LockDocument()) return QuantityPipeAttributeService.LoadDefaultProfileForObject(doc, id, attrs.ObjectKind, attrs);
-            }, "已按当前对象类型重新载入默认表。");
+            }, "????????????????");
         }
 
         public static CDBoxStudioQuantityAttributeEditorContext SelectNode(string payload)
         {
             CDBoxStudioQuantityAttributeEditorRequest request = Required(payload);
-            return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
+            FormWindowState? previousState = CDBoxStudioQuantityAttributeEditorWindow.MinimizeForCadSelection();
+            try
             {
-                return QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(doc, id, attrs, request.forStart);
-            }, request.forStart ? "已更新起点井。" : "已更新终点井。");
+                return Transform(payload, delegate(Document doc, ObjectId id, QuantityPipeAttributes attrs)
+                {
+                    return QuantityPipeAttributeService.SelectConnectedNodeForMainPipe(doc, id, attrs, request.forStart);
+                }, request.forStart ? "???????" : "???????");
+            }
+            finally
+            {
+                CDBoxStudioQuantityAttributeEditorWindow.RestoreAfterCadSelection(previousState);
+            }
         }
 
         public static void OpenLegacy(string payload)
@@ -110,7 +118,7 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioQuantityAttributeEditorRequest request = Required(payload);
             Document doc = RequiredDocument(request);
             QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, ResolveObjectId(doc, request.handle));
-            if (info == null) throw new InvalidOperationException("未找到可编辑对象。");
+            if (info == null) throw new InvalidOperationException("?????????");
             using (Form form = QuantityAttributeEditorFormFactory.Create(doc, info)) form.ShowDialog(new AcadMainWindow());
         }
 
@@ -120,7 +128,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Document doc = RequiredDocument(request);
             ObjectId id = ResolveObjectId(doc, request.handle);
             QuantityPipeSelectionInfo info = QuantityPipeAttributeService.ReadPipe(doc, id);
-            if (info == null) throw new InvalidOperationException("对象已删除或不再支持属性编辑。");
+            if (info == null) throw new InvalidOperationException("???????????????");
             QuantityPipeAttributes attrs = PrepareAttributes(request, info);
             QuantityPipeAttributes next = action(doc, id, attrs) ?? attrs;
             info.Attributes = next;
@@ -144,28 +152,28 @@ namespace TCPipeAutoDraw.UI.Studio
         private static CDBoxStudioQuantityAttributeEditorRequest Required(string payload)
         {
             CDBoxStudioQuantityAttributeEditorRequest request = Deserialize<CDBoxStudioQuantityAttributeEditorRequest>(payload);
-            if (request == null || string.IsNullOrWhiteSpace(request.handle)) throw new InvalidOperationException("请先选择对象。");
+            if (request == null || string.IsNullOrWhiteSpace(request.handle)) throw new InvalidOperationException("???????");
             return request;
         }
 
         private static Document RequiredDocument(CDBoxStudioQuantityAttributeEditorRequest request)
         {
             Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
-            if (doc == null) throw new InvalidOperationException("目标图纸已关闭。");
+            if (doc == null) throw new InvalidOperationException("????????");
             return doc;
         }
 
         private static ObjectId ResolveObjectId(Document doc, string handle)
         {
             long value;
-            if (doc == null || !long.TryParse((handle ?? string.Empty).Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value)) throw new InvalidOperationException("对象句柄无效。");
+            if (doc == null || !long.TryParse((handle ?? string.Empty).Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value)) throw new InvalidOperationException("???????");
             try { return doc.Database.GetObjectId(false, new Handle(value), 0); }
-            catch { throw new InvalidOperationException("对象已删除或不属于目标图纸。"); }
+            catch { throw new InvalidOperationException("??????????????"); }
         }
 
         public static CDBoxStudioQuantityAttributeEditorContext FromInfo(Document doc, QuantityPipeSelectionInfo info)
         {
-            if (info == null) return Empty("所选对象无法识别为主管、支管或节点/检查井。", doc);
+            if (info == null) return Empty("?????????????????/????", doc);
             QuantityPipeAttributes attrs = info.Attributes == null ? QuantityPipeAttributes.DefaultForKind(info.InferredKind) : info.Attributes.Clone();
             QuantityDependencyResult normalized = QuantityPipeAttributeService.CalculateDraft(
                 doc, info.ObjectId, attrs, QuantityStructureLayer.Parse(attrs.BackfillStructure), "Load");
@@ -187,7 +195,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 selected = true, documentId = QuantityDashboardService.GetDocumentId(doc), documentName = doc == null ? string.Empty : doc.Name,
                 handle = info.HandleText, layerName = info.LayerName, objectTypeName = info.ObjectTypeName, inferredKind = info.InferredKind,
                 cadLength = info.CadLength, effectiveLength = attrs.EffectiveLength(info.CadLength), hasSavedAttributes = info.HasSavedAttributes,
-                message = info.HasSavedAttributes ? "已读取对象现有属性。" : "对象尚未保存属性，已套用默认表。", attributes = attrs,
+                message = info.HasSavedAttributes ? "??????????" : "????????????????", attributes = attrs,
                 layers = normalized == null ? QuantityStructureLayer.Parse(attrs.BackfillStructure) : normalized.Layers,
                 warnings = normalized == null ? new System.Collections.Generic.List<string>() : normalized.Warnings,
                 calculation = calculation,

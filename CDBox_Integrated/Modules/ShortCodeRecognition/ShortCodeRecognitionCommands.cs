@@ -20,9 +20,9 @@ namespace TCPipeAutoDraw.Modules.ShortCodeRecognition
             try
             {
                 PromptOpenFileOptions options = new PromptOpenFileOptions(
-                    "\n选择带简码的 CASS DAT/TXT/CSV 坐标文件");
+                    "\n?????? CASS DAT/TXT/CSV ????");
                 options.Filter =
-                    "坐标数据 (*.dat;*.txt;*.csv)|*.dat;*.txt;*.csv|所有文件 (*.*)|*.*";
+                    "???? (*.dat;*.txt;*.csv)|*.dat;*.txt;*.csv|???? (*.*)|*.*";
                 PromptFileNameResult selected =
                     editor.GetFileNameForOpen(options);
                 if (selected.Status != PromptStatus.OK
@@ -33,12 +33,12 @@ namespace TCPipeAutoDraw.Modules.ShortCodeRecognition
                     new ShortCodeRecognitionModule().Run(document,
                         selected.StringResult,
                         ShortCodeRecognitionSettingsStore.Load());
-                editor.WriteMessage(result.ToEditorMessage());
+                editor.WriteHudMessage(result.ToEditorMessage());
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage(
-                    "\n[简码识别] 识别失败，图纸未写入不完整结果："
+                editor.WriteHudMessage(
+                    "\n[????] ????????????????"
                     + ex.Message);
             }
         }
@@ -55,7 +55,7 @@ namespace TCPipeAutoDraw.Modules.ShortCodeRecognition
             catch (System.Exception ex)
             {
                 CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
-                    "简码识别设置", System.Windows.Forms.MessageBoxButtons.OK,
+                    "??????", System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Warning);
             }
         }

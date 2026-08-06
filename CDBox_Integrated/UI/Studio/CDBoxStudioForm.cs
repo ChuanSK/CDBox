@@ -32,7 +32,7 @@ namespace TCPipeAutoDraw.UI.Studio
             _settings = CDBoxStudioSettingsStore.Load();
             SetActions(actions);
             BuildUi();
-            CDBoxStudioLogger.Info("Studio 窗口构造完成。日志路径：" + CDBoxStudioLogger.LogFilePath);
+            CDBoxStudioLogger.Info("Studio ????????????" + CDBoxStudioLogger.LogFilePath);
         }
 
         public void SetActions(IEnumerable<CDBoxStudioAction> actions)
@@ -85,12 +85,12 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioRuntimeInfo runtime = CDBoxStudioRuntime.Detect();
                 if (runtime == null || !runtime.Available)
                 {
-                    string reason = runtime == null ? "未知错误" : runtime.ErrorMessage;
-                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(reason) ? "未检测到 Microsoft Edge WebView2 Runtime。" : reason);
+                    string reason = runtime == null ? "????" : runtime.ErrorMessage;
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(reason) ? "???? Microsoft Edge WebView2 Runtime?" : reason);
                 }
 
                 _runtimeVersion = runtime.Version;
-                CDBoxStudioLogger.Info("WebView2 Runtime 可用。版本：" + _runtimeVersion);
+                CDBoxStudioLogger.Info("WebView2 Runtime ??????" + _runtimeVersion);
 
                 await _webView.EnsureCoreWebView2Async(null);
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
@@ -101,7 +101,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error("WebView2 初始化失败。", ex);
+                CDBoxStudioLogger.Error("WebView2 ??????", ex);
                 ShowFallback(ex);
             }
         }
@@ -121,7 +121,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error("读取前端消息失败。", ex);
+                CDBoxStudioLogger.Error("?????????", ex);
                 return;
             }
 
@@ -135,24 +135,33 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private void RouteMessage(string raw)
         {
-            CDBoxStudioRouteRequest request = CDBoxStudioRouteRequest.Parse(raw);
-            CDBoxStudioRouteResult result = _router == null ? null : _router.Route(request);
-            if (result == null || !result.Handled) return;
-
-            if (!string.IsNullOrWhiteSpace(result.WindowTitleSuffix))
+            CDBoxStudioRouteResult result;
+            using (CDBoxNotificationService.BeginWorkbenchScope(ShowToast))
             {
-                Text = "CDBox Studio（" + result.WindowTitleSuffix.Trim() + "）";
+                CDBoxStudioRouteRequest request =
+                    CDBoxStudioRouteRequest.Parse(raw);
+                result = _router == null
+                    ? null : _router.Route(request);
+                if (result == null || !result.Handled) return;
+
+                if (!string.IsNullOrWhiteSpace(result.WindowTitleSuffix))
+                {
+                    Text = "CDBox Studio?"
+                        + result.WindowTitleSuffix.Trim() + "?";
+                }
+
+                if (result.ActionToRun == null)
+                {
+                    if (result.RefreshPage) RefreshPage();
+                    if (!string.IsNullOrWhiteSpace(result.ExecuteScript))
+                        ExecuteScript(result.ExecuteScript);
+                    if (!string.IsNullOrWhiteSpace(result.ToastMessage))
+                        ShowToast(result.ToastMessage, result.ToastKind);
+                    return;
+                }
             }
 
-            if (result.ActionToRun != null)
-            {
-                RunAction(result.ActionToRun, result.RefreshPage);
-                return;
-            }
-
-            if (result.RefreshPage) RefreshPage();
-            if (!string.IsNullOrWhiteSpace(result.ExecuteScript)) ExecuteScript(result.ExecuteScript);
-            if (!string.IsNullOrWhiteSpace(result.ToastMessage)) ShowToast(result.ToastMessage, result.ToastKind);
+            RunAction(result.ActionToRun, result.RefreshPage);
         }
 
         private void RunAction(CDBoxStudioAction action, bool refreshAfterRun)
@@ -164,14 +173,14 @@ namespace TCPipeAutoDraw.UI.Studio
 
             try
             {
-                ShowToast("正在打开：" + action.Title, "info");
+                ShowToast("?????" + action.Title, "info");
                 Hide();
                 action.Run();
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error(action.Title + " 运行失败。", ex);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, action.Title + "运行失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CDBoxStudioLogger.Error(action.Title + " ?????", ex);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message, action.Title + "????", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 shouldRestore = true;
             }
             finally
@@ -182,7 +191,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     WindowState = FormWindowState.Normal;
                     Activate();
                     if (refreshAfterRun) RefreshPage();
-                    ShowToast("已返回 Studio", "success");
+                    ShowToast("??? Studio", "success");
                 }
             }
         }
@@ -199,7 +208,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error("执行 Studio 后台路由脚本失败。", ex);
+                CDBoxStudioLogger.Error("?? Studio ?????????", ex);
             }
         }
 
@@ -219,7 +228,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Error("执行 Studio 前端脚本失败。", ex);
+                CDBoxStudioLogger.Error("?? Studio ???????", ex);
             }
         }
 
@@ -255,7 +264,7 @@ namespace TCPipeAutoDraw.UI.Studio
             title.TextAlign = ContentAlignment.MiddleLeft;
             title.Font = new Font(Font.FontFamily, 15F, FontStyle.Bold);
             title.ForeColor = Color.FromArgb(22, 32, 51);
-            title.Text = "CDBox Studio 无法启动 WebView2";
+            title.Text = "CDBox Studio ???? WebView2";
 
             var body = new Label();
             body.Dock = DockStyle.Fill;
@@ -264,11 +273,11 @@ namespace TCPipeAutoDraw.UI.Studio
             body.Font = new Font(Font.FontFamily, 10F, FontStyle.Regular);
             body.ForeColor = Color.FromArgb(70, 80, 100);
             body.Padding = new Padding(0, 18, 0, 0);
-            body.Text = "CDBox Studio 需要 Microsoft Edge WebView2 Runtime。\r\n\r\n"
-                + "当前 WebView2 初始化失败，经典 CDBOX、侧边栏和所有旧功能不受影响。\r\n\r\n"
-                + "建议：安装或修复 Microsoft Edge WebView2 Runtime 后，重新打开 CDSTUDIO。\r\n\r\n"
-                + "错误信息：" + (ex == null ? "未知错误" : ex.Message) + "\r\n\r\n"
-                + "Studio 日志：" + CDBoxStudioLogger.LogFilePath;
+            body.Text = "CDBox Studio ?? Microsoft Edge WebView2 Runtime?\r\n\r\n"
+                + "?? WebView2 ???????? CDBOX???????????????\r\n\r\n"
+                + "???????? Microsoft Edge WebView2 Runtime ?????? CDSTUDIO?\r\n\r\n"
+                + "?????" + (ex == null ? "????" : ex.Message) + "\r\n\r\n"
+                + "Studio ???" + CDBoxStudioLogger.LogFilePath;
 
             panel.Controls.Add(body);
             panel.Controls.Add(title);

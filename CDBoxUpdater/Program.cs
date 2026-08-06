@@ -30,7 +30,7 @@ namespace CDBoxUpdater
             {
                 if (string.IsNullOrWhiteSpace(pendingPath))
                 {
-                    throw new InvalidOperationException("缺少 --pending 参数。");
+                    throw new InvalidOperationException("?? --pending ???");
                 }
 
                 pendingPath = Path.GetFullPath(pendingPath);
@@ -38,33 +38,33 @@ namespace CDBoxUpdater
                 PendingUpdateManifest pending = LoadPending(pendingPath);
                 ConfigurePaths(pending, result);
 
-                UpdaterLogger.Info("CDBoxUpdater 启动。Pending=" + pendingPath
+                UpdaterLogger.Info("CDBoxUpdater ???Pending=" + pendingPath
                     + ", ElevatedContinuation=" + elevatedContinuation
                     + ", Target=" + pending.TargetBundlePath);
 
                 result.Status = "waiting-for-autocad";
-                result.Message = "正在等待 AutoCAD 退出。";
+                result.Message = "???? AutoCAD ???";
                 WriteResult(pending.LastResultPath, result);
 
-                // AutoCAD 主窗口关闭后立即显示更新器；进程仍在释放资源时显示等待状态，
-                // 直到确认所有相关 AutoCAD 进程完全退出才开始替换文件。
+                // AutoCAD ??????????????????????????????
+                // ???????? AutoCAD ??????????????
                 progressWindow = WaitForAutoCadExit(pending, progressWindow);
                 autoCadExitConfirmed = true;
                 if (progressWindow == null) progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
-                progressWindow.Report(15, "已确认 AutoCAD 退出，正在准备安装…");
+                progressWindow.Report(15, "??? AutoCAD ??????????");
 
-                progressWindow.Report(20, "正在检查安装目录权限…");
+                progressWindow.Report(20, "???????????");
                 ValidatePendingRuntimePaths(pending);
                 if (!BundleInstaller.CanWriteTarget(pending.TargetBundlePath))
                 {
                     if (!elevatedContinuation)
                     {
-                        UpdaterLogger.Warn("目标目录不可写，准备按需申请管理员权限。Target=" + pending.TargetBundlePath);
+                        UpdaterLogger.Warn("????????????????????Target=" + pending.TargetBundlePath);
                         if (TryRelaunchElevated(pendingPath))
                         {
                             result.ElevationRequested = true;
                             result.Status = "elevation-requested";
-                            result.Message = "目标目录需要管理员权限，已启动提权后的更新器。";
+                            result.Message = "???????????????????????";
                             result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
                             WriteResult(pending.LastResultPath, result);
                             UpdaterLogger.Info(result.Message);
@@ -72,14 +72,14 @@ namespace CDBoxUpdater
                             return 0;
                         }
 
-                        throw new UnauthorizedAccessException("目标目录不可写，且未能获得管理员权限。");
+                        throw new UnauthorizedAccessException("???????????????????");
                     }
 
-                    throw new UnauthorizedAccessException("以管理员权限运行后仍无法写入目标目录：" + pending.TargetBundlePath);
+                    throw new UnauthorizedAccessException("???????????????????" + pending.TargetBundlePath);
                 }
 
                 result.Status = "installing";
-                result.Message = "正在解压、校验并替换 CDBox.bundle。";
+                result.Message = "?????????? CDBox.bundle?";
                 WriteResult(pending.LastResultPath, result);
 
                 BundleInstallOutcome outcome;
@@ -101,7 +101,7 @@ namespace CDBoxUpdater
                         result.BackupBundlePath = bundleInstallException == null ? string.Empty : bundleInstallException.BackupBundlePath;
                         result.PackageSha256Actual = bundleInstallException == null ? string.Empty : bundleInstallException.PackageSha256Actual;
                         result.Status = "elevation-requested";
-                        result.Message = "安装阶段检测到访问被拒绝，已启动管理员权限更新器重试。";
+                        result.Message = "???????????????????????????";
                         result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
                         WriteResult(pending.LastResultPath, result);
                         UpdaterLogger.Info(result.Message);
@@ -120,13 +120,13 @@ namespace CDBoxUpdater
                 result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
                 WriteResult(pending.LastResultPath, result);
 
-                UpdaterLogger.Info("CDBoxUpdater 完成。Success=" + result.Success
+                UpdaterLogger.Info("CDBoxUpdater ???Success=" + result.Success
                     + ", RolledBack=" + result.RolledBack
                     + ", Backup=" + result.BackupBundlePath);
                 progressWindow.Complete(result.Success,
                     result.Success
-                        ? "更新已完成，现在可以重新打开 AutoCAD。"
-                        : (string.IsNullOrWhiteSpace(result.Message) ? "更新未完成，请查看更新日志。" : result.Message));
+                        ? "?????????????? AutoCAD?"
+                        : (string.IsNullOrWhiteSpace(result.Message) ? "??????????????" : result.Message));
                 return result.Success ? 0 : 1;
             }
             catch (Exception ex)
@@ -144,7 +144,7 @@ namespace CDBoxUpdater
                 result.ErrorMessage = ex.ToString();
                 result.Message = ex.Message;
                 result.FinishedAtUtc = DateTime.UtcNow.ToString("o");
-                UpdaterLogger.Error("CDBoxUpdater 执行失败。", ex);
+                UpdaterLogger.Error("CDBoxUpdater ?????", ex);
 
                 try
                 {
@@ -153,18 +153,18 @@ namespace CDBoxUpdater
                 }
                 catch (Exception writeEx)
                 {
-                    UpdaterLogger.Error("写入 last-update-result.json 失败。", writeEx);
+                    UpdaterLogger.Error("?? last-update-result.json ???", writeEx);
                 }
 
                 if (progressWindow == null && autoCadExitConfirmed)
                 {
                     try { progressWindow = UpdateProgressWindowHost.Start(result.TargetVersion); }
-                    catch (Exception windowEx) { UpdaterLogger.Error("打开更新失败提示窗口失败。", windowEx); }
+                    catch (Exception windowEx) { UpdaterLogger.Error("?????????????", windowEx); }
                 }
 
                 if (progressWindow != null)
                 {
-                    progressWindow.Complete(false, "更新未完成：" + ex.Message);
+                    progressWindow.Complete(false, "??????" + ex.Message);
                 }
 
                 return 1;
@@ -173,11 +173,11 @@ namespace CDBoxUpdater
 
         private static PendingUpdateManifest LoadPending(string path)
         {
-            if (!File.Exists(path)) throw new FileNotFoundException("pending-update.json 不存在。", path);
+            if (!File.Exists(path)) throw new FileNotFoundException("pending-update.json ????", path);
             string json = File.ReadAllText(path, Encoding.UTF8);
             var serializer = new JavaScriptSerializer { MaxJsonLength = 1024 * 1024 * 4 };
             PendingUpdateManifest pending = serializer.Deserialize<PendingUpdateManifest>(json);
-            if (pending == null) throw new InvalidOperationException("pending-update.json 解析结果为空。");
+            if (pending == null) throw new InvalidOperationException("pending-update.json ???????");
             return pending;
         }
 
@@ -196,16 +196,16 @@ namespace CDBoxUpdater
 
         private static void ValidatePendingRuntimePaths(PendingUpdateManifest pending)
         {
-            if (pending.SchemaVersion != 1) throw new InvalidOperationException("不支持的 pending-update.json 版本：" + pending.SchemaVersion);
-            if (string.IsNullOrWhiteSpace(pending.PackagePath) || !File.Exists(pending.PackagePath)) throw new FileNotFoundException("更新包不存在。", pending.PackagePath ?? string.Empty);
-            if (string.IsNullOrWhiteSpace(pending.TargetBundlePath)) throw new InvalidOperationException("TargetBundlePath 为空。");
-            if (string.IsNullOrWhiteSpace(pending.LastResultPath)) throw new InvalidOperationException("LastResultPath 为空。");
+            if (pending.SchemaVersion != 1) throw new InvalidOperationException("???? pending-update.json ???" + pending.SchemaVersion);
+            if (string.IsNullOrWhiteSpace(pending.PackagePath) || !File.Exists(pending.PackagePath)) throw new FileNotFoundException("???????", pending.PackagePath ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(pending.TargetBundlePath)) throw new InvalidOperationException("TargetBundlePath ???");
+            if (string.IsNullOrWhiteSpace(pending.LastResultPath)) throw new InvalidOperationException("LastResultPath ???");
 
             string target = Path.GetFullPath(pending.TargetBundlePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             string leaf = new DirectoryInfo(target).Name;
             if (!leaf.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("更新器只允许替换 .bundle 目录。当前目标：" + target);
+                throw new InvalidOperationException("???????? .bundle ????????" + target);
             }
 
             if (!string.IsNullOrWhiteSpace(pending.ProtectedUserConfigDirectory))
@@ -214,7 +214,7 @@ namespace CDBoxUpdater
                 if (string.Equals(target, protectedPath, StringComparison.OrdinalIgnoreCase)
                     || target.StartsWith(protectedPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException("目标 bundle 不得指向 Studio 用户配置目录：" + protectedPath);
+                    throw new InvalidOperationException("?? bundle ???? Studio ???????" + protectedPath);
                 }
             }
         }
@@ -231,7 +231,7 @@ namespace CDBoxUpdater
                 List<Process> running = FindBlockingProcesses(processName, pending.AutoCadProcessId, pending.AutoCadProcessStartTimeUtc);
                 if (running.Count == 0)
                 {
-                    UpdaterLogger.Info("已确认 AutoCAD 进程退出，开始安装更新。");
+                    UpdaterLogger.Info("??? AutoCAD ????????????");
                     return progressWindow;
                 }
 
@@ -242,11 +242,11 @@ namespace CDBoxUpdater
                         try
                         {
                             progressWindow = UpdateProgressWindowHost.Start(pending.TargetVersion);
-                            UpdaterLogger.Info("检测到 AutoCAD 主窗口已关闭，已显示更新等待窗口。");
+                            UpdaterLogger.Info("??? AutoCAD ?????????????????");
                         }
                         catch (Exception ex)
                         {
-                            UpdaterLogger.Error("AutoCAD 窗口关闭后显示更新器失败，将继续后台等待。", ex);
+                            UpdaterLogger.Error("AutoCAD ?????????????????????", ex);
                         }
                     }
                     if (progressWindow != null) progressWindow.ReportWaitingForAutoCadExit();
@@ -261,7 +261,7 @@ namespace CDBoxUpdater
                         catch { }
                         finally { process.Dispose(); }
                     }
-                    UpdaterLogger.Info("等待 AutoCAD 退出。ProcessName=" + processName + ", PID=" + string.Join(",", ids.ToArray()));
+                    UpdaterLogger.Info("?? AutoCAD ???ProcessName=" + processName + ", PID=" + string.Join(",", ids.ToArray()));
                     lastLog = DateTime.UtcNow;
                 }
                 else
@@ -287,7 +287,7 @@ namespace CDBoxUpdater
                 }
                 catch
                 {
-                    // 无法确认窗口状态时继续保持后台等待，避免过早显示更新器。
+                    // ????????????????????????????
                     return false;
                 }
             }
@@ -303,7 +303,30 @@ namespace CDBoxUpdater
             var result = new List<Process>();
             int currentPid = Process.GetCurrentProcess().Id;
 
-            if (!string.IsNullOrWhiteSpace(processName))
+            // ?????????????? AutoCAD ?? PID????????
+            // ????????? AutoCAD 2020/2023 ????????????
+            if (expectedPid > 0 && expectedPid != currentPid)
+            {
+                try
+                {
+                    Process process = Process.GetProcessById(expectedPid);
+                    if (MatchesExpectedStartTime(process, expectedStartTimeUtc))
+                        result.Add(process);
+                    else
+                        process.Dispose();
+                }
+                catch (ArgumentException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    UpdaterLogger.Warn("???? AutoCAD PID ???" + ex.Message);
+                }
+                return result;
+            }
+
+            // ???? PID ??? pending-update.json ??????????
+            if (expectedPid <= 0 && !string.IsNullOrWhiteSpace(processName))
             {
                 try
                 {
@@ -320,23 +343,8 @@ namespace CDBoxUpdater
                 }
                 catch (Exception ex)
                 {
-                    UpdaterLogger.Warn("枚举 AutoCAD 进程失败，将退回到 PID 检查：" + ex.Message);
+                    UpdaterLogger.Warn("?? AutoCAD ????????? PID ???" + ex.Message);
                 }
-            }
-
-            if (expectedPid <= 0 || expectedPid == currentPid) return result;
-            try
-            {
-                Process process = Process.GetProcessById(expectedPid);
-                if (MatchesExpectedStartTime(process, expectedStartTimeUtc)) result.Add(process);
-                else process.Dispose();
-            }
-            catch (ArgumentException)
-            {
-            }
-            catch (Exception ex)
-            {
-                UpdaterLogger.Warn("检查 AutoCAD PID 失败：" + ex.Message);
             }
             return result;
         }
@@ -391,12 +399,12 @@ namespace CDBoxUpdater
             }
             catch (Win32Exception ex)
             {
-                UpdaterLogger.Error("管理员权限申请失败或被用户取消。", ex);
+                UpdaterLogger.Error("????????????????", ex);
                 return false;
             }
             catch (Exception ex)
             {
-                UpdaterLogger.Error("重新启动管理员更新器失败。", ex);
+                UpdaterLogger.Error("?????????????", ex);
                 return false;
             }
         }

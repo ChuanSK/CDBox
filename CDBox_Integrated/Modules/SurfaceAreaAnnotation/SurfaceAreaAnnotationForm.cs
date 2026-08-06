@@ -4,12 +4,13 @@ using System.Drawing;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
     /// <summary>
-    /// 表面积标注界面。
-    /// 采用 WinForms，避免引入 WPF 依赖，兼容当前 AutoCAD 2023 / CASS11 插件工程结构。
+    /// ????????
+    /// ?? WinForms????? WPF ??????? AutoCAD 2023 / CASS11 ???????
     /// </summary>
     public sealed class SurfaceAreaAnnotationForm : Form
     {
@@ -18,6 +19,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         private NumericUpDown _numInterval;
         private NumericUpDown _numTextHeight;
         private NumericUpDown _numDecimals;
+        private ComboBox _cmbCalculationMode;
         private TextBox _txtCassLogPath;
         private Button _btnBrowseCassLog;
         private CheckBox _chkDeleteCassObjects;
@@ -36,7 +38,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             _doc = doc;
             _initialOptions = SurfaceAreaAnnotationSettingsStore.Load();
 
-            Text = "表面积标注（制作：氚）";
+            Text = "???????????";
             Width = 620;
             Height = 680;
             StartPosition = FormStartPosition.CenterScreen;
@@ -60,7 +62,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             Controls.Add(root);
 
             var title = new Label();
-            title.Text = "表面积标注：固定调用 CASS surfacearea 计算";
+            title.Text = "??? / ????";
             title.AutoSize = true;
             title.Font = new System.Drawing.Font(title.Font.FontFamily, 11, System.Drawing.FontStyle.Bold);
             title.Padding = new Padding(0, 0, 0, 8);
@@ -77,46 +79,47 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
             _numInterval = MakeNumber(0.1M, 1000M, 5M, 1);
             SetNumberValue(_numInterval, (decimal)_initialOptions.BoundaryInterval);
-            AddRow(options, 0, "边界插值间隔（米）", _numInterval);
+            AddRow(options, 0, "?????????", _numInterval);
 
-            var calcLabel = new Label();
-            calcLabel.Text = "调用 CASS surfacearea 计算（固定）";
-            calcLabel.AutoSize = true;
-            calcLabel.Dock = DockStyle.Fill;
-            calcLabel.TextAlign = ContentAlignment.MiddleLeft;
-            AddRow(options, 1, "计算方式", calcLabel);
+            _cmbCalculationMode = new ComboBox();
+            _cmbCalculationMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            _cmbCalculationMode.Items.Add("?????");
+            _cmbCalculationMode.Items.Add("????");
+            _cmbCalculationMode.SelectedIndex = _initialOptions.CalculationMode == SurfaceAreaCalculationMode.PlanArea ? 1 : 0;
+            _cmbCalculationMode.SelectedIndexChanged += delegate { UpdateCalculationControls(); };
+            AddRow(options, 1, "????", _cmbCalculationMode);
 
             _chkDeleteCassObjects = new CheckBox();
-            _chkDeleteCassObjects.Text = "保留 CASS 生成的三角网和三角面积文字（默认不保留）";
+            _chkDeleteCassObjects.Text = "?? CASS ????????????????????";
             _chkDeleteCassObjects.Checked = !_initialOptions.DeleteCassGeneratedObjects;
             _chkDeleteCassObjects.AutoSize = true;
-            AddRow(options, 2, "CASS生成物", _chkDeleteCassObjects);
+            AddRow(options, 2, "CASS???", _chkDeleteCassObjects);
 
-            // 备用字段：保留给旧的 surface.log 读取模式/调试模式使用，正式界面不再显示。
+            // ?????????? surface.log ????/????????????????
             _txtCassLogPath = new TextBox();
             _btnBrowseCassLog = new Button();
 
             _numTextHeight = MakeNumber(0.1M, 1000M, 1M, 1);
             SetNumberValue(_numTextHeight, (decimal)_initialOptions.TextHeight);
-            AddRow(options, 3, "注记文字高度", _numTextHeight);
+            AddRow(options, 3, "??????", _numTextHeight);
 
             _numDecimals = MakeNumber(0M, 6M, 2M, 0);
             SetNumberValue(_numDecimals, _initialOptions.DecimalPlaces);
-            AddRow(options, 4, "面积小数位", _numDecimals);
+            AddRow(options, 4, "?????", _numDecimals);
 
             _cmbFonts = new ComboBox();
             _cmbFonts.DropDownStyle = ComboBoxStyle.DropDownList;
             _cmbFonts.Width = 260;
             _cmbFonts.DataSource = LoadTextStyleNames();
             SelectDefaultTextStyle(_cmbFonts, _initialOptions.AnnotationFontName);
-            AddRow(options, 5, "字体样式", _cmbFonts);
+            AddRow(options, 5, "????", _cmbFonts);
 
             _radDefaultZJ = new RadioButton();
-            _radDefaultZJ.Text = "默认注记图层：ZJ（图中没有时自动创建）";
+            _radDefaultZJ.Text = "???????ZJ???????????";
             _radDefaultZJ.Checked = true;
             _radDefaultZJ.AutoSize = true;
             _radDefaultZJ.CheckedChanged += delegate { if (_radDefaultZJ.Checked) UncheckOtherLayerModes(_radDefaultZJ); UpdateLayerControls(); };
-            AddRow(options, 6, "注记图层", _radDefaultZJ);
+            AddRow(options, 6, "????", _radDefaultZJ);
 
             var existingPanel = new FlowLayoutPanel();
             existingPanel.Dock = DockStyle.Fill;
@@ -124,7 +127,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             existingPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
 
             _radExistingLayer = new RadioButton();
-            _radExistingLayer.Text = "选择已有图层";
+            _radExistingLayer.Text = "??????";
             _radExistingLayer.AutoSize = true;
             _radExistingLayer.CheckedChanged += delegate { if (_radExistingLayer.Checked) UncheckOtherLayerModes(_radExistingLayer); UpdateLayerControls(); };
             existingPanel.Controls.Add(_radExistingLayer);
@@ -144,7 +147,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             customPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
 
             _radCustomLayer = new RadioButton();
-            _radCustomLayer.Text = "自定义图层";
+            _radCustomLayer.Text = "?????";
             _radCustomLayer.AutoSize = true;
             _radCustomLayer.CheckedChanged += delegate { if (_radCustomLayer.Checked) UncheckOtherLayerModes(_radCustomLayer); UpdateLayerControls(); };
             customPanel.Controls.Add(_radCustomLayer);
@@ -159,7 +162,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             _txtTemplate = new TextBox();
             _txtTemplate.Multiline = false;
             _txtTemplate.Text = string.IsNullOrWhiteSpace(_initialOptions.AnnotationTemplate) ? SurfaceAreaAnnotationOptions.Default.AnnotationTemplate : _initialOptions.AnnotationTemplate;
-            AddRow(options, 9, "注记模板", _txtTemplate);
+            AddRow(options, 9, "????", _txtTemplate);
 
             var buttons = new FlowLayoutPanel();
             buttons.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft;
@@ -168,13 +171,13 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             root.Controls.Add(buttons, 0, 3);
 
             var close = new Button();
-            close.Text = "关闭";
+            close.Text = "??";
             close.AutoSize = true;
             close.Click += delegate { Close(); };
             buttons.Controls.Add(close);
 
             var run = new Button();
-            run.Text = "计算并标注";
+            run.Text = "?????";
             run.Width = 170;
             run.Height = 30;
             run.Click += delegate { RunCalculation(); };
@@ -206,7 +209,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch
             {
-                // 读取失败时至少给出 ZJ，避免界面不可用。
+                // ????????? ZJ?????????
             }
 
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
@@ -242,15 +245,15 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch
             {
-                // 读取失败时使用 STANDARD 兜底，但不会创建文字样式。
+                // ??????? STANDARD ?????????????
             }
 
             if (names.Count == 0) names.Add("STANDARD");
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
 
-            if (ContainsIgnoreCase(names, "宋体"))
+            if (ContainsIgnoreCase(names, "??"))
             {
-                MoveNameToTop(names, "宋体");
+                MoveNameToTop(names, "??");
             }
             else if (!string.IsNullOrWhiteSpace(currentStyleName) && ContainsIgnoreCase(names, currentStyleName))
             {
@@ -356,7 +359,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
         private void UpdateCalculationControls()
         {
-            if (_chkDeleteCassObjects != null) _chkDeleteCassObjects.Enabled = true;
+            bool useCass = _cmbCalculationMode == null || _cmbCalculationMode.SelectedIndex != 1;
+            if (_chkDeleteCassObjects != null) _chkDeleteCassObjects.Enabled = useCass;
             if (_txtCassLogPath != null) _txtCassLogPath.Enabled = false;
             if (_btnBrowseCassLog != null) _btnBrowseCassLog.Enabled = false;
         }
@@ -365,8 +369,8 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "选择 CASS surface.log 文件";
-                dialog.Filter = "CASS surface.log|surface.log|日志文件 (*.log)|*.log|所有文件 (*.*)|*.*";
+                dialog.Title = "?? CASS surface.log ??";
+                dialog.Filter = "CASS surface.log|surface.log|???? (*.log)|*.log|???? (*.*)|*.*";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;
 
@@ -421,7 +425,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 TextHeight = (double)_numTextHeight.Value,
                 DecimalPlaces = (int)_numDecimals.Value,
                 AnnotationTemplate = _txtTemplate.Text,
-                CalculationMode = SurfaceAreaCalculationMode.CassCommand,
+                CalculationMode = _cmbCalculationMode != null && _cmbCalculationMode.SelectedIndex == 1
+                    ? SurfaceAreaCalculationMode.PlanArea
+                    : SurfaceAreaCalculationMode.CassCommand,
                 CassSurfaceLogPath = _txtCassLogPath == null ? string.Empty : _txtCassLogPath.Text.Trim(),
                 DeleteCassGeneratedObjects = !(_chkDeleteCassObjects != null && _chkDeleteCassObjects.Checked),
                 AnnotationFontName = textStyleName,
@@ -441,17 +447,17 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             {
                 SurfaceAreaAnnotationOptions options = ReadOptions();
                 SurfaceAreaAnnotationSettingsStore.Save(options);
-                // CASS 命令需要在 AutoCAD 命令行继续交互。启动后关闭设置窗，避免遮挡选择边界。
+                // CASS ????? AutoCAD ??????????????????????????
                 restoreForm = false;
 
                 if (wasVisible) Hide();
 
                 SurfaceAreaAnnotationResult result = SurfaceAreaAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                 //WriteLog(result);
 
-                // 计算并注记成功后直接结束本次表单流程。
-                // 成功完成后不再弹回插件界面。
+                // ???????????????????
+                // ??????????????
                 if (result.Success || result.AsyncStarted)
                 {
                     restoreForm = false;
@@ -460,8 +466,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch (System.Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {

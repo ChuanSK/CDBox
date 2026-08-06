@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -6,6 +6,7 @@ using System.IO;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 
 namespace TCPipeAutoDraw.Modules.SectionDrawing
 {
@@ -51,7 +52,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             _selectedLayerIndex = 0;
 
-            Text = "断面图生成（制作：氚）";
+            Text = "???????????";
             Width = 1220;
             Height = 820;
             StartPosition = FormStartPosition.CenterScreen;
@@ -102,13 +103,13 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             root.Controls.Add(buttons, 0, 5);
 
             var close = new Button();
-            close.Text = "关闭";
+            close.Text = "??";
             close.AutoSize = true;
             close.Click += delegate { Close(); };
             buttons.Controls.Add(close);
 
             var draw = new Button();
-            draw.Text = "绘制断面";
+            draw.Text = "????";
             draw.Width = 150;
             draw.Height = 30;
             draw.Click += delegate { RunDraw(); };
@@ -133,7 +134,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildLayerActionGroup()
         {
             var group = new GroupBox();
-            group.Text = "层级操作";
+            group.Text = "????";
             group.Dock = DockStyle.Fill;
             group.AutoSize = true;
 
@@ -145,17 +146,17 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             buttons.Padding = new Padding(8);
             group.Controls.Add(buttons);
 
-            buttons.Controls.Add(MakeLayerButton("添加层", AddLayer));
-            buttons.Controls.Add(MakeLayerButton("删除层", DeleteSelectedLayer));
-            buttons.Controls.Add(MakeLayerButton("上移", MoveSelectedLayerUp));
-            buttons.Controls.Add(MakeLayerButton("下移", MoveSelectedLayerDown));
+            buttons.Controls.Add(MakeLayerButton("???", AddLayer));
+            buttons.Controls.Add(MakeLayerButton("???", DeleteSelectedLayer));
+            buttons.Controls.Add(MakeLayerButton("??", MoveSelectedLayerUp));
+            buttons.Controls.Add(MakeLayerButton("??", MoveSelectedLayerDown));
             return group;
         }
 
         private Control BuildWidthGroup()
         {
             var group = new GroupBox();
-            group.Text = "宽高设置";
+            group.Text = "????";
             group.Dock = DockStyle.Top;
             group.AutoSize = true;
 
@@ -176,7 +177,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             group.Controls.Add(panel);
 
             var widthLabel = new Label();
-            widthLabel.Text = "断面宽度";
+            widthLabel.Text = "????";
             widthLabel.TextAlign = ContentAlignment.MiddleLeft;
             widthLabel.Dock = DockStyle.Fill;
             panel.Controls.Add(widthLabel, 0, 0);
@@ -186,7 +187,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             panel.Controls.Add(_numWidth, 1, 0);
 
             var totalLabel = new Label();
-            totalLabel.Text = "总高";
+            totalLabel.Text = "??";
             totalLabel.TextAlign = ContentAlignment.MiddleLeft;
             totalLabel.Dock = DockStyle.Fill;
             panel.Controls.Add(totalLabel, 2, 0);
@@ -206,7 +207,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             panel.Controls.Add(_numTotalHeight, 3, 0);
 
             _chkLockTotalHeight = new CheckBox();
-            _chkLockTotalHeight.Text = "锁定总高";
+            _chkLockTotalHeight.Text = "????";
             _chkLockTotalHeight.AutoSize = true;
             _chkLockTotalHeight.Anchor = AnchorStyles.Left;
             _chkLockTotalHeight.CheckedChanged += delegate
@@ -228,13 +229,13 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             panel.Controls.Add(_chkLockTotalHeight, 4, 0);
 
             _chkTopDimension = new CheckBox();
-            _chkTopDimension.Text = "上方宽度标注";
+            _chkTopDimension.Text = "??????";
             _chkTopDimension.AutoSize = true;
             _chkTopDimension.CheckedChanged += delegate { UpdatePreview(); };
             panel.Controls.Add(_chkTopDimension, 5, 0);
 
             _chkBottomDimension = new CheckBox();
-            _chkBottomDimension.Text = "下方宽度标注";
+            _chkBottomDimension.Text = "??????";
             _chkBottomDimension.AutoSize = true;
             _chkBottomDimension.CheckedChanged += delegate { UpdatePreview(); };
             panel.Controls.Add(_chkBottomDimension, 6, 0);
@@ -245,7 +246,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildMiddleGroup()
         {
             var group = new GroupBox();
-            group.Text = "断面编辑与预览";
+            group.Text = "???????";
             group.Dock = DockStyle.Fill;
 
             var main = new TableLayoutPanel();
@@ -268,7 +269,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildLayerNotePanel()
         {
             var group = new GroupBox();
-            group.Text = "各层注记 / 图案填充";
+            group.Text = "???? / ????";
             group.Dock = DockStyle.Fill;
 
             var root = new TableLayoutPanel();
@@ -290,7 +291,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildPreviewPanel()
         {
             var group = new GroupBox();
-            group.Text = "预览框";
+            group.Text = "???";
             group.Dock = DockStyle.Fill;
 
             var root = new TableLayoutPanel();
@@ -312,7 +313,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildLayerHeightPipePanel()
         {
             var group = new GroupBox();
-            group.Text = "各层高度 / 管圆设置";
+            group.Text = "???? / ????";
             group.Dock = DockStyle.Fill;
 
             var root = new TableLayoutPanel();
@@ -333,7 +334,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildTitleGroup()
         {
             var group = new GroupBox();
-            group.Text = "管段注记编辑";
+            group.Text = "??????";
             group.Dock = DockStyle.Top;
             group.AutoSize = true;
 
@@ -355,10 +356,10 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             _txtSectionTitle.ScrollBars = ScrollBars.Vertical;
             _txtSectionTitle.AcceptsReturn = true;
             _txtSectionTitle.TextChanged += delegate { UpdatePreview(); };
-            AddRow(panel, 0, 0, "管段注记", _txtSectionTitle);
+            AddRow(panel, 0, 0, "????", _txtSectionTitle);
 
             _chkDrawTitle = new CheckBox();
-            _chkDrawTitle.Text = "生成最下方管段注记";
+            _chkDrawTitle.Text = "?????????";
             _chkDrawTitle.AutoSize = true;
             _chkDrawTitle.CheckedChanged += delegate { UpdatePreview(); };
             panel.Controls.Add(_chkDrawTitle, 2, 0);
@@ -369,7 +370,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private Control BuildOtherGroup()
         {
             var group = new GroupBox();
-            group.Text = "其他设置";
+            group.Text = "????";
             group.Dock = DockStyle.Top;
             group.AutoSize = true;
 
@@ -388,27 +389,27 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             _cmbTextStyle = new ComboBox();
             _cmbTextStyle.DropDownStyle = ComboBoxStyle.DropDownList;
             _cmbTextStyle.SelectedIndexChanged += delegate { UpdatePreview(); };
-            AddRow(panel, 0, 0, "字体样式", _cmbTextStyle);
+            AddRow(panel, 0, 0, "????", _cmbTextStyle);
 
             _cmbUnifiedLayer = new ComboBox();
             _cmbUnifiedLayer.DropDownStyle = ComboBoxStyle.DropDownList;
-            AddRow(panel, 0, 2, "统一图层", _cmbUnifiedLayer);
+            AddRow(panel, 0, 2, "????", _cmbUnifiedLayer);
 
             _cmbDimensionStyle = new ComboBox();
             _cmbDimensionStyle.DropDownStyle = ComboBoxStyle.DropDownList;
-            AddRow(panel, 1, 0, "标注样式", _cmbDimensionStyle);
+            AddRow(panel, 1, 0, "????", _cmbDimensionStyle);
 
             _chkRightDimensions = new CheckBox();
-            _chkRightDimensions.Text = "生成右侧各层高度标注";
+            _chkRightDimensions.Text = "??????????";
             _chkRightDimensions.AutoSize = true;
             _chkRightDimensions.CheckedChanged += delegate { UpdatePreview(); };
-            AddRow(panel, 1, 2, "层高标注", _chkRightDimensions);
+            AddRow(panel, 1, 2, "????", _chkRightDimensions);
 
             _chkTotalHeightDimension = new CheckBox();
-            _chkTotalHeightDimension.Text = "生成右侧总高度标注";
+            _chkTotalHeightDimension.Text = "?????????";
             _chkTotalHeightDimension.AutoSize = true;
             _chkTotalHeightDimension.CheckedChanged += delegate { UpdatePreview(); };
-            AddRow(panel, 2, 2, "总高标注", _chkTotalHeightDimension);
+            AddRow(panel, 2, 2, "????", _chkTotalHeightDimension);
 
             return group;
         }
@@ -471,7 +472,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             if (removed.Count > 0)
             {
-                //WriteLog("已跳过当前 CAD 未读取到的填充图案：" + string.Join("、", removed.ToArray()) + "。对应层改为无填充。", false);
+                //WriteLog("????? CAD ??????????" + string.Join("?", removed.ToArray()) + "??????????", false);
             }
         }
 
@@ -479,14 +480,14 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (string.IsNullOrWhiteSpace(patternName)) return string.Empty;
             string value = patternName.Trim();
-            return string.Equals(value, "无", StringComparison.CurrentCultureIgnoreCase) ? "无填充" : value;
+            return string.Equals(value, "?", StringComparison.CurrentCultureIgnoreCase) ? "???" : value;
         }
 
         private static bool IsNoHatch(string patternName)
         {
             if (string.IsNullOrWhiteSpace(patternName)) return true;
-            return string.Equals(patternName, "无填充", StringComparison.CurrentCultureIgnoreCase)
-                || string.Equals(patternName, "无", StringComparison.CurrentCultureIgnoreCase)
+            return string.Equals(patternName, "???", StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(patternName, "?", StringComparison.CurrentCultureIgnoreCase)
                 || string.Equals(patternName, "NONE", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(patternName, "NO", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(patternName, "OFF", StringComparison.OrdinalIgnoreCase);
@@ -532,7 +533,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
         private void AddLayerRowStyles(TableLayoutPanel leftTable, TableLayoutPanel rightTable, int index)
         {
-            // 左右设置区只用于编辑参数，行高不再随断面层高变化，避免某层过薄时控件被压住。
+            // ??????????????????????????????????????
             float part = 100.0f / Math.Max(1, _layers.Count);
             leftTable.RowStyles.Add(new RowStyle(SizeType.Percent, part));
             rightTable.RowStyles.Add(new RowStyle(SizeType.Percent, part));
@@ -555,7 +556,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             int rowIndex = index;
             var drawCheck = new CheckBox();
-            drawCheck.Text = "绘制";
+            drawCheck.Text = "??";
             drawCheck.Checked = layer == null || layer.DrawLayer;
             drawCheck.AutoSize = true;
             drawCheck.Anchor = AnchorStyles.Left;
@@ -587,7 +588,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             };
             table.Controls.Add(text, 1, 0);
 
-            var hatchBtn = MakeFixedInlineButton("图案填充", delegate { EditLayerHatch(rowIndex); }, 92);
+            var hatchBtn = MakeFixedInlineButton("????", delegate { EditLayerHatch(rowIndex); }, 92);
             table.Controls.Add(hatchBtn, 2, 0);
 
             var hatchSummary = new Label();
@@ -643,7 +644,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             table.Controls.Add(height, 1, 0);
 
             var lockCheck = new CheckBox();
-            lockCheck.Text = "锁定";
+            lockCheck.Text = "??";
             lockCheck.AutoSize = true;
             lockCheck.Checked = layer != null && layer.HeightLocked;
             lockCheck.Anchor = AnchorStyles.Left;
@@ -663,7 +664,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             };
             table.Controls.Add(lockCheck, 2, 0);
 
-            var pipeBtn = MakeFixedInlineButton("添加管断面", delegate { EditLayerPipes(rowIndex); }, 106);
+            var pipeBtn = MakeFixedInlineButton("?????", delegate { EditLayerPipes(rowIndex); }, 106);
             table.Controls.Add(pipeBtn, 3, 0);
 
             var pipeSummary = new Label();
@@ -740,8 +741,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (!_leftHatchSummaryLabels.TryGetValue(index, out label) || label == null || index < 0 || index >= _layers.Count) return;
             SectionLayerOptions layer = _layers[index];
             string pattern = layer.HatchPatternName;
-            if (string.IsNullOrWhiteSpace(pattern)) pattern = "无";
-            label.Text = pattern + " / 比例 " + layer.HatchScale.ToString("0.###");
+            if (string.IsNullOrWhiteSpace(pattern)) pattern = "?";
+            label.Text = pattern + " / ?? " + layer.HatchScale.ToString("0.###");
         }
 
         private void UpdatePipeSummary(int index)
@@ -749,7 +750,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             Label label;
             if (!_rightPipeSummaryLabels.TryGetValue(index, out label) || label == null || index < 0 || index >= _layers.Count) return;
             int count = _layers[index].Pipes == null ? 0 : _layers[index].Pipes.Count;
-            label.Text = count <= 0 ? "无管圆" : count + " 个管圆";
+            label.Text = count <= 0 ? "???" : count + " ???";
         }
 
         private string GetLayerTitleText(int index)
@@ -757,16 +758,16 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             string name = GetLayerDisplayName(index);
             if (index >= 0 && index < _layers.Count && _layers[index] != null && !_layers[index].DrawLayer)
             {
-                return "不绘制 - " + name;
+                return "??? - " + name;
             }
             return name;
         }
 
         private string GetLayerDisplayName(int index)
         {
-            if (index < 0 || index >= _layers.Count) return "未命名层";
+            if (index < 0 || index >= _layers.Count) return "????";
             string name = _layers[index] == null ? string.Empty : _layers[index].LeftLabel;
-            return string.IsNullOrWhiteSpace(name) ? "未命名" : name;
+            return string.IsNullOrWhiteSpace(name) ? "???" : name;
         }
 
         private Color GetLayerRowBackColor(int index)
@@ -865,7 +866,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             int insert = _selectedLayerIndex + 1;
             if (insert < 0 || insert > _layers.Count) insert = _layers.Count;
-            _layers.Insert(insert, new SectionLayerOptions { LeftLabel = "自定义层", Height = 0.10, HeightLocked = false, HatchPatternName = string.Empty, HatchScale = 1.0, HatchAngle = 0.0 });
+            _layers.Insert(insert, new SectionLayerOptions { LeftLabel = "????", Height = 0.10, HeightLocked = false, HatchPatternName = string.Empty, HatchScale = 1.0, HatchAngle = 0.0 });
             _selectedLayerIndex = insert;
             if (_chkLockTotalHeight != null && _chkLockTotalHeight.Checked) ApplyLockedTotalHeight(insert);
             RebuildLayerPanels();
@@ -876,7 +877,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (_layers.Count <= 1)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("至少需要保留一层。", "断面图生成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show("?????????", "?????", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             int index = _selectedLayerIndex;
@@ -950,7 +951,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             if (options.Layers.Count == 0)
             {
-                throw new InvalidOperationException("至少需要设置一层断面层级。");
+                throw new InvalidOperationException("?????????????");
             }
 
             bool hasPipe = false;
@@ -958,7 +959,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             {
                 if (options.Layers[i].Height <= 0)
                 {
-                    throw new InvalidOperationException("第 " + (i + 1) + " 层高度必须大于 0。");
+                    throw new InvalidOperationException("? " + (i + 1) + " ??????? 0?");
                 }
                 if (options.Layers[i].Pipes != null && options.Layers[i].Pipes.Count > 0)
                 {
@@ -1158,7 +1159,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (_cmbDimensionStyle == null || _cmbDimensionStyle.SelectedItem == null) return string.Empty;
             string value = _cmbDimensionStyle.SelectedItem.ToString();
-            if (value.StartsWith("当前尺寸样式", StringComparison.CurrentCultureIgnoreCase)) return string.Empty;
+            if (value.StartsWith("??????", StringComparison.CurrentCultureIgnoreCase)) return string.Empty;
             return value;
         }
 
@@ -1192,12 +1193,12 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             {
                 NormalizeUnavailableHatchPatterns();
                 SectionDrawingOptions options = ReadOptions(true);
-                if (!HasDrawableLayer(options)) throw new InvalidOperationException("至少需要勾选一层进行绘制。");
+                if (!HasDrawableLayer(options)) throw new InvalidOperationException("?????????????");
                 SectionDrawingSettingsStore.Save(options);
                 if (wasVisible) Hide();
 
                 SectionDrawingResult result = SectionDrawingService.SelectPositionAndDraw(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                 //WriteLog(result.Message + " " + result.ToEditorMessage().Trim(), !result.Success);
 
                 if (result.Success)
@@ -1208,8 +1209,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[断面图生成] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "断面图生成失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -1235,8 +1235,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             var names = new List<string>(HatchSettingDialog.GetAvailablePatternNameSet(doc));
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
-            if (ContainsIgnoreCase(names, "无填充")) MoveNameToTop(names, "无填充");
-            else if (ContainsIgnoreCase(names, "无")) MoveNameToTop(names, "无");
+            if (ContainsIgnoreCase(names, "???")) MoveNameToTop(names, "???");
+            else if (ContainsIgnoreCase(names, "?")) MoveNameToTop(names, "?");
             return names;
         }
 
@@ -1270,7 +1270,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (names.Count == 0) names.Add("STANDARD");
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
             if (!string.IsNullOrWhiteSpace(preferred) && ContainsIgnoreCase(names, preferred)) MoveNameToTop(names, preferred);
-            else if (ContainsIgnoreCase(names, "宋体")) MoveNameToTop(names, "宋体");
+            else if (ContainsIgnoreCase(names, "??")) MoveNameToTop(names, "??");
             else if (!string.IsNullOrWhiteSpace(currentStyleName) && ContainsIgnoreCase(names, currentStyleName)) MoveNameToTop(names, currentStyleName);
             return names;
         }
@@ -1312,7 +1312,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         private List<string> LoadDimensionStyleNames(string preferred)
         {
             var names = new List<string>();
-            names.Add("当前尺寸样式");
+            names.Add("??????");
             string currentName = string.Empty;
             try
             {
@@ -1438,8 +1438,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             {
                 get
                 {
-                    string value = string.IsNullOrWhiteSpace(_selectedPatternName) ? "无填充" : _selectedPatternName.Trim();
-                    return string.Equals(value, "无填充", StringComparison.CurrentCultureIgnoreCase) ? "无" : value;
+                    string value = string.IsNullOrWhiteSpace(_selectedPatternName) ? "???" : _selectedPatternName.Trim();
+                    return string.Equals(value, "???", StringComparison.CurrentCultureIgnoreCase) ? "?" : value;
                 }
             }
 
@@ -1448,7 +1448,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             public HatchSettingDialog(Document doc, SectionLayerOptions layer)
             {
-                Text = "图案填充选择";
+                Text = "??????";
                 Width = 560;
                 Height = 620;
                 StartPosition = FormStartPosition.CenterParent;
@@ -1496,7 +1496,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 root.Controls.Add(scalePanel, 0, 2);
 
                 var scaleLabel = new Label();
-                scaleLabel.Text = "填充比例";
+                scaleLabel.Text = "????";
                 scaleLabel.Dock = DockStyle.Fill;
                 scaleLabel.TextAlign = ContentAlignment.MiddleLeft;
                 scalePanel.Controls.Add(scaleLabel, 0, 0);
@@ -1515,21 +1515,21 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 root.Controls.Add(buttons, 0, 3);
 
                 var ok = new Button();
-                ok.Text = "确定";
+                ok.Text = "??";
                 ok.DialogResult = DialogResult.OK;
                 ok.Width = 78;
                 ok.Height = 28;
                 buttons.Controls.Add(ok);
 
                 var cancel = new Button();
-                cancel.Text = "取消";
+                cancel.Text = "??";
                 cancel.DialogResult = DialogResult.Cancel;
                 cancel.Width = 78;
                 cancel.Height = 28;
                 buttons.Controls.Add(cancel);
 
                 var removeCommon = new Button();
-                removeCommon.Text = "移出常用";
+                removeCommon.Text = "????";
                 removeCommon.Width = 86;
                 removeCommon.Height = 28;
                 removeCommon.Click += delegate
@@ -1540,13 +1540,13 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 buttons.Controls.Add(removeCommon);
 
                 var addCommon = new Button();
-                addCommon.Text = "加入常用";
+                addCommon.Text = "????";
                 addCommon.Width = 86;
                 addCommon.Height = 28;
                 addCommon.Click += delegate
                 {
                     string name = NormalizePreferredPattern(_selectedPatternName);
-                    if (!string.Equals(name, "无填充", StringComparison.CurrentCultureIgnoreCase))
+                    if (!string.Equals(name, "???", StringComparison.CurrentCultureIgnoreCase))
                     {
                         AddOrUpdateCommonPattern(name, (double)_numScale.Value);
                         RebuildPatternTabs(name);
@@ -1555,10 +1555,10 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 buttons.Controls.Add(addCommon);
 
                 var none = new Button();
-                none.Text = "无填充";
+                none.Text = "???";
                 none.Width = 78;
                 none.Height = 28;
-                none.Click += delegate { SelectPatternByName("无填充"); };
+                none.Click += delegate { SelectPatternByName("???"); };
                 buttons.Controls.Add(none);
 
                 AcceptButton = ok;
@@ -1581,21 +1581,21 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             private void BuildPatternTabs(Document doc, string preferred)
             {
                 List<PatternItem> items = LoadCadHatchPatternItems(doc);
-                // 不再把上次保存的图案名强行塞入列表。
-                // 如果当前 CAD 读取不到该图案，就不显示，避免选择到 CAD 无法生成的 Hatch。
+                // ??????????????????
+                // ???? CAD ?????????????????? CAD ????? Hatch?
                 AddCommonPatternItems(items);
 
                 AddPatternTab("ANSI", items, "ANSI", preferred);
                 AddPatternTab("ISO", items, "ISO", preferred);
-                AddPatternTab("其他预定义", items, "其他预定义", preferred);
-                AddPatternTab("常用", items, "常用", preferred);
-                AddPatternTab("自定义", items, "自定义", preferred);
+                AddPatternTab("?????", items, "?????", preferred);
+                AddPatternTab("??", items, "??", preferred);
+                AddPatternTab("???", items, "???", preferred);
 
                 if (_tabs.TabPages.Count == 0)
                 {
-                    // 理论上至少会有“其他预定义”中的“无填充 / SOLID”。
-                    // 这里保留一个空自定义页，避免窗口完全空白。
-                    AddPatternTab("自定义", items, "自定义", preferred);
+                    // ???????????????????? / SOLID??
+                    // ?????????????????????
+                    AddPatternTab("???", items, "???", preferred);
                 }
 
                 SelectPatternByName(preferred);
@@ -1622,7 +1622,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     if (item != null && string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase)) list.Add(item);
                 }
 
-                if (list.Count == 0 && !string.Equals(category, "自定义", StringComparison.OrdinalIgnoreCase)) return;
+                if (list.Count == 0 && !string.Equals(category, "???", StringComparison.OrdinalIgnoreCase)) return;
 
                 var page = new TabPage(title);
                 var view = new ListView();
@@ -1655,7 +1655,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (list.Count == 0)
                 {
                     var empty = new Label();
-                    empty.Text = "未读取到自定义 PAT 图案。";
+                    empty.Text = "??????? PAT ???";
                     empty.Dock = DockStyle.Fill;
                     empty.TextAlign = ContentAlignment.MiddleCenter;
                     page.Controls.Add(empty);
@@ -1670,7 +1670,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                             if (item != null)
                             {
                                 _selectedPatternName = item.Name;
-                                if (string.Equals(item.Category, "常用", StringComparison.CurrentCultureIgnoreCase) && item.DefaultScale > 0)
+                                if (string.Equals(item.Category, "??", StringComparison.CurrentCultureIgnoreCase) && item.DefaultScale > 0)
                                 {
                                     SetNumberValue(_numScale, (decimal)item.DefaultScale);
                                 }
@@ -1728,7 +1728,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                             try { item.EnsureVisible(); } catch { }
                             _selectedPatternName = item.Text;
                             PatternItem patternItem = item.Tag as PatternItem;
-                            if (patternItem != null && string.Equals(patternItem.Category, "常用", StringComparison.CurrentCultureIgnoreCase) && patternItem.DefaultScale > 0)
+                            if (patternItem != null && string.Equals(patternItem.Category, "??", StringComparison.CurrentCultureIgnoreCase) && patternItem.DefaultScale > 0)
                             {
                                 SetNumberValue(_numScale, (decimal)patternItem.DefaultScale);
                             }
@@ -1743,14 +1743,14 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
                 if (!found)
                 {
-                    _selectedPatternName = "无填充";
+                    _selectedPatternName = "???";
                     for (int i = 0; i < _views.Count; i++)
                     {
                         ListView view = _views[i];
                         if (view == null) continue;
                         for (int j = 0; j < view.Items.Count; j++)
                         {
-                            if (string.Equals(view.Items[j].Text, "无填充", StringComparison.CurrentCultureIgnoreCase))
+                            if (string.Equals(view.Items[j].Text, "???", StringComparison.CurrentCultureIgnoreCase))
                             {
                                 _tabs.SelectedTab = view.Parent as TabPage;
                                 view.Items[j].Selected = true;
@@ -1768,23 +1768,23 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             private void UpdateSelectedLabel()
             {
                 if (_lblSelected == null) return;
-                string value = string.IsNullOrWhiteSpace(_selectedPatternName) ? "无填充" : _selectedPatternName;
-                _lblSelected.Text = "当前选择：" + value;
+                string value = string.IsNullOrWhiteSpace(_selectedPatternName) ? "???" : _selectedPatternName;
+                _lblSelected.Text = "?????" + value;
             }
 
             private static string NormalizePreferredPattern(string value)
             {
-                if (string.IsNullOrWhiteSpace(value)) return "无填充";
+                if (string.IsNullOrWhiteSpace(value)) return "???";
                 value = value.Trim();
-                if (string.Equals(value, "无", StringComparison.CurrentCultureIgnoreCase)) return "无填充";
+                if (string.Equals(value, "?", StringComparison.CurrentCultureIgnoreCase)) return "???";
                 return value;
             }
 
             private static List<PatternItem> LoadCadHatchPatternItems(Document doc)
             {
                 var result = new List<PatternItem>();
-                AddPatternItem(result, "无填充", "其他预定义", "不生成填充");
-                AddPatternItem(result, "SOLID", "其他预定义", "实体填充");
+                AddPatternItem(result, "???", "?????", "?????");
+                AddPatternItem(result, "SOLID", "?????", "????");
 
                 List<PatternFileInfo> files = FindCadPatternFiles(doc);
                 for (int i = 0; i < files.Count; i++)
@@ -1792,9 +1792,9 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     ParsePatternFile(files[i], result);
                 }
 
-                // 不再强行加入硬编码图案。
-                // 除“无填充”和“SOLID”外，图案列表完全来自当前 CAD 可读取到的 .pat 文件。
-                // 例如当前 CAD/CASS 环境中没有 ISO 图案，则 ISO 页不会出现对应图案。
+                // ????????????
+                // ????????SOLID????????????? CAD ????? .pat ???
+                // ???? CAD/CASS ????? ISO ???? ISO ??????????
                 return result;
             }
 
@@ -1807,8 +1807,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     if (items[i] == null || string.IsNullOrWhiteSpace(items[i].Name)) continue;
                     names.Add(NormalizePreferredPattern(items[i].Name));
                 }
-                names.Add("无填充");
-                names.Add("无");
+                names.Add("???");
+                names.Add("?");
                 return names;
             }
 
@@ -1819,10 +1819,10 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 {
                     CommonPatternInfo c = common[i];
                     PatternItem source = FindPatternItem(items, c.Name);
-                    // 常用页也不再强行加入当前 CAD 未读取到的图案。
-                    // 例如 1064 或 ISO 图案在当前环境不存在时，不显示、不参与生成。
+                    // ???????????? CAD ????????
+                    // ?? 1064 ? ISO ??????????????????????
                     if (source == null) continue;
-                    PatternItem item = AddPatternItem(items, c.Name, "常用", "常用图案，默认比例 " + c.Scale.ToString("0.###"));
+                    PatternItem item = AddPatternItem(items, c.Name, "??", "????????? " + c.Scale.ToString("0.###"));
                     item.DefaultScale = c.Scale;
                     if (source.Lines != null && source.Lines.Count > 0)
                     {
@@ -1836,7 +1836,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (items == null || string.IsNullOrWhiteSpace(name)) return null;
                 for (int i = 0; i < items.Count; i++)
                 {
-                    if (items[i] != null && !string.Equals(items[i].Category, "常用", StringComparison.CurrentCultureIgnoreCase) &&
+                    if (items[i] != null && !string.Equals(items[i].Category, "??", StringComparison.CurrentCultureIgnoreCase) &&
                         string.Equals(items[i].Name, name, StringComparison.CurrentCultureIgnoreCase)) return items[i];
                 }
                 return null;
@@ -1922,7 +1922,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                             int comma = line.IndexOf(',');
                             string name = comma > 1 ? line.Substring(1, comma - 1).Trim() : line.Substring(1).Trim();
                             string description = comma > 0 && comma < line.Length - 1 ? line.Substring(comma + 1).Trim() : string.Empty;
-                            string category = fileInfo.IsCustom ? "自定义" : GetPatternCategory(name);
+                            string category = fileInfo.IsCustom ? "???" : GetPatternCategory(name);
                             current = AddPatternItem(result, name, category, description);
                             continue;
                         }
@@ -1979,11 +1979,11 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             private static string GetPatternCategory(string name)
             {
-                if (string.IsNullOrWhiteSpace(name)) return "其他预定义";
+                if (string.IsNullOrWhiteSpace(name)) return "?????";
                 string upper = name.Trim().ToUpperInvariant();
                 if (upper.StartsWith("ANSI", StringComparison.Ordinal)) return "ANSI";
                 if (upper.StartsWith("ISO", StringComparison.Ordinal)) return "ISO";
-                return "其他预定义";
+                return "?????";
             }
 
             private static bool IsStandardPatternFile(string path)
@@ -2011,8 +2011,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             {
                 if (items == null || string.IsNullOrWhiteSpace(name)) return new PatternItem();
                 name = name.Trim();
-                if (string.Equals(name, "无", StringComparison.CurrentCultureIgnoreCase)) name = "无填充";
-                string cat = string.IsNullOrWhiteSpace(category) ? "其他预定义" : category;
+                if (string.Equals(name, "?", StringComparison.CurrentCultureIgnoreCase)) name = "???";
+                string cat = string.IsNullOrWhiteSpace(category) ? "?????" : category;
                 for (int i = 0; i < items.Count; i++)
                 {
                     if (string.Equals(items[i].Name, name, StringComparison.CurrentCultureIgnoreCase) &&
@@ -2047,7 +2047,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     {
                         g.FillRectangle(blackBrush, 4, 4, 40, 40);
                     }
-                    else if (string.Equals(upper, "无填充", StringComparison.OrdinalIgnoreCase) || string.Equals(upper, "无", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(upper, "???", StringComparison.OrdinalIgnoreCase) || string.Equals(upper, "?", StringComparison.OrdinalIgnoreCase))
                     {
                         g.DrawLine(grayPen, 8, 8, 40, 40);
                         g.DrawLine(grayPen, 40, 8, 8, 40);
@@ -2219,7 +2219,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 double nx = -uy;
                 double ny = ux;
 
-                // PAT 中 delta-x 表示沿线方向位移，delta-y 表示相邻平行线间距。
+                // PAT ? delta-x ?????????delta-y ??????????
                 double stepX = def.DeltaX * ux + def.DeltaY * nx;
                 double stepY = def.DeltaX * uy + def.DeltaY * ny;
                 double stepLen = Math.Sqrt(stepX * stepX + stepY * stepY);
@@ -2559,7 +2559,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
             public PipeSettingDialog(string layerName, List<SectionPipeOptions> pipes)
             {
-                Text = "管断面设置 - " + (string.IsNullOrWhiteSpace(layerName) ? "未命名层" : layerName);
+                Text = "????? - " + (string.IsNullOrWhiteSpace(layerName) ? "????" : layerName);
                 Width = 560;
                 Height = 360;
                 StartPosition = FormStartPosition.CenterParent;
@@ -2584,7 +2584,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 root.Controls.Add(top, 0, 0);
 
                 var add = new Button();
-                add.Text = "添加管道";
+                add.Text = "????";
                 add.AutoSize = true;
                 add.Click += delegate { AddPipeRow(SectionPipeOptions.Default); };
                 top.Controls.Add(add);
@@ -2611,13 +2611,13 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 root.Controls.Add(buttons, 0, 2);
 
                 var ok = new Button();
-                ok.Text = "确定";
+                ok.Text = "??";
                 ok.DialogResult = DialogResult.OK;
                 ok.AutoSize = true;
                 buttons.Controls.Add(ok);
 
                 var cancel = new Button();
-                cancel.Text = "取消";
+                cancel.Text = "??";
                 cancel.DialogResult = DialogResult.Cancel;
                 cancel.AutoSize = true;
                 buttons.Controls.Add(cancel);
@@ -2669,7 +2669,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
                     Root.Controls.Add(table);
 
-                    table.Controls.Add(MakeSimpleLabel("管径(m)"), 0, 0);
+                    table.Controls.Add(MakeSimpleLabel("??(m)"), 0, 0);
                     _diameter = MakeNumber(0.001M, 100000M, (decimal)Math.Max(0.001, pipe.Diameter), 3);
                     _diameter.ValueChanged += delegate
                     {
@@ -2680,7 +2680,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     };
                     table.Controls.Add(_diameter, 1, 0);
 
-                    table.Controls.Add(MakeSimpleLabel("注记"), 2, 0);
+                    table.Controls.Add(MakeSimpleLabel("??"), 2, 0);
                       _text = new TextBox();
                       _text.Dock = DockStyle.Fill;
                       _text.Text = string.IsNullOrWhiteSpace(pipe.PipeText) ? SectionPipeOptions.BuildPipeText(pipe.Diameter) : pipe.PipeText;
@@ -2696,23 +2696,23 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                       table.Controls.Add(_text, 3, 0);
 
                     var auto = new Button();
-                    auto.Text = "自动";
+                    auto.Text = "??";
                     auto.AutoSize = true;
                     auto.Click += delegate { _text.Text = SectionPipeOptions.BuildPipeText((double)_diameter.Value); };
                     table.Controls.Add(auto, 4, 0);
 
                     var del = new Button();
-                    del.Text = "删除";
+                    del.Text = "??";
                     del.AutoSize = true;
                     del.Click += delegate { if (deleteAction != null) deleteAction(this); };
                     table.Controls.Add(del, 5, 0);
 
-                    table.Controls.Add(MakeSimpleLabel("竖向位置"), 0, 1);
+                    table.Controls.Add(MakeSimpleLabel("????"), 0, 1);
                     _mode = new ComboBox();
                     _mode.Dock = DockStyle.Fill;
                     _mode.DropDownStyle = ComboBoxStyle.DropDownList;
-                    _mode.Items.Add("该层底");
-                    _mode.Items.Add("该层中");
+                    _mode.Items.Add("???");
+                    _mode.Items.Add("???");
                     _mode.SelectedIndex = pipe.VerticalMode == SectionPipeVerticalMode.LayerBottom ? 0 : 1;
                     table.Controls.Add(_mode, 1, 1);
                     table.SetColumnSpan(_mode, 2);

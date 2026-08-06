@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.SectionDrawing;
 using TCPipeAutoDraw.UI;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -44,8 +45,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
                 catch (Exception ex)
                 {
-                    result = Error("断面设置保存失败：" + ex.Message);
-                    CDBoxStudioLogger.Error("保存 Preview 10 断面设置失败。", ex);
+                    result = Error("?????????" + ex.Message);
+                    CDBoxStudioLogger.Error("?? Preview 10 ???????", ex);
                 }
                 return true;
             }
@@ -60,19 +61,19 @@ namespace TCPipeAutoDraw.UI.Studio
                     {
                         Handled = true,
                         RefreshPage = false,
-                        ActionToRun = NewAction("section-drawing:draw", "断面图生成", false, delegate
+                        ActionToRun = NewAction("section-drawing:draw", "?????", false, delegate
                         {
                             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
-                            if (doc == null) throw new InvalidOperationException("未找到当前图纸。");
+                            if (doc == null) throw new InvalidOperationException("????????");
                             SectionDrawingResult drawingResult = SectionDrawingService.SelectPositionAndDraw(doc, options);
-                            doc.Editor.WriteMessage(drawingResult.ToEditorMessage());
+                            doc.Editor.WriteHudMessage(drawingResult.ToEditorMessage());
                             SendResult(scriptSink, drawingResult.Message, drawingResult.Success);
                         })
                     };
                 }
                 catch (Exception ex)
                 {
-                    result = Error("断面参数无效：" + ex.Message);
+                    result = Error("???????" + ex.Message);
                 }
                 return true;
             }
@@ -83,10 +84,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 {
                     Handled = true,
                     RefreshPage = true,
-                    ActionToRun = NewAction("section-drawing:legacy", "旧版断面图界面", delegate
+                    ActionToRun = NewAction("section-drawing:legacy", "???????", delegate
                     {
                         Document doc = AcadApp.DocumentManager.MdiActiveDocument;
-                        if (doc == null) throw new InvalidOperationException("未找到当前图纸。");
+                        if (doc == null) throw new InvalidOperationException("????????");
                         using (var form = new SectionDrawingForm(doc)) form.ShowDialog(new AcadMainWindow());
                     })
                 };
@@ -98,9 +99,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static SectionDrawingOptions ReadOptions(string payload)
         {
-            if (string.IsNullOrWhiteSpace(payload)) throw new InvalidOperationException("未收到断面参数。");
+            if (string.IsNullOrWhiteSpace(payload)) throw new InvalidOperationException("????????");
             SectionDrawingOptions options = Serializer.Deserialize<SectionDrawingOptions>(payload);
-            if (options == null) throw new InvalidOperationException("断面参数无法解析。");
+            if (options == null) throw new InvalidOperationException("?????????");
             SectionLayoutCalculator.Normalize(options);
             bool drawable = false;
             for (int i = 0; i < options.Layers.Count; i++)
@@ -112,7 +113,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     break;
                 }
             }
-            if (!drawable) throw new InvalidOperationException("至少需要启用一个结构层。");
+            if (!drawable) throw new InvalidOperationException("????????????");
             return options;
         }
 
@@ -160,7 +161,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Warn("读取断面注记样式失败：" + ex.Message);
+                CDBoxStudioLogger.Warn("???????????" + ex.Message);
             }
             AddIfMissing(names, preferred);
             AddIfMissing(names, "STANDARD");
@@ -171,7 +172,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static List<string> LoadDimensionStyleNames(Document doc, string preferred)
         {
-            var names = new List<string> { "当前尺寸样式" };
+            var names = new List<string> { "??????" };
             try
             {
                 Database db = doc == null ? null : doc.Database;
@@ -191,7 +192,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Warn("读取断面标注样式失败：" + ex.Message);
+                CDBoxStudioLogger.Warn("???????????" + ex.Message);
             }
             AddIfMissing(names, preferred);
             return names;
@@ -219,7 +220,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Warn("读取断面图层失败：" + ex.Message);
+                CDBoxStudioLogger.Warn("?????????" + ex.Message);
             }
             AddIfMissing(names, preferred);
             AddIfMissing(names, "0");
@@ -254,7 +255,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private static void SendResult(Action<string> scriptSink, string message, bool success)
         {
             if (scriptSink == null) return;
-            string text = string.IsNullOrWhiteSpace(message) ? (success ? "断面图已生成。" : "未生成断面图。") : message;
+            string text = string.IsNullOrWhiteSpace(message) ? (success ? "???????" : "???????") : message;
             scriptSink("window.CDBoxSectionDrawingResult && window.CDBoxSectionDrawingResult(" + Serializer.Serialize(text) + "," + (success ? "true" : "false") + ");");
         }
 
@@ -265,7 +266,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static CDBoxStudioAction NewAction(string id, string title, bool restoreStudioAfterRun, Action action)
         {
-            return new CDBoxStudioAction(id, title, "断面", string.Empty, "DM", "Preview 10", CDBoxStudioActionKind.Module, true, restoreStudioAfterRun, action);
+            return new CDBoxStudioAction(id, title, "??", string.Empty, "DM", "Preview 10", CDBoxStudioActionKind.Module, true, restoreStudioAfterRun, action);
         }
 
         private static CDBoxStudioRouteResult Error(string message)

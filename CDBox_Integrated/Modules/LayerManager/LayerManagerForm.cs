@@ -34,7 +34,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             _allLayers = new List<LayerInfo>();
             _visibleLayers = new BindingList<LayerInfo>();
 
-            Text = "CDBox - 图层批量管理";
+            Text = "CDBox - ??????";
             Width = 1515;
             Height = 760;
             StartPosition = FormStartPosition.CenterScreen;
@@ -65,29 +65,29 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             top.WrapContents = true;
             root.Controls.Add(top, 0, 0);
 
-            top.Controls.Add(new Label { Text = "筛选：", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
+            top.Controls.Add(new Label { Text = "???", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
             _txtFilter = new TextBox { Width = 220 };
             _txtFilter.TextChanged += delegate { ApplyFilter(); };
             top.Controls.Add(_txtFilter);
 
-            top.Controls.Add(new Label { Text = "标签：", AutoSize = true, Padding = new Padding(12, 6, 0, 0) });
+            top.Controls.Add(new Label { Text = "???", AutoSize = true, Padding = new Padding(12, 6, 0, 0) });
             _cboTagSearch = new ComboBox { Width = 160, DropDownStyle = ComboBoxStyle.DropDown };
             _cboTagSearch.KeyDown += TagSearchKeyDown;
             top.Controls.Add(_cboTagSearch);
-            top.Controls.Add(MakeButton("勾选标签", delegate { SelectLayersByTag(false); }));
-            top.Controls.Add(MakeButton("仅勾选标签", delegate { SelectLayersByTag(true); }));
+            top.Controls.Add(MakeButton("????", delegate { SelectLayersByTag(false); }));
+            top.Controls.Add(MakeButton("?????", delegate { SelectLayersByTag(true); }));
 
-            top.Controls.Add(MakeButton("刷新", delegate { RefreshLayers(true); }));
-            top.Controls.Add(MakeButton("拾取对象加入勾选", PickLayersFromObjects));
-            top.Controls.Add(MakeButton("全选", delegate { SetAllVisibleSelected(true); }));
-            top.Controls.Add(MakeButton("反选", InvertVisibleSelected));
-            top.Controls.Add(MakeButton("清空勾选", delegate { SetAllVisibleSelected(false); }));
+            top.Controls.Add(MakeButton("??", delegate { RefreshLayers(true); }));
+            top.Controls.Add(MakeButton("????????", PickLayersFromObjects));
+            top.Controls.Add(MakeButton("??", delegate { SetAllVisibleSelected(true); }));
+            top.Controls.Add(MakeButton("??", InvertVisibleSelected));
+            top.Controls.Add(MakeButton("????", delegate { SetAllVisibleSelected(false); }));
 
-            _chkCountObjects = new CheckBox { Text = "统计对象数", AutoSize = true, Checked = true, Padding = new Padding(12, 4, 0, 0) };
+            _chkCountObjects = new CheckBox { Text = "?????", AutoSize = true, Checked = true, Padding = new Padding(12, 4, 0, 0) };
             _chkCountObjects.CheckedChanged += delegate { RefreshLayers(false); };
             top.Controls.Add(_chkCountObjects);
 
-            _chkForceUnlockDelete = new CheckBox { Text = "删除时临时解锁", AutoSize = true, Checked = false, Padding = new Padding(12, 4, 0, 0) };
+            _chkForceUnlockDelete = new CheckBox { Text = "???????", AutoSize = true, Checked = false, Padding = new Padding(12, 4, 0, 0) };
             top.Controls.Add(_chkForceUnlockDelete);
 
             _mainSplit = new SplitContainer();
@@ -95,12 +95,12 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             split.Dock = DockStyle.Fill;
             split.Orientation = Orientation.Vertical;
             split.FixedPanel = FixedPanel.Panel1;
-            // 不在初始化阶段设置 Panel1MinSize/Panel2MinSize/SplitterDistance。
-            // SplitContainer 在加入布局前 Width 很小，设置最小宽度也可能触发 SplitterDistance 越界异常。
+            // ????????? Panel1MinSize/Panel2MinSize/SplitterDistance?
+            // SplitContainer ?????? Width ?????????????? SplitterDistance ?????
             root.Controls.Add(split, 0, 1);
 
             var treeGroup = new GroupBox();
-            treeGroup.Text = "父属性 / 分类";
+            treeGroup.Text = "??? / ??";
             treeGroup.Dock = DockStyle.Fill;
             treeGroup.Padding = new Padding(6);
             split.Panel1.Controls.Add(treeGroup);
@@ -135,23 +135,23 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             actions.WrapContents = true;
             root.Controls.Add(actions, 0, 2);
 
-            actions.Controls.Add(MakeButton("选中对象", delegate { SelectObjects(); }));
-            actions.Controls.Add(MakeButton("删除对象", delegate { DeleteObjects(); }));
-            actions.Controls.Add(MakeButton("锁定图层", delegate { ApplyState(LayerStateAction.Lock, true); }));
-            actions.Controls.Add(MakeButton("解锁图层", delegate { ApplyState(LayerStateAction.Unlock, true); }));
-            actions.Controls.Add(MakeButton("隐藏图层", delegate { ApplyState(LayerStateAction.TurnOff, true); }));
-            actions.Controls.Add(MakeButton("显示/解冻", ShowSelectedLayers));
-            actions.Controls.Add(MakeButton("冻结图层", delegate { ApplyState(LayerStateAction.Freeze, true); }));
-            actions.Controls.Add(MakeButton("解冻图层", delegate { ApplyState(LayerStateAction.Thaw, true); }));
-            actions.Controls.Add(MakeButton("设为当前", SetCurrentLayer));
-            actions.Controls.Add(MakeButton("仅显示勾选", OnlyShowCheckedLayers));
-            actions.Controls.Add(MakeButton("显示全部", ShowAllLayers));
-            actions.Controls.Add(MakeButton("新建图层", CreateLayers));
-            actions.Controls.Add(MakeButton("创建管线默认层", CreateDefaultPipeLayers));
-            actions.Controls.Add(MakeButton("设置父类/标签", EditLayerMetadata));
-            actions.Controls.Add(MakeButton("属性识别表", OpenRecognitionRulesEditor));
-            actions.Controls.Add(MakeButton("自动识别属性", AutoInferLayerMetadata));
-            actions.Controls.Add(MakeButton("关闭", delegate { Close(); }));
+            actions.Controls.Add(MakeButton("????", delegate { SelectObjects(); }));
+            actions.Controls.Add(MakeButton("????", delegate { DeleteObjects(); }));
+            actions.Controls.Add(MakeButton("????", delegate { ApplyState(LayerStateAction.Lock, true); }));
+            actions.Controls.Add(MakeButton("????", delegate { ApplyState(LayerStateAction.Unlock, true); }));
+            actions.Controls.Add(MakeButton("????", delegate { ApplyState(LayerStateAction.TurnOff, true); }));
+            actions.Controls.Add(MakeButton("??/??", ShowSelectedLayers));
+            actions.Controls.Add(MakeButton("????", delegate { ApplyState(LayerStateAction.Freeze, true); }));
+            actions.Controls.Add(MakeButton("????", delegate { ApplyState(LayerStateAction.Thaw, true); }));
+            actions.Controls.Add(MakeButton("????", SetCurrentLayer));
+            actions.Controls.Add(MakeButton("?????", OnlyShowCheckedLayers));
+            actions.Controls.Add(MakeButton("????", ShowAllLayers));
+            actions.Controls.Add(MakeButton("????", CreateLayers));
+            actions.Controls.Add(MakeButton("???????", CreateDefaultPipeLayers));
+            actions.Controls.Add(MakeButton("????/??", EditLayerMetadata));
+            actions.Controls.Add(MakeButton("?????", OpenRecognitionRulesEditor));
+            actions.Controls.Add(MakeButton("??????", AutoInferLayerMetadata));
+            actions.Controls.Add(MakeButton("??", delegate { Close(); }));
 
             _lblStatus = new Label();
             _lblStatus.Dock = DockStyle.Fill;
@@ -165,10 +165,10 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             if (_mainSplit == null || _mainSplit.IsDisposed) return;
             if (!_mainSplit.IsHandleCreated) return;
 
-            // 这里不使用 Panel1MinSize / Panel2MinSize 作为强约束，
-            // 因为 SplitContainer 在不同 DPI、窗口初始化阶段、AutoCAD 宿主窗口中，
-            // 这些 MinSize 很容易和当前 Width 组合出非法范围。
-            // 只在控件真正可见后，用当前实际宽度安全夹取目标宽度。
+            // ????? Panel1MinSize / Panel2MinSize ??????
+            // ?? SplitContainer ??? DPI?????????AutoCAD ??????
+            // ?? MinSize ?????? Width ????????
+            // ??????????????????????????
             int width = _mainSplit.ClientSize.Width;
             int splitterWidth = _mainSplit.SplitterWidth;
             if (width <= splitterWidth + 80) return;
@@ -177,7 +177,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             int maxDistance = width - splitterWidth - Math.Max(25, _mainSplit.Panel2MinSize);
             if (maxDistance < minDistance) return;
 
-            int target = 286; // 图2样式：左侧树约 280px，右侧表格保留主要空间。
+            int target = 286; // ?2??????? 280px????????????
             if (target < minDistance) target = minDistance;
             if (target > maxDistance) target = maxDistance;
 
@@ -190,8 +190,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch
             {
-                // AutoCAD 宿主窗口布局过程中偶发无效尺寸，跳过即可；
-                // 这只影响左侧树初始宽度，不影响图层管理功能。
+                // AutoCAD ?????????????????????
+                // ??????????????????????
             }
         }
 
@@ -199,69 +199,69 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         {
             _grid.Columns.Add(new DataGridViewCheckBoxColumn
             {
-                HeaderText = "勾选",
+                HeaderText = "??",
                 DataPropertyName = "Selected",
                 Width = 56
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "图层名",
+                HeaderText = "???",
                 DataPropertyName = "Name",
                 Width = 300,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "父属性",
+                HeaderText = "???",
                 DataPropertyName = "ParentGroup",
                 Width = 90,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "分类",
+                HeaderText = "??",
                 DataPropertyName = "ParentClass",
                 Width = 130,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "标签",
+                HeaderText = "??",
                 DataPropertyName = "TagText",
                 Width = 190,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "状态",
+                HeaderText = "??",
                 DataPropertyName = "StatusText",
                 Width = 110,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "对象数",
+                HeaderText = "???",
                 DataPropertyName = "ObjectCount",
                 Width = 70,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "颜色",
+                HeaderText = "??",
                 DataPropertyName = "ColorIndex",
                 Width = 60,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "线型",
+                HeaderText = "??",
                 DataPropertyName = "Linetype",
                 Width = 120,
                 ReadOnly = true
             });
             _grid.Columns.Add(new DataGridViewCheckBoxColumn
             {
-                HeaderText = "打印",
+                HeaderText = "??",
                 DataPropertyName = "IsPlottable",
                 Width = 56,
                 ReadOnly = true
@@ -299,12 +299,12 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 RebuildLayerTree();
                 UpdateTagSearchList();
                 ApplyFilter();
-                WriteStatus("已刷新图层列表，共 " + _allLayers.Count + " 个图层。左侧可按父属性/分类勾选图层，标签框可快速勾选同标签图层。");
+                WriteStatus("????????? " + _allLayers.Count + " ???????????/?????????????????????");
             }
             catch (Exception ex)
             {
-                WriteStatus("刷新失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "刷新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -338,7 +338,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 _tree.Nodes.Clear();
 
                 var groups = _allLayers
-                    .GroupBy(x => string.IsNullOrWhiteSpace(x.ParentGroup) ? "未设置父属性" : x.ParentGroup.Trim())
+                    .GroupBy(x => string.IsNullOrWhiteSpace(x.ParentGroup) ? "??????" : x.ParentGroup.Trim())
                     .OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase);
 
                 foreach (var group in groups)
@@ -347,8 +347,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                     groupNode.Tag = LayerTreeNodeTag.CreateGroup(group.Key);
                     _tree.Nodes.Add(groupNode);
 
-                    // 未设置分类时不再生成“未设置分类”节点，直接把图层挂在父属性节点下。
-                    // 这样左侧树更简洁，也避免大量未分类图层被额外包一层。
+                    // ??????????????????????????????????
+                    // ??????????????????????????
                     var layersWithoutClass = group
                         .Where(x => string.IsNullOrWhiteSpace(x.ParentClass))
                         .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase);
@@ -462,7 +462,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
 
             if (_grid != null) _grid.Refresh();
-            WriteStatus("已" + (e.Node.Checked ? "勾选" : "取消勾选") + "树节点下 " + layerNames.Count + " 个图层。 ");
+            WriteStatus("?" + (e.Node.Checked ? "??" : "????") + "???? " + layerNames.Count + " ???? ");
         }
 
         private static void SetNodeAndChildrenChecked(TreeNode node, bool isChecked)
@@ -555,7 +555,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             string keyword = _cboTagSearch == null ? string.Empty : (_cboTagSearch.Text ?? string.Empty).Trim();
             if (keyword.Length == 0)
             {
-                WriteStatus("请输入或选择标签。 ");
+                WriteStatus("????????? ");
                 return;
             }
 
@@ -579,7 +579,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             if (_grid != null) _grid.Refresh();
             RefreshTreeCheckStates();
-            WriteStatus("已根据标签“" + keyword + "”勾选 " + count + " 个图层。 ");
+            WriteStatus("??????" + keyword + "??? " + count + " ???? ");
         }
 
         private void GridCurrentCellDirtyStateChanged(object sender, EventArgs e)
@@ -639,7 +639,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             _grid.Refresh();
             RefreshTreeCheckStates();
-            WriteStatus(selected ? "已勾选当前列表全部图层。" : "已清空当前列表勾选。仍可通过筛选分批处理。 ");
+            WriteStatus(selected ? "????????????" : "????????????????????? ");
         }
 
         private void InvertVisibleSelected(object sender, EventArgs e)
@@ -650,7 +650,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             _grid.Refresh();
             RefreshTreeCheckStates();
-            WriteStatus("已反选当前列表。 ");
+            WriteStatus("???????? ");
         }
 
         private List<string> GetCheckedLayerNames(bool allowSingleSelectedRow)
@@ -687,14 +687,14 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 HashSet<string> picked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 PromptSelectionResult psr;
                 var opts = new PromptSelectionOptions();
-                opts.MessageForAdding = "\n请选择对象，插件会勾选这些对象所在图层：";
+                opts.MessageForAdding = "\n????????????????????";
 
                 bool wasVisible = this.Visible;
                 try
                 {
                     if (wasVisible) this.Hide();
-                    _doc.Editor.WriteMessage("\n请选择对象，完成后回车确认；取消请按 ESC。 ");
-                    psr = _doc.Editor.GetSelection(opts);
+                    _doc.Editor.WriteHudMessage("\n?????????????????? ESC? ");
+                    psr = _doc.Editor.GetHudSelection(opts);
                 }
                 finally
                 {
@@ -707,7 +707,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
                 if (psr.Status != PromptStatus.OK || psr.Value == null)
                 {
-                    WriteStatus("未拾取对象。 ");
+                    WriteStatus("?????? ");
                     return;
                 }
 
@@ -728,12 +728,12 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
                 ApplyFilter();
                 RefreshTreeCheckStates();
-                WriteStatus("已从拾取对象中勾选 " + picked.Count + " 个图层。 ");
+                WriteStatus("????????? " + picked.Count + " ???? ");
             }
             catch (Exception ex)
             {
-                WriteStatus("拾取失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "拾取失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -747,8 +747,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("选中对象失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "选中对象失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("???????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -759,14 +759,14 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 List<string> names = GetCheckedLayerNames(true);
                 if (names.Count == 0)
                 {
-                    WriteStatus("请先勾选图层。 ");
+                    WriteStatus("??????? ");
                     return;
                 }
 
                 DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
                     this,
-                    "将删除所选图层上的对象，不删除图层本身。\n\n图层数量：" + names.Count + "\n是否继续？",
-                    "确认删除对象",
+                    "????????????????????\n\n?????" + names.Count + "\n?????",
+                    "??????",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning,
                     MessageBoxDefaultButton.Button2);
@@ -778,8 +778,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("删除失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -794,8 +794,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("处理失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "处理失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -816,8 +816,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("设置当前图层失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "设置当前图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -832,8 +832,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("仅显示失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "仅显示失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("??????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "?????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -847,8 +847,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("显示全部失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "显示全部失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("???????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -866,8 +866,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 }
                 catch (Exception ex)
                 {
-                    WriteStatus("新建图层失败：" + ex.Message);
-                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "新建图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    WriteStatus("???????" + ex.Message);
+                    TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -882,8 +882,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("创建默认图层失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "创建默认图层失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -895,7 +895,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 List<string> names = GetCheckedLayerNames(true);
                 if (names.Count == 0)
                 {
-                    WriteStatus("请先勾选需要设置父属性/标签的图层。 ");
+                    WriteStatus("???????????/?????? ");
                     return;
                 }
 
@@ -915,8 +915,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("设置图层属性失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "设置图层属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -928,13 +928,13 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 {
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
                     LayerManagerService.SaveRecognitionRules(dialog.Rules);
-                    WriteStatus("属性识别表已保存。之后自动识别属性将按该表执行。 ");
+                    WriteStatus("???????????????????????? ");
                 }
             }
             catch (Exception ex)
             {
-                WriteStatus("打开属性识别表失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "属性识别表", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("??????????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "?????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -945,14 +945,14 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 List<string> names = GetCheckedLayerNames(true);
                 if (names.Count == 0)
                 {
-                    WriteStatus("请先勾选需要自动识别属性的图层。 ");
+                    WriteStatus("???????????????? ");
                     return;
                 }
 
                 DialogResult overwrite = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
                     this,
-                    "是否覆盖已存在的父属性/标签？\n\n选择“是”：根据属性识别表重新识别并覆盖。\n选择“否”：只给空属性图层补全。\n\n可点击“属性识别表”自定义识别规则。",
-                    "自动识别图层属性",
+                    "???????????/???\n\n?????????????????????\n????????????????\n\n??????????????????",
+                    "????????",
                     MessageBoxButtons.YesNoCancel,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button2);
@@ -964,8 +964,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             }
             catch (Exception ex)
             {
-                WriteStatus("自动识别属性失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "自动识别属性失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                WriteStatus("?????????" + ex.Message);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -974,7 +974,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             if (_lblStatus != null) _lblStatus.Text = message;
             try
             {
-                _doc.Editor.WriteMessage("\n[图层管理] " + message);
+                _doc.Editor.WriteHudMessage("\n[????] " + message);
             }
             catch
             {
@@ -1043,7 +1043,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         public LayerRecognitionRulesForm(IEnumerable<LayerRecognitionRule> rules, string filePath)
         {
-            Text = "属性识别表";
+            Text = "?????";
             Width = 1080;
             Height = 560;
             StartPosition = FormStartPosition.CenterParent;
@@ -1070,7 +1070,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             var tip = new Label();
             tip.AutoSize = true;
             tip.Dock = DockStyle.Fill;
-            tip.Text = "自动识别属性将按本表从上到下匹配。可用变量：{LayerName} 图层名、{BaseName} 去括号主名、{Bracket} 括号内容、{LeadingNumber} 前置数字、{DN}、{PipeMaterial}。";
+            tip.Text = "??????????????????????{LayerName} ????{BaseName} ??????{Bracket} ?????{LeadingNumber} ?????{DN}?{PipeMaterial}?";
             root.Controls.Add(tip, 0, 0);
 
             _grid = new DataGridView();
@@ -1096,11 +1096,11 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             actions.AutoSize = true;
             actions.WrapContents = true;
             actions.Padding = new Padding(0, 6, 0, 4);
-            actions.Controls.Add(MakeButton("添加规则", AddRule));
-            actions.Controls.Add(MakeButton("删除规则", DeleteRules));
-            actions.Controls.Add(MakeButton("上移", MoveRuleUp));
-            actions.Controls.Add(MakeButton("下移", MoveRuleDown));
-            actions.Controls.Add(MakeButton("恢复默认表", RestoreDefaultRules));
+            actions.Controls.Add(MakeButton("????", AddRule));
+            actions.Controls.Add(MakeButton("????", DeleteRules));
+            actions.Controls.Add(MakeButton("??", MoveRuleUp));
+            actions.Controls.Add(MakeButton("??", MoveRuleDown));
+            actions.Controls.Add(MakeButton("?????", RestoreDefaultRules));
             root.Controls.Add(actions, 0, 2);
 
             var bottom = new TableLayoutPanel();
@@ -1113,16 +1113,16 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             _lblPath = new Label();
             _lblPath.AutoSize = true;
-            _lblPath.Text = "保存位置：" + filePath;
+            _lblPath.Text = "?????" + filePath;
             _lblPath.ForeColor = System.Drawing.SystemColors.GrayText;
             bottom.Controls.Add(_lblPath, 0, 0);
 
             var buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Right;
             buttons.AutoSize = true;
-            var ok = new Button { Text = "保存", DialogResult = DialogResult.OK, AutoSize = true };
+            var ok = new Button { Text = "??", DialogResult = DialogResult.OK, AutoSize = true };
             ok.Click += delegate { if (_grid != null) _grid.EndEdit(); };
-            var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var cancel = new Button { Text = "??", DialogResult = DialogResult.Cancel, AutoSize = true };
             buttons.Controls.Add(ok);
             buttons.Controls.Add(cancel);
             bottom.Controls.Add(buttons, 1, 0);
@@ -1135,13 +1135,13 @@ namespace TCPipeAutoDraw.Modules.LayerManager
         {
             _grid.Columns.Add(new DataGridViewCheckBoxColumn
             {
-                HeaderText = "启用",
+                HeaderText = "??",
                 DataPropertyName = "Enabled",
                 Width = 55
             });
 
             var modeColumn = new DataGridViewComboBoxColumn();
-            modeColumn.HeaderText = "匹配方式";
+            modeColumn.HeaderText = "????";
             modeColumn.DataPropertyName = "MatchMode";
             modeColumn.Width = 90;
             modeColumn.Items.Add(LayerManagerService.MatchModeExact);
@@ -1154,31 +1154,31 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "匹配内容",
+                HeaderText = "????",
                 DataPropertyName = "Pattern",
                 Width = 230
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "父属性",
+                HeaderText = "???",
                 DataPropertyName = "ParentGroup",
                 Width = 110
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "分类",
+                HeaderText = "??",
                 DataPropertyName = "ParentClass",
                 Width = 150
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                HeaderText = "标签",
+                HeaderText = "??",
                 DataPropertyName = "TagText",
                 Width = 260
             });
             _grid.Columns.Add(new DataGridViewCheckBoxColumn
             {
-                HeaderText = "命中后停止",
+                HeaderText = "?????",
                 DataPropertyName = "StopAfterMatch",
                 Width = 95
             });
@@ -1246,7 +1246,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         private void RestoreDefaultRules(object sender, EventArgs e)
         {
-            DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, "恢复默认属性识别表会覆盖当前编辑内容，是否继续？", "恢复默认表", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            DialogResult confirm = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(this, "????????????????????????", "?????", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             if (confirm != DialogResult.Yes) return;
             _rules = new BindingList<LayerRecognitionRule>(LayerManagerService.GetDefaultRecognitionRules().Select(r => r.Clone()).ToList());
             _grid.DataSource = _rules;
@@ -1270,7 +1270,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         public CreateLayersForm()
         {
-            Text = "新建图层";
+            Text = "????";
             Width = 460;
             Height = 320;
             StartPosition = FormStartPosition.CenterParent;
@@ -1290,7 +1290,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             root.Controls.Add(new Label
             {
-                Text = "输入图层名。支持一行一个，也支持逗号/分号分隔：",
+                Text = "??????????????????/?????",
                 AutoSize = true
             }, 0, 0);
 
@@ -1303,7 +1303,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             var colorPanel = new FlowLayoutPanel();
             colorPanel.Dock = DockStyle.Fill;
             colorPanel.AutoSize = true;
-            colorPanel.Controls.Add(new Label { Text = "颜色：", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
+            colorPanel.Controls.Add(new Label { Text = "???", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
             _numColor = new NumericUpDown();
             _numColor.Minimum = 1;
             _numColor.Maximum = 255;
@@ -1313,7 +1313,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             Action updateColorButton = delegate
             {
                 CDBoxColor color = CDBoxColor.FromIndex((int)_numColor.Value);
-                colorButton.Text = "■  " + color.DisplayName + " · " + color.RgbText;
+                colorButton.Text = "?  " + color.DisplayName + " ? " + color.RgbText;
                 colorButton.ForeColor = color.Index == 7
                     ? System.Drawing.SystemColors.ControlText
                     : System.Drawing.Color.FromArgb(color.R, color.G, color.B);
@@ -1333,8 +1333,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             var buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Right;
             buttons.AutoSize = true;
-            var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, AutoSize = true };
-            var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var ok = new Button { Text = "??", DialogResult = DialogResult.OK, AutoSize = true };
+            var cancel = new Button { Text = "??", DialogResult = DialogResult.Cancel, AutoSize = true };
             buttons.Controls.Add(ok);
             buttons.Controls.Add(cancel);
             root.Controls.Add(buttons, 0, 3);
@@ -1367,7 +1367,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
         public LayerMetadataEditForm(string parentGroup, string parentClass, string tagText, int layerCount)
         {
-            Text = "设置图层父属性/标签";
+            Text = "???????/??";
             Width = 650;
             Height = 420;
             StartPosition = FormStartPosition.CenterParent;
@@ -1389,7 +1389,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
             Controls.Add(root);
 
             var tip = new Label();
-            tip.Text = "将为 " + layerCount + " 个图层写入 CDBox 元数据。父属性用于主归属，分类用于规格/类型，标签用于横向筛选。";
+            tip.Text = "?? " + layerCount + " ????? CDBox ???????????????????/????????????";
             tip.AutoSize = true;
             tip.Dock = DockStyle.Fill;
             root.Controls.Add(tip, 0, 0);
@@ -1397,23 +1397,23 @@ namespace TCPipeAutoDraw.Modules.LayerManager
 
             _txtParentGroup = new TextBox();
             _txtParentGroup.Text = parentGroup ?? string.Empty;
-            AddRow(root, 1, "父属性", _txtParentGroup, "例如：主管、支管、注记、道路、构筑物");
+            AddRow(root, 1, "???", _txtParentGroup, "??????????????????");
 
             _txtParentClass = new TextBox();
             _txtParentClass.Text = parentClass ?? string.Empty;
-            AddRow(root, 2, "分类", _txtParentClass, "例如：110PVC管、75PVC管、管线长度注记");
+            AddRow(root, 2, "??", _txtParentClass, "???110PVC??75PVC????????");
 
             _txtTags = new TextBox();
             _txtTags.Text = tagText ?? string.Empty;
             _txtTags.Multiline = true;
             _txtTags.ScrollBars = ScrollBars.Vertical;
-            AddRow(root, 3, "标签", _txtTags, "多个标签可用顿号、逗号、分号分隔，例如：明管、PVC、DN110");
+            AddRow(root, 3, "??", _txtTags, "???????????????????????PVC?DN110");
 
             var buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Right;
             buttons.AutoSize = true;
-            var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, AutoSize = true };
-            var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var ok = new Button { Text = "??", DialogResult = DialogResult.OK, AutoSize = true };
+            var cancel = new Button { Text = "??", DialogResult = DialogResult.Cancel, AutoSize = true };
             buttons.Controls.Add(ok);
             buttons.Controls.Add(cancel);
             root.Controls.Add(buttons, 0, 4);

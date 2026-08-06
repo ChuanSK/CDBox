@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -11,8 +11,8 @@ using TCPipeAutoDraw.Modules.QuantityCalculation;
 namespace TCPipeAutoDraw.Modules.SectionDrawing
 {
     /// <summary>
-    /// 断面图批量生成服务。
-    /// 根据工程量管线属性生成断面图，按结构层一致性合并重复断面。
+    /// ??????????
+    /// ?????????????????????????????
     /// </summary>
     public static class SectionBatchDrawingService
     {
@@ -37,7 +37,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 return new SectionBatchDrawingResult
                 {
                     Success = false,
-                    Message = "未选择任何对象。"
+                    Message = "????????"
                 };
             }
 
@@ -47,7 +47,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 return new SectionBatchDrawingResult
                 {
                     Success = false,
-                    Message = "所选区域内未找到可生成断面图的主管或支管属性。请确认对象已通过 属性编辑器 写入管线属性，且回填结构层不为空。",
+                    Message = "??????????????????????????????? ????? ?????????????????",
                     SelectedCount = ids.Count
                 };
             }
@@ -58,20 +58,20 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 return new SectionBatchDrawingResult
                 {
                     Success = false,
-                    Message = "没有可绘制的断面图。",
+                    Message = "??????????",
                     SelectedCount = ids.Count,
                     PipeCount = sources.Count
                 };
             }
 
-            var pointOpt = new PromptPointOptions("\n请选择生成断面图左下角插入点：");
-            PromptPointResult pointRes = ed.GetPoint(pointOpt);
+            var pointOpt = new PromptPointOptions("\n???????????????");
+            PromptPointResult pointRes = ed.GetHudPoint(pointOpt);
             if (pointRes.Status != PromptStatus.OK)
             {
                 return new SectionBatchDrawingResult
                 {
                     Success = false,
-                    Message = "已取消绘制。",
+                    Message = "??????",
                     SelectedCount = ids.Count,
                     PipeCount = sources.Count,
                     SectionCount = groups.Count
@@ -97,7 +97,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             Point3d startPoint = pointRes.Value;
             int progressIndex = 0;
             int progressTotal = Math.Max(groups.Count, 1);
-            ReportProgress(progress, 0, progressTotal, "正在生成批量断面图...");
+            ReportProgress(progress, 0, progressTotal, "?????????...");
 
             DrawGroupRows(doc, mainGroups, baseOptions, startPoint, ref nextRowY, ref successCount, ref failCount, ref entityCount, ref hatchFailureCount, progress, progressTotal, ref progressIndex);
 
@@ -107,12 +107,12 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
 
             DrawGroupRows(doc, branchGroups, baseOptions, new Point3d(startPoint.X, nextRowY, startPoint.Z), ref nextRowY, ref successCount, ref failCount, ref entityCount, ref hatchFailureCount, progress, progressTotal, ref progressIndex);
-            ReportProgress(progress, progressTotal, progressTotal, "批量断面图生成完成。");
+            ReportProgress(progress, progressTotal, progressTotal, "??????????");
 
             return new SectionBatchDrawingResult
             {
                 Success = successCount > 0,
-                Message = successCount > 0 ? "批量断面图已生成。" : "批量断面图生成失败。",
+                Message = successCount > 0 ? "?????????" : "??????????",
                 SelectedCount = ids.Count,
                 PipeCount = sources.Count,
                 SectionCount = groups.Count,
@@ -185,7 +185,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 if (tileHeight > rowHeight) rowHeight = tileHeight;
                 column++;
                 progressIndex++;
-                ReportProgress(progress, progressIndex, progressTotal, "正在生成批量断面图：" + progressIndex + "/" + progressTotal);
+                ReportProgress(progress, progressIndex, progressTotal, "??????????" + progressIndex + "/" + progressTotal);
             }
 
             nextRowY = currentY - rowHeight;
@@ -226,10 +226,10 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
 
             var selOpt = new PromptSelectionOptions();
-            selOpt.MessageForAdding = "\n请选择需要批量生成断面图的管线区域对象：";
-            selOpt.MessageForRemoval = "\n移除对象：";
+            selOpt.MessageForAdding = "\n????????????????????";
+            selOpt.MessageForRemoval = "\n?????";
             selOpt.AllowDuplicates = false;
-            PromptSelectionResult res = ed.GetSelection(selOpt);
+            PromptSelectionResult res = ed.GetHudSelection(selOpt);
             if (res.Status != PromptStatus.OK || res.Value == null) return ids;
 
             foreach (SelectedObject selected in res.Value)
@@ -331,8 +331,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 layers.Add(new SectionLayerOptions
                 {
                     DrawLayer = true,
-                    // 注记文字直接取属性表原始层名，仅去掉末尾高度/控制词；
-                    // 不使用 QuantityStructureLayer.Name，因为其清理逻辑会把 C25 中的 25 一并去掉。
+                    // ??????????????????????/????
+                    // ??? QuantityStructureLayer.Name?????????? C25 ?? 25 ?????
                     LeftLabel = BuildLayerDisplayName(q),
                     Height = RoundForSection(q.Height),
                     HeightLocked = q.Locked,
@@ -355,11 +355,11 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (string.IsNullOrWhiteSpace(text)) text = layer.Name == null ? string.Empty : layer.Name.Trim();
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
 
-            // 去掉控制词，但保留材料名称中的数字，例如 C25、C30。
-            text = Regex.Replace(text, @"\s+垫层\s*$", string.Empty);
-            text = Regex.Replace(text, "锁定|固定|管线层|管道层|管层|井下层|井下方垫层", " ");
+            // ???????????????????? C25?C30?
+            text = Regex.Replace(text, @"\s+??\s*$", string.Empty);
+            text = Regex.Replace(text, "??|??|???|???|??|???|?????", " ");
 
-            // 只移除与层高相同的最后一个数字，避免把 C25 / C30 中的数字删掉。
+            // ??????????????????? C25 / C30 ???????
             MatchCollection matches = Regex.Matches(text, @"[-+]?\d+(?:\.\d+)?");
             for (int i = matches.Count - 1; i >= 0; i--)
             {
@@ -374,7 +374,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 }
             }
 
-            text = Regex.Replace(text, @"[：:，,；;、/\\|]+", " ");
+            text = Regex.Replace(text, @"[?:?,?;?/\\|]+", " ");
             text = Regex.Replace(text, @"\s+", " ").Trim();
             if (!string.IsNullOrWhiteSpace(text)) return text;
 
@@ -401,7 +401,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                     QuantityStructureLayer layer = qLayers[i];
                     if (layer == null || layer.Height <= 0) continue;
                     string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-                    if (ContainsAny(text, "包管", "管顶", "管周")) return sectionIndex;
+                    if (ContainsAny(text, "??", "??", "??")) return sectionIndex;
                     sectionIndex++;
                 }
             }
@@ -431,7 +431,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 }
 
                 string text = (layer.Name ?? string.Empty) + " " + (layer.RawText ?? string.Empty);
-                if (layer.IsCushionLayer || layer.IsBelowWellLayer || ContainsAny(text, "垫层")) return true;
+                if (layer.IsCushionLayer || layer.IsBelowWellLayer || ContainsAny(text, "??")) return true;
                 sectionIndex++;
             }
 
@@ -443,10 +443,10 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             string text = ((name ?? string.Empty) + " " + (rawText ?? string.Empty)).Trim();
 
-            if (ContainsAny(text, "碎石")) return new PatternChoice("HEX", 0.1);
-            if (ContainsAny(text, "原土") && ContainsAny(text, "回填")) return new PatternChoice("EARTH", 0.1);
-            if (ContainsAny(text, "C25", "C30", "C20", "C15", "砼", "混凝土", "路面恢复", "恢复路面", "砼恢复", "混凝土恢复")) return new PatternChoice("AR-CONC", 0.01);
-            if (ContainsAny(text, "中粗砂", "粗砂", "砂包管", "砂垫层", "砂回填", "包管") || (ContainsAny(text, "砂") && !ContainsAny(text, "砂浆"))) return new PatternChoice("1064", 0.01);
+            if (ContainsAny(text, "??")) return new PatternChoice("HEX", 0.1);
+            if (ContainsAny(text, "??") && ContainsAny(text, "??")) return new PatternChoice("EARTH", 0.1);
+            if (ContainsAny(text, "C25", "C30", "C20", "C15", "?", "???", "????", "????", "???", "?????")) return new PatternChoice("AR-CONC", 0.01);
+            if (ContainsAny(text, "???", "??", "???", "???", "???", "??") || (ContainsAny(text, "?") && !ContainsAny(text, "??"))) return new PatternChoice("1064", 0.01);
 
             return new PatternChoice(string.Empty, 1.0);
         }
@@ -455,7 +455,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (string.IsNullOrWhiteSpace(text)) return 0.0;
             Match m = Regex.Match(text, @"(?i)DN\s*(\d+(?:\.\d+)?)");
-            if (!m.Success) m = Regex.Match(text, @"[Φφ]\s*(\d+(?:\.\d+)?)");
+            if (!m.Success) m = Regex.Match(text, @"[??]\s*(\d+(?:\.\d+)?)");
             if (!m.Success) m = Regex.Match(text, @"(\d+(?:\.\d+)?)");
             if (!m.Success) return 0.0;
 
@@ -472,7 +472,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             if (attrs == null) return string.Empty;
             string start = attrs.StartNode == null ? string.Empty : attrs.StartNode.Trim();
             string end = attrs.EndNode == null ? string.Empty : attrs.EndNode.Trim();
-            if (!string.IsNullOrWhiteSpace(start) && !string.IsNullOrWhiteSpace(end)) return start + "至" + end;
+            if (!string.IsNullOrWhiteSpace(start) && !string.IsNullOrWhiteSpace(end)) return start + "?" + end;
             return string.Empty;
         }
 
@@ -640,7 +640,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                         current.EndText = seg.EndText;
                         current.EndPrefix = seg.EndPrefix;
                         current.EndNumber = seg.EndNumber;
-                        current.RawText = current.StartText + "至" + current.EndText;
+                        current.RawText = current.StartText + "?" + current.EndText;
                     }
                     else
                     {
@@ -681,7 +681,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             {
                 segment = null;
                 if (string.IsNullOrWhiteSpace(text)) return false;
-                string[] parts = text.Split(new[] { "至" }, StringSplitOptions.None);
+                string[] parts = text.Split(new[] { "?" }, StringSplitOptions.None);
                 if (parts.Length != 2) return false;
 
                 NodeCode start;
@@ -730,7 +730,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             public string ToText()
             {
                 if (!Parsed) return RawText ?? string.Empty;
-                return StartText + "至" + EndText;
+                return StartText + "?" + EndText;
             }
 
             public static int Compare(PipelineSegment a, PipelineSegment b)
@@ -792,12 +792,12 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
         public string ToEditorMessage()
         {
-            if (!Success) return "\n[批量断面图] " + Message;
-            string text = "\n[批量断面图] 完成。选中对象 " + SelectedCount + " 个，识别管线 " + PipeCount + " 条，生成断面 " + SuccessSectionCount + " 张";
-            if (MergedPipeCount > 0) text += "，合并重复 " + MergedPipeCount + " 条";
-            text += "，生成对象 " + EntityCount + " 个。";
-            if (FailSectionCount > 0) text += "失败断面 " + FailSectionCount + " 张。";
-            if (HatchFailureCount > 0) text += "有 " + HatchFailureCount + " 个填充图案未能生成，请检查填充名称是否存在。";
+            if (!Success) return "\n[?????] " + Message;
+            string text = "\n[?????] ??????? " + SelectedCount + " ?????? " + PipeCount + " ?????? " + SuccessSectionCount + " ?";
+            if (MergedPipeCount > 0) text += "????? " + MergedPipeCount + " ?";
+            text += "????? " + EntityCount + " ??";
+            if (FailSectionCount > 0) text += "???? " + FailSectionCount + " ??";
+            if (HatchFailureCount > 0) text += "? " + HatchFailureCount + " ??????????????????????";
             return text;
         }
     }

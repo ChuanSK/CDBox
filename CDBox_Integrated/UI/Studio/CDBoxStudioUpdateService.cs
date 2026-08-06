@@ -14,10 +14,10 @@ namespace TCPipeAutoDraw.UI.Studio
 {
     internal static class CDBoxStudioUpdateService
     {
-        public static readonly string CurrentVersion = ReadInformationalVersion("3.3.0");
-        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30300);
-        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.3.0");
-        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.3.0");
+        public static readonly string CurrentVersion = ReadInformationalVersion("3.4.1");
+        public static readonly int CurrentVersionCode = ReadAssemblyMetadataInt("CDBoxVersionCode", 30401);
+        public static readonly string ReleaseIdentity = ReadAssemblyMetadata("CDBoxReleaseIdentity", "CDBox-Studio-Preview-3.4.1");
+        public static readonly string ReleaseTitle = ReadAssemblyMetadata("CDBoxReleaseTitle", "CDBox Studio Preview 3.4.1");
         public static readonly string DefaultChannel = ReadAssemblyMetadata("CDBoxUpdateChannel", "studio-preview");
         public const string DefaultUpdateSourceName = "Gitee";
         public const string GiteeUpdateSourceUrl = CDBoxStudioUpdateSourceCatalog.GiteeManifestUrl;
@@ -88,10 +88,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 lastResult = result;
                 try
                 {
-                    CDBoxStudioLogger.Info("开始检查 Studio 更新。固定通道=" + DefaultChannel
+                    CDBoxStudioLogger.Info("???? Studio ???????=" + DefaultChannel
                         + ", ManifestSource=" + result.SourceName + ", Url=" + result.SourceUrl);
                     string json = DownloadString(result.SourceUrl);
-                    if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("更新源返回内容为空。");
+                    if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("??????????");
 
                     Dictionary<string, object> root = Deserialize(json);
                     FillResultFromFixedManifest(result, root, result.SourceUrl);
@@ -99,7 +99,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     result.UpdateAvailable = IsUpdateAvailable(result.VersionCode, result.LatestVersion,
                         result.CurrentVersionCode, result.CurrentVersion);
 
-                    CDBoxStudioLogger.Info("更新检查完成。ManifestSource=" + result.SourceName
+                    CDBoxStudioLogger.Info("???????ManifestSource=" + result.SourceName
                         + ", Current=" + result.CurrentVersion + "(" + result.CurrentVersionCode + ")"
                         + ", Latest=" + result.LatestVersion + "(" + result.VersionCode + ")"
                         + ", UpdateAvailable=" + result.UpdateAvailable
@@ -111,20 +111,20 @@ namespace TCPipeAutoDraw.UI.Studio
                     result.Success = false;
                     result.UpdateAvailable = false;
                     result.ErrorMessage = ex.Message;
-                    failures.Add(result.SourceName + "：" + ex.Message);
-                    CDBoxStudioLogger.Error("update.json 更新源失败，准备自动尝试下一个。Source="
+                    failures.Add(result.SourceName + "?" + ex.Message);
+                    CDBoxStudioLogger.Error("update.json ????????????????Source="
                         + result.SourceName + ", Url=" + result.SourceUrl, ex);
                 }
             }
 
             lastResult.Success = false;
             lastResult.UpdateAvailable = false;
-            lastResult.SourceName = "内置更新源";
+            lastResult.SourceName = "?????";
             lastResult.SourceUrl = string.Empty;
             lastResult.ErrorMessage = failures.Count == 0
-                ? "没有可用的内置 update.json 更新源。"
-                : "所有内置 update.json 更新源均失败：" + string.Join("；", failures.ToArray());
-            CDBoxStudioLogger.Error("检查 Studio 更新失败。" + lastResult.ErrorMessage, null);
+                ? "??????? update.json ????"
+                : "???? update.json ???????" + string.Join("?", failures.ToArray());
+            CDBoxStudioLogger.Error("?? Studio ?????" + lastResult.ErrorMessage, null);
             return lastResult;
         }
 
@@ -159,26 +159,26 @@ namespace TCPipeAutoDraw.UI.Studio
 
             try
             {
-                CDBoxStudioLogger.Info("开始下载 Studio 更新包。下载并校验通过后将生成 pending-update.json，并启动独立 CDBoxUpdater.exe 等待 AutoCAD 退出。");
-                ReportProgress(progress, 0, "正在检查 update.json");
+                CDBoxStudioLogger.Info("???? Studio ??????????????? pending-update.json?????? CDBoxUpdater.exe ?? AutoCAD ???");
+                ReportProgress(progress, 0, "???? update.json");
                 CDBoxStudioUpdateResult manifest = Check(settings);
                 CopyManifestToDownloadResult(manifest, download);
 
-                ReportProgress(progress, 5, "更新清单读取完成");
+                ReportProgress(progress, 5, "????????");
 
                 if (!manifest.Success)
                 {
-                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(manifest.ErrorMessage) ? "检查更新失败，无法下载。" : manifest.ErrorMessage);
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(manifest.ErrorMessage) ? "????????????" : manifest.ErrorMessage);
                 }
 
                 if (manifest.Sources.Count == 0)
                 {
-                    throw new InvalidOperationException("update.json 中 package.urls 为空，无法下载更新包。");
+                    throw new InvalidOperationException("update.json ? package.urls ???????????");
                 }
 
                 if (!IsUsableSha256(manifest.Sha256))
                 {
-                    throw new InvalidOperationException("update.json 中 package.sha256 为空或仍为占位符。为避免下载包被篡改，本阶段已中止下载。");
+                    throw new InvalidOperationException("update.json ? package.sha256 ????????????????????????????");
                 }
 
                 string downloadDir = GetUpdateDownloadDirectory(manifest.LatestVersion);
@@ -199,12 +199,12 @@ namespace TCPipeAutoDraw.UI.Studio
                         download.Sha256Expected = manifest.Sha256;
                         download.Sha256Actual = existingHash;
                         download.FinishedAt = DateTime.Now;
-                        CDBoxStudioLogger.Info("更新包已存在且 SHA256 校验通过，跳过重复下载。Path=" + finalPath);
+                        CDBoxStudioLogger.Info("??????? SHA256 ????????????Path=" + finalPath);
                         PrepareAndLaunchUpdater(download, progress);
                         return download;
                     }
 
-                    CDBoxStudioLogger.Warn("已存在更新包但 SHA256 不匹配，将重新下载。Path=" + finalPath);
+                    CDBoxStudioLogger.Warn("??????? SHA256 ??????????Path=" + finalPath);
                     TryDelete(finalPath);
                 }
 
@@ -224,21 +224,21 @@ namespace TCPipeAutoDraw.UI.Studio
                     string tempPath = Path.Combine(downloadDir, fileName + "." + Guid.NewGuid().ToString("N") + ".download");
                     try
                     {
-                        CDBoxStudioLogger.Info("开始从下载源获取更新包：" + attempt.SourceName + " -> " + attempt.SourceUrl);
-                        ReportProgress(progress, 8, "正在连接下载服务器");
+                        CDBoxStudioLogger.Info("????????????" + attempt.SourceName + " -> " + attempt.SourceUrl);
+                        ReportProgress(progress, 8, "?????????");
                         DownloadFile(source.Url.Trim(), tempPath, manifest.PackageSizeBytes, attempt, progress, attempt.SourceName);
                         attempt.PackagePath = tempPath;
 
-                        ReportProgress(progress, 96, "正在校验 SHA256");
+                        ReportProgress(progress, 96, "???? SHA256");
                         string hash = ComputeSha256(tempPath);
                         attempt.Sha256Actual = hash;
                         if (!SameHash(hash, manifest.Sha256))
                         {
                             attempt.Success = false;
                             attempt.Verified = false;
-                            attempt.ErrorMessage = "SHA256 校验失败。期望 " + manifest.Sha256 + "，实际 " + hash;
+                            attempt.ErrorMessage = "SHA256 ??????? " + manifest.Sha256 + "??? " + hash;
                             attempt.FinishedAt = DateTime.Now;
-                            CDBoxStudioLogger.Warn("更新包 SHA256 校验失败，准备切换下载源。" + attempt.ErrorMessage);
+                            CDBoxStudioLogger.Warn("??? SHA256 ?????????????" + attempt.ErrorMessage);
                             TryDelete(tempPath);
                             continue;
                         }
@@ -259,7 +259,7 @@ namespace TCPipeAutoDraw.UI.Studio
                         download.Sha256Actual = hash;
                         download.FinishedAt = DateTime.Now;
 
-                        CDBoxStudioLogger.Info("更新包下载完成且 SHA256 校验通过。Path=" + finalPath + ", Source=" + attempt.SourceName);
+                        CDBoxStudioLogger.Info("???????? SHA256 ?????Path=" + finalPath + ", Source=" + attempt.SourceName);
                         PrepareAndLaunchUpdater(download, progress);
                         return download;
                     }
@@ -270,11 +270,11 @@ namespace TCPipeAutoDraw.UI.Studio
                         attempt.ErrorMessage = ex.Message;
                         attempt.FinishedAt = DateTime.Now;
                         TryDelete(tempPath);
-                        CDBoxStudioLogger.Error("下载源失败，准备切换下一个下载源。Source=" + attempt.SourceName, ex);
+                        CDBoxStudioLogger.Error("?????????????????Source=" + attempt.SourceName, ex);
                     }
                 }
 
-                throw new InvalidOperationException("所有下载源均失败，未能完成更新包下载与 SHA256 校验。");
+                throw new InvalidOperationException("??????????????????? SHA256 ???");
             }
             catch (Exception ex)
             {
@@ -282,7 +282,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 download.Verified = false;
                 download.ErrorMessage = ex.Message;
                 download.FinishedAt = DateTime.Now;
-                CDBoxStudioLogger.Error("Studio 更新包下载/校验失败。", ex);
+                CDBoxStudioLogger.Error("Studio ?????/?????", ex);
             }
 
             return download;
@@ -292,12 +292,12 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             if (download == null || !download.Success || !download.Verified) return;
 
-            ReportProgress(progress, 97, "正在生成 pending-update.json 并准备独立更新器");
+            ReportProgress(progress, 97, "???? pending-update.json ????????");
             CDBoxStudioUpdaterLaunchResult launch = CDBoxStudioUpdaterLauncher.PrepareAndLaunch(download);
             if (launch == null)
             {
-                download.InstallerErrorMessage = "更新器准备结果为空。";
-                ReportProgress(progress, 100, "更新包已校验，但更新器未启动");
+                download.InstallerErrorMessage = "??????????";
+                ReportProgress(progress, 100, "??????????????");
                 return;
             }
 
@@ -313,13 +313,13 @@ namespace TCPipeAutoDraw.UI.Studio
 
             if (launch.Started)
             {
-                ReportProgress(progress, 100, "更新器已启动；请正常关闭 AutoCAD 以完成安装");
-                CDBoxStudioLogger.Info("独立更新器已启动，等待 AutoCAD 正常退出后安装。Pending=" + download.PendingUpdatePath);
+                ReportProgress(progress, 100, "???????????? AutoCAD ?????");
+                CDBoxStudioLogger.Info("??????????? AutoCAD ????????Pending=" + download.PendingUpdatePath);
             }
             else
             {
-                ReportProgress(progress, 100, "更新包已校验，但更新器启动失败");
-                CDBoxStudioLogger.Warn("更新包已校验，但独立更新器未启动：" + download.InstallerErrorMessage);
+                ReportProgress(progress, 100, "???????????????");
+                CDBoxStudioLogger.Warn("?????????????????" + download.InstallerErrorMessage);
             }
         }
 
@@ -327,7 +327,7 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             if (progress == null) return;
             try { progress(Math.Max(0, Math.Min(100, percent)), message ?? string.Empty); }
-            catch (Exception ex) { CDBoxStudioLogger.Warn("更新进度回调失败：" + ex.Message); }
+            catch (Exception ex) { CDBoxStudioLogger.Warn("?????????" + ex.Message); }
         }
 
         private static string DownloadString(string url)
@@ -376,7 +376,7 @@ namespace TCPipeAutoDraw.UI.Studio
             using (var response = (HttpWebResponse)request.GetResponse())
             using (Stream stream = response.GetResponseStream())
             {
-                if (stream == null) throw new InvalidOperationException("下载响应流为空。");
+                if (stream == null) throw new InvalidOperationException("????????");
 
                 long total = response.ContentLength > 0 ? response.ContentLength : expectedBytes;
                 if (attempt != null) attempt.BytesTotal = total;
@@ -401,8 +401,8 @@ namespace TCPipeAutoDraw.UI.Studio
                             if (percent >= lastLoggedPercent + 10 || percent == 100)
                             {
                                 lastLoggedPercent = percent;
-                                ReportProgress(progress, Math.Max(10, Math.Min(95, percent)), "正在下载更新包：" + percent + "%");
-                                CDBoxStudioLogger.Info("更新包下载进度：" + percent + "% (" + received + "/" + total + ")");
+                                ReportProgress(progress, Math.Max(10, Math.Min(95, percent)), "????????" + percent + "%");
+                                CDBoxStudioLogger.Info("????????" + percent + "% (" + received + "/" + total + ")");
                             }
                         }
                     }
@@ -411,7 +411,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (attempt != null) attempt.BytesReceived = received;
                 if (expectedBytes > 0 && received != expectedBytes)
                 {
-                    CDBoxStudioLogger.Warn("下载大小与 update.json package.size 不一致。Expected=" + expectedBytes + ", Actual=" + received);
+                    CDBoxStudioLogger.Warn("????? update.json package.size ????Expected=" + expectedBytes + ", Actual=" + received);
                 }
             }
         }
@@ -422,13 +422,13 @@ namespace TCPipeAutoDraw.UI.Studio
             serializer.MaxJsonLength = 1024 * 1024 * 8;
             object parsed = serializer.DeserializeObject(json);
             var root = parsed as Dictionary<string, object>;
-            if (root == null) throw new InvalidOperationException("update.json 格式不正确：根节点不是 JSON 对象。");
+            if (root == null) throw new InvalidOperationException("update.json ??????????? JSON ???");
             return root;
         }
 
         private static void FillResultFromFixedManifest(CDBoxStudioUpdateResult result, Dictionary<string, object> root, string sourceUrl)
         {
-            if (result == null || root == null) throw new InvalidOperationException("update.json 格式不正确。");
+            if (result == null || root == null) throw new InvalidOperationException("update.json ??????");
 
             result.Channel = RequiredString(root, "channel");
             result.LatestVersion = RequiredString(root, "latestVersion");
@@ -441,7 +441,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
             if (!string.Equals(result.Channel, DefaultChannel, StringComparison.OrdinalIgnoreCase))
             {
-                CDBoxStudioLogger.Warn("update.json channel 与当前固定通道不一致。Manifest=" + result.Channel + ", Expected=" + DefaultChannel);
+                CDBoxStudioLogger.Warn("update.json channel ???????????Manifest=" + result.Channel + ", Expected=" + DefaultChannel);
             }
 
             Dictionary<string, object> package = RequiredObject(root, "package");
@@ -461,7 +461,7 @@ namespace TCPipeAutoDraw.UI.Studio
             object urlsObject;
             if (!TryGetValueIgnoreCase(package, "urls", out urlsObject))
             {
-                throw new InvalidOperationException("update.json 格式不正确：package.urls 缺失。");
+                throw new InvalidOperationException("update.json ??????package.urls ???");
             }
 
             object[] array = urlsObject as object[];
@@ -473,7 +473,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
             if (array == null || array.Length == 0)
             {
-                throw new InvalidOperationException("update.json 格式不正确：package.urls 不是非空数组。");
+                throw new InvalidOperationException("update.json ??????package.urls ???????");
             }
 
             foreach (object item in array)
@@ -484,7 +484,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 string name = OptionalString(map, "name");
                 result.Sources.Add(new CDBoxStudioUpdateSource
                 {
-                    Name = string.IsNullOrWhiteSpace(name) ? "下载源 " + (result.Sources.Count + 1) : name,
+                    Name = string.IsNullOrWhiteSpace(name) ? "??? " + (result.Sources.Count + 1) : name,
                     Url = url,
                     Sha256 = result.Sha256,
                     Enabled = true
@@ -493,7 +493,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
             if (result.Sources.Count == 0)
             {
-                throw new InvalidOperationException("update.json 格式不正确：package.urls 未包含有效下载源。");
+                throw new InvalidOperationException("update.json ??????package.urls ?????????");
             }
         }
 
@@ -520,7 +520,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 string line = Convert.ToString(item, CultureInfo.InvariantCulture);
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (sb.Length > 0) sb.Append("\n");
-                sb.Append("• ").Append(line.Trim());
+                sb.Append("? ").Append(line.Trim());
             }
             return sb.ToString();
         }
@@ -595,23 +595,23 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Warn("删除临时更新文件失败：" + path + "，" + ex.Message);
+                CDBoxStudioLogger.Warn("???????????" + path + "?" + ex.Message);
             }
         }
 
         private static Dictionary<string, object> RequiredObject(Dictionary<string, object> map, string key)
         {
             object value;
-            if (!TryGetValueIgnoreCase(map, key, out value)) throw new InvalidOperationException("update.json 格式不正确：缺少 " + key + "。");
+            if (!TryGetValueIgnoreCase(map, key, out value)) throw new InvalidOperationException("update.json ???????? " + key + "?");
             var result = value as Dictionary<string, object>;
-            if (result == null) throw new InvalidOperationException("update.json 格式不正确：" + key + " 不是对象。");
+            if (result == null) throw new InvalidOperationException("update.json ??????" + key + " ?????");
             return result;
         }
 
         private static string RequiredString(Dictionary<string, object> map, string key)
         {
             string value = OptionalString(map, key);
-            if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("update.json 格式不正确：缺少 " + key + "。");
+            if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("update.json ???????? " + key + "?");
             return value;
         }
 
@@ -625,23 +625,23 @@ namespace TCPipeAutoDraw.UI.Studio
         private static int RequiredInt(Dictionary<string, object> map, string key)
         {
             object value;
-            if (!TryGetValueIgnoreCase(map, key, out value) || value == null) throw new InvalidOperationException("update.json 格式不正确：缺少 " + key + "。");
+            if (!TryGetValueIgnoreCase(map, key, out value) || value == null) throw new InvalidOperationException("update.json ???????? " + key + "?");
             try { return Convert.ToInt32(value, CultureInfo.InvariantCulture); }
             catch { }
             int parsed;
             if (int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
-            throw new InvalidOperationException("update.json 格式不正确：" + key + " 不是整数。");
+            throw new InvalidOperationException("update.json ??????" + key + " ?????");
         }
 
         private static long RequiredLong(Dictionary<string, object> map, string key)
         {
             object value;
-            if (!TryGetValueIgnoreCase(map, key, out value) || value == null) throw new InvalidOperationException("update.json 格式不正确：缺少 " + key + "。");
+            if (!TryGetValueIgnoreCase(map, key, out value) || value == null) throw new InvalidOperationException("update.json ???????? " + key + "?");
             try { return Convert.ToInt64(value, CultureInfo.InvariantCulture); }
             catch { }
             long parsed;
             if (long.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
-            throw new InvalidOperationException("update.json 格式不正确：" + key + " 不是整数。");
+            throw new InvalidOperationException("update.json ??????" + key + " ?????");
         }
 
         private static bool OptionalBool(Dictionary<string, object> map, string key)

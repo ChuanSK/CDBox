@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -15,8 +15,8 @@ using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
     /// <summary>
-    /// 属性读写服务。
-    /// 统一支持主管、支管、节点/检查井；使用对象 ExtensionDictionary + Xrecord 保存。
+    /// ???????
+    /// ????????????/???????? ExtensionDictionary + Xrecord ???
     /// </summary>
     public static class QuantityPipeAttributeService
     {
@@ -33,8 +33,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (doc == null) throw new ArgumentNullException("doc");
             Editor ed = doc.Editor;
 
-            var opt = new PromptEntityOptions("\n选择需要编辑属性的管线或节点（检查井）：");
-            PromptEntityResult res = ed.GetEntity(opt);
+            var opt = new PromptEntityOptions("\n????????????????????");
+            PromptEntityResult res = ed.GetHudEntity(opt);
             if (res.Status != PromptStatus.OK) return null;
 
             return ReadPipe(doc, res.ObjectId);
@@ -85,10 +85,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             PromptSelectionOptions opt = new PromptSelectionOptions();
-            opt.MessageForAdding = "\n选择需要编辑属性的对象（可点选多个或框选）：";
-            opt.MessageForRemoval = "\n移除对象：";
+            opt.MessageForAdding = "\n??????????????????????";
+            opt.MessageForRemoval = "\n?????";
 
-            PromptSelectionResult res = ed.GetSelection(opt);
+            PromptSelectionResult res = ed.GetHudSelection(opt);
             if (res.Status != PromptStatus.OK || res.Value == null || res.Value.Count == 0) return new ObjectId[0];
             return FilterNonNullIds(res.Value.GetObjectIds());
         }
@@ -281,7 +281,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public static QuantityPipeWriteResult WritePipeAttributes(Document doc, ObjectId objectId, QuantityPipeAttributes attributes)
         {
             if (doc == null) throw new ArgumentNullException("doc");
-            if (objectId.IsNull) return new QuantityPipeWriteResult { Success = false, Message = "未指定对象。" };
+            if (objectId.IsNull) return new QuantityPipeWriteResult { Success = false, Message = "??????" };
             attributes = attributes == null ? QuantityPipeAttributes.Default : attributes.Clone();
 
             Database db = doc.Database;
@@ -294,15 +294,15 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (entity == null)
                 {
                     tr.Commit();
-                    return new QuantityPipeWriteResult { Success = false, Message = "选中对象不是有效实体。" };
+                    return new QuantityPipeWriteResult { Success = false, Message = "???????????" };
                 }
 
                 QuantityPipeAttributes previous = HasPipeAttributes(entity, tr) ? ReadPipeAttributes(entity, tr) : attributes.Clone();
                 attributes = NormalizeAttributesForWrite(db, tr, entity, attributes, previous, "Save");
                 WritePipeAttributes(entity, tr, attributes);
 
-                // 保存井属性后，同步刷新已绑定该井编号的主管起终点深度与平均开挖深度。
-                // 这样修改井深后，相关主管不会继续保留旧深度。
+                // ??????????????????????????????????
+                // ??????????????????????
                 if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
                 {
                     linkedPipeHandles = RefreshMainPipeDepthsLinkedToNode(db, tr, objectId, attributes);
@@ -321,7 +321,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (!string.IsNullOrWhiteSpace(changedPipeHandle)) linkedPipeHandles.Add(changedPipeHandle);
             RefreshBoundPipeAnnotations(doc, linkedPipeHandles);
 
-            return new QuantityPipeWriteResult { Success = true, SuccessCount = 1, Message = "已写入当前对象属性。" };
+            return new QuantityPipeWriteResult { Success = true, SuccessCount = 1, Message = "??????????" };
         }
 
         private static void RefreshBoundNodeAnnotations(Document doc,
@@ -348,7 +348,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             catch
             {
-                // 属性写入不能因个别旧标注损坏而失败。
+                // ??????????????????
             }
         }
 
@@ -361,9 +361,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 StringComparer.OrdinalIgnoreCase);
             if (handles.Count == 0) return;
 
-            // 批量编辑后统一检查两套绑定注记。不能仅依据写入后的对象类型
-            // 决定是否刷新，否则对象类型被批量修改、普通可计长曲线或关联主管
-            // 可能保留旧的标注内容。
+            // ?????????????????????????????
+            // ???????????????????????????????
+            // ???????????
             RefreshBoundNodeAnnotations(doc, handles);
             RefreshBoundPipeAnnotations(doc, handles);
         }
@@ -430,7 +430,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
                 catch
                 {
-                    // 单条主管同步失败不应影响井属性保存。
+                    // ??????????????????
                 }
             }
             return changedHandles;
@@ -448,13 +448,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             Editor ed = doc.Editor;
             var opt = new PromptSelectionOptions();
-            opt.MessageForAdding = "\n选择需要批量写入属性的对象（管线/节点）：";
-            opt.MessageForRemoval = "\n移除对象：";
+            opt.MessageForAdding = "\n????????????????/????";
+            opt.MessageForRemoval = "\n?????";
 
-            PromptSelectionResult res = ed.GetSelection(opt);
+            PromptSelectionResult res = ed.GetHudSelection(opt);
             if (res.Status != PromptStatus.OK || res.Value == null || res.Value.Count == 0)
             {
-                return new QuantityPipeWriteResult { Success = false, Message = "未选择对象。" };
+                return new QuantityPipeWriteResult { Success = false, Message = "??????" };
             }
 
             int success = 0;
@@ -466,7 +466,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             bool showProgress = progress != null && total > 1;
             var changedAnnotationSourceHandles = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
-            if (showProgress) ReportProgress(progress, 0, total, "正在批量写入属性...");
+            if (showProgress) ReportProgress(progress, 0, total, "????????...");
 
             Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -477,7 +477,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     {
                         skip++;
                         processed++;
-                        if (showProgress) ReportProgress(progress, processed, total, "正在批量写入属性：" + processed + "/" + total);
+                        if (showProgress) ReportProgress(progress, processed, total, "?????????" + processed + "/" + total);
                         continue;
                     }
 
@@ -540,7 +540,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     finally
                     {
                         processed++;
-                        if (showProgress) ReportProgress(progress, processed, total, "正在批量写入属性：" + processed + "/" + total);
+                        if (showProgress) ReportProgress(progress, processed, total, "?????????" + processed + "/" + total);
                     }
                 }
 
@@ -549,10 +549,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             RefreshBoundAnnotationsAfterBatch(doc,
                 changedAnnotationSourceHandles);
 
-            string message = "批量写入完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
-            if (unavailableLayerSkip > 0) message += "\n其中 " + unavailableLayerSkip + " 个对象因图层锁定、冻结或关闭而跳过。";
+            string message = "????????? " + success + " ???? " + skip + " ???? " + fail + " ??";
+            if (unavailableLayerSkip > 0) message += "\n?? " + unavailableLayerSkip + " ??????????????????";
             if (success > 0)
-                message += "\n已检查并同步可更新的绑定注记。";
+                message += "\n???????????????";
             return new QuantityPipeWriteResult
             {
                 Success = success > 0,
@@ -575,7 +575,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             List<ObjectId> ids = NormalizeObjectIds(objectIds);
             if (ids.Count == 0)
             {
-                return new QuantityPipeWriteResult { Success = false, Message = "未选择对象。" };
+                return new QuantityPipeWriteResult { Success = false, Message = "??????" };
             }
 
             int success = 0;
@@ -588,7 +588,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             var changedAnnotationSourceHandles = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
             bool showProgress = progress != null && ids.Count > 1;
-            if (showProgress) ReportProgress(progress, 0, ids.Count, "正在按默认表补填空字段...");
+            if (showProgress) ReportProgress(progress, 0, ids.Count, "???????????...");
 
             Database db = doc.Database;
             int lockedSkip = 0;
@@ -644,9 +644,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             attrs.ObjectKind = kind;
                             ApplyLayerMetadata(db, tr, entity, attrs);
 
-                            // v19 数据模型刷新：批量 SX 不再简单跳过已填对象。
-                            // 未填对象按默认表建立；已填对象保留身份字段，同时让默认表控制字段与当前 SXMRB 默认表同步，
-                            // 并始终执行一次识别/规格解析/依赖字段刷新，避免默认表调整后旧对象数据不更新。
+                            // v19 ????????? SX ???????????
+                            // ??????????????????????????????????? SXMRB ??????
+                            // ?????????/????/????????????????????????
                             RefreshAttributeModel(db, tr, entity, attrs, defaultAttrs, kind, true, false);
 
                             attrs = NormalizeAttributesForWrite(db, tr, entity, attrs, previous, "ApplyDefaults");
@@ -676,7 +676,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         {
                             skip++;
                             lockedSkip++;
-                            if (errors.Count < 3) errors.Add("对象或所在图层不可写，已跳过");
+                            if (errors.Count < 3) errors.Add("??????????????");
                         }
                         else
                         {
@@ -691,22 +691,22 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
                     finally
                     {
-                        if (showProgress) ReportProgress(progress, i + 1, ids.Count, "正在按默认表补填空字段：" + (i + 1) + "/" + ids.Count);
+                        if (showProgress) ReportProgress(progress, i + 1, ids.Count, "????????????" + (i + 1) + "/" + ids.Count);
                     }
                 }
             }
             RefreshBoundAnnotationsAfterBatch(doc,
                 changedAnnotationSourceHandles);
 
-            string message = "默认表补填完成：成功 " + success + " 个";
-            if (success > 0) message += "（主管 " + mainCount + "，支管 " + branchCount + "，节点/井 " + nodeCount + "）";
-            message += "，跳过 " + skip + " 个，失败 " + fail + " 个。";
-            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因对象不可写，或图层锁定、冻结、关闭而跳过。";
-            message += "\n跳过包括：无关对象、特殊对象、不可写对象，以及已无空字段需要补填的对象。";
-            message += "\n识别规则：仅父属性为“主管”“支管”“井”的对象参与；父属性为“井”时分类必须为“检查、沉泥井”。";
+            string message = "?????????? " + success + " ?";
+            if (success > 0) message += "??? " + mainCount + "??? " + branchCount + "???/? " + nodeCount + "?";
+            message += "??? " + skip + " ???? " + fail + " ??";
+            if (lockedSkip > 0) message += "\n?? " + lockedSkip + " ?????????????????????????";
+            message += "\n????????????????????????????????????";
+            message += "\n?????????????????????????????????????????????????";
             if (success > 0)
-                message += "\n已检查并同步可更新的绑定注记。";
-            if (errors.Count > 0) message += "\n前几项失败原因：" + string.Join("；", errors.ToArray());
+                message += "\n???????????????";
+            if (errors.Count > 0) message += "\n????????" + string.Join("?", errors.ToArray());
 
             return new QuantityPipeWriteResult
             {
@@ -725,7 +725,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             List<ObjectId> ids = NormalizeObjectIds(objectIds);
             if (ids.Count == 0)
             {
-                return new QuantityPipeWriteResult { Success = false, Message = "未选择对象。" };
+                return new QuantityPipeWriteResult { Success = false, Message = "??????" };
             }
 
             int success = 0;
@@ -784,7 +784,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         {
                             skip++;
                             lockedSkip++;
-                            if (errors.Count < 3) errors.Add("对象或所在图层不可写，已跳过");
+                            if (errors.Count < 3) errors.Add("??????????????");
                         }
                         else
                         {
@@ -800,9 +800,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
             }
 
-            string message = "属性清除完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
-            if (lockedSkip > 0) message += "\n其中 " + lockedSkip + " 个对象因对象不可写，或图层锁定、冻结、关闭而跳过。";
-            if (errors.Count > 0) message += "\n前几项失败原因：" + string.Join("；", errors.ToArray());
+            string message = "????????? " + success + " ???? " + skip + " ???? " + fail + " ??";
+            if (lockedSkip > 0) message += "\n?? " + lockedSkip + " ?????????????????????????";
+            if (errors.Count > 0) message += "\n????????" + string.Join("?", errors.ToArray());
 
             return new QuantityPipeWriteResult
             {
@@ -1021,28 +1021,75 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             if (candidates == null || candidates.Count == 0)
             {
-                doc.Editor.WriteMessage("\n未找到有效井对象。请确认图层管理中井对象父属性=井，分类=检查、沉泥井。");
+                doc.Editor.WriteHudMessage("\n???????????????????????=????=???????");
                 return attributes;
             }
 
             var jig = new QuantityNodeSelectPreviewJig(candidates, forStart, textStyleId);
-            PromptResult dragResult = doc.Editor.Drag(jig);
+            PromptResult dragResult = doc.Editor.DragWithHud(jig,
+                forStart
+                    ? "??????????????????????????"
+                    : "??????????????????????????");
             if (dragResult.Status != PromptStatus.OK) return attributes;
 
             NodeCandidate node = jig.SelectedCandidate ?? FindNearestNodeCandidate(candidates, jig.PickPoint);
             if (node != null)
             {
-                // 手动选择用于处理自动识别受干扰的情况，应覆盖当前起点/终点字段。
+                // ??????????????????????????/?????
                 if (forStart) ApplyNodeToPipeStart(attributes, node, true);
                 else ApplyNodeToPipeEnd(attributes, node, true);
 
                 string nodeNo = node.Attributes == null ? string.Empty : (node.Attributes.NodeNo ?? string.Empty);
-                doc.Editor.WriteMessage(string.IsNullOrWhiteSpace(nodeNo)
-                    ? "\n已选择未编号节点。"
-                    : "\n已选择节点：" + nodeNo);
+                doc.Editor.WriteHudMessage(string.IsNullOrWhiteSpace(nodeNo)
+                    ? "\n?????????"
+                    : "\n??????" + nodeNo);
             }
 
             return attributes;
+        }
+
+        /// <summary>
+        /// ?????????????????????????
+        /// ????????????????????????????
+        /// ?? null ?????????????
+        /// </summary>
+        public static QuantityPipeAttributes SelectNodeWithPreview(
+            Document doc, bool forStart)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            Database db = doc.Database;
+            List<NodeCandidate> candidates;
+            ObjectId textStyleId = ObjectId.Null;
+            using (Transaction tr =
+                db.TransactionManager.StartTransaction())
+            {
+                candidates = CollectNodeCandidates(db, tr,
+                    db.CurrentSpaceId);
+                try { textStyleId = db.Textstyle; }
+                catch { textStyleId = ObjectId.Null; }
+                tr.Commit();
+            }
+
+            if (candidates == null || candidates.Count == 0)
+            {
+                doc.Editor.WriteHudMessage(
+                    "\n???????????????????????=????=????????");
+                return null;
+            }
+
+            var jig = new QuantityNodeSelectPreviewJig(candidates,
+                forStart, textStyleId);
+            PromptResult dragResult = doc.Editor.DragWithHud(jig,
+                forStart
+                    ? "?????????????????????????"
+                    : "?????????????????????????");
+            if (dragResult.Status != PromptStatus.OK) return null;
+
+            NodeCandidate selected = jig.SelectedCandidate
+                ?? FindNearestNodeCandidate(candidates, jig.PickPoint);
+            if (selected == null || selected.Attributes == null)
+                return null;
+            return selected.Attributes.Clone();
         }
 
         public static void SaveDefaultProfile(string kind, QuantityPipeAttributes attrs)
@@ -1056,9 +1103,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         }
 
         /// <summary>
-        /// 按用户保存的默认表重新填充指定对象。
-        /// 与 ApplySmartDefaults 不同，这里不会用图层/内置规则覆盖用户默认表中的非空字段，
-        /// 只补充图层元数据、空字段的管径/规格识别，以及主管相连井信息。
+        /// ??????????????????
+        /// ? ApplySmartDefaults ??????????/??????????????????
+        /// ???????????????/???????????????
         /// </summary>
         public static QuantityPipeAttributes LoadDefaultProfileForObject(Document doc, ObjectId objectId, string kind)
         {
@@ -1113,7 +1160,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             HashSet<string> keys = ReadPipeAttributeKeySet(entity, tr);
             target.ObjectKind = string.IsNullOrWhiteSpace(kind) ? target.ObjectKind : kind;
 
-            // 图层元数据是识别依据，应始终保持为当前图层管理中的最新值；这不属于用户手填工程量数据。
+            // ???????????????????????????????????????????
             target.LayerParentGroup = defaults.LayerParentGroup ?? string.Empty;
             target.LayerParentClass = defaults.LayerParentClass ?? string.Empty;
             target.LayerTags = defaults.LayerTags ?? string.Empty;
@@ -1133,7 +1180,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 target.StartNode = FillStringIfEmpty(target.StartNode, defaults.StartNode);
                 target.EndNode = FillStringIfEmpty(target.EndNode, defaults.EndNode);
 
-                // 起终点井已由用户填写时不覆盖；仅在字段缺失或井名为空时，使用自动识别结果补齐深度。
+                // ?????????????????????????????????????????
                 if (!HasKey(keys, "StartDepth") || (startWasEmpty && target.StartDepth <= 0 && defaults.StartDepth > 0)) target.StartDepth = defaults.StartDepth;
                 if (!HasKey(keys, "EndDepth") || (endWasEmpty && target.EndDepth <= 0 && defaults.EndDepth > 0)) target.EndDepth = defaults.EndDepth;
                 if (!HasKey(keys, "AverageDepth") || (target.AverageDepth <= 0 && defaults.AverageDepth > 0)) target.AverageDepth = defaults.AverageDepth;
@@ -1162,7 +1209,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             target.TrenchWidth = FillPositiveDoubleIfMissingOrEmpty(keys, "TrenchWidth", target.TrenchWidth, defaults.TrenchWidth);
-            // 原路面结构层 0 可能是有效值，因此只有旧记录缺少该键时才补填。
+            // ?????? 0 ???????????????????????
             target.RoadThickness = FillDoubleIfMissing(keys, "RoadThickness", target.RoadThickness, defaults.RoadThickness);
             target.ExcavationType = FillStringIfEmpty(target.ExcavationType, defaults.ExcavationType);
             target.BackfillType = FillStringIfEmpty(target.BackfillType, defaults.BackfillType);
@@ -1377,7 +1424,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 attrs.LayerParentGroup = meta.ParentGroup ?? string.Empty;
                 attrs.LayerParentClass = meta.ParentClass ?? string.Empty;
                 attrs.LayerTags = meta.TagText ?? string.Empty;
-                sourceText += " " + attrs.LayerParentGroup + " " + attrs.LayerParentClass + " " + attrs.LayerTags;
+                sourceText += " " + attrs.LayerParentGroup + " " + attrs.LayerParentClass
+                    + " " + attrs.LayerTags + " " + (meta.Specification ?? string.Empty)
+                    + " " + (meta.Material ?? string.Empty);
             }
 
             string inferredKind = InferObjectKind(sourceText, entity);
@@ -1390,8 +1439,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
 
             string wellSpec = InferWellSpec(sourceText);
-            // 图层中明确写出的井径属于对象识别结果，应覆盖默认表中的占位规格。
-            // 否则“700铸铁井盖”会被默认的 φ500 挡住，连带导致开挖尺寸仍为 1.3 m。
+            // ????????????????????????????????
+            // ???700?????????? ?500 ????????????? 1.3 m?
             if (!string.IsNullOrWhiteSpace(wellSpec)
                 && (overwrite || string.IsNullOrWhiteSpace(attrs.WellSpec)
                     || QuantityPipeAttributes.IsNodeKind(inferredKind)))
@@ -1399,20 +1448,20 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 attrs.WellSpec = wellSpec;
             }
 
-            if ((overwrite || string.IsNullOrWhiteSpace(attrs.Material)) && ContainsAny(sourceText, "HDPE", "高密度", "波纹"))
+            if ((overwrite || string.IsNullOrWhiteSpace(attrs.Material)) && ContainsAny(sourceText, "HDPE", "???", "??"))
             {
-                attrs.Material = "钢带增强高密度聚乙烯螺旋波纹管(HDPE)";
+                attrs.Material = "???????????????(HDPE)";
             }
             else if ((overwrite || string.IsNullOrWhiteSpace(attrs.Material)) && ContainsAny(sourceText, "PVC", "UPVC"))
             {
-                attrs.Material = "PVC管";
+                attrs.Material = "PVC?";
             }
 
             string explicitBranchType = string.Empty;
             if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
             {
                 explicitBranchType = InferExplicitBranchType(sourceText);
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "人工开挖";
+                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "????";
                 if (!string.IsNullOrWhiteSpace(explicitBranchType)) attrs.BranchType = explicitBranchType;
                 else if (overwrite || string.IsNullOrWhiteSpace(attrs.BranchType)) attrs.BranchType = InferBranchType(sourceText);
                 attrs.BranchIncludeInCalculation = ShouldIncludeBranch(attrs.BranchType, sourceText);
@@ -1424,18 +1473,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (overwrite || string.IsNullOrWhiteSpace(attrs.WellMaterialType)) attrs.WellMaterialType = InferWellMaterialType(sourceText);
                 if (overwrite || attrs.SiltWellDeductDepth500 <= 0) attrs.SiltWellDeductDepth500 = 0.20;
                 if (overwrite || attrs.SiltWellDeductDepth700 <= 0) attrs.SiltWellDeductDepth700 = 0.50;
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.WellCoverMaterial)) attrs.WellCoverMaterial = "铸铁井盖";
+                if (overwrite || string.IsNullOrWhiteSpace(attrs.WellCoverMaterial)) attrs.WellCoverMaterial = "????";
                 if (overwrite || attrs.ExcavationLength <= 0 || attrs.ExcavationWidth <= 0)
                 {
                     double size = ContainsAny(attrs.WellSpec, "700") ? 1.5 : 1.3;
                     attrs.ExcavationLength = size;
                     attrs.ExcavationWidth = size;
                 }
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.CoverPlate)) attrs.CoverPlate = ContainsAny(attrs.WellSpec, "700") ? "1600承压盖板" : "1200承压盖板";
+                if (overwrite || string.IsNullOrWhiteSpace(attrs.CoverPlate)) attrs.CoverPlate = ContainsAny(attrs.WellSpec, "700") ? "1600????" : "1200????";
             }
             else
             {
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "机械开挖";
+                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "????";
             }
 
             double outer = InferOuterDiameter(attrs.Diameter);
@@ -1450,7 +1499,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 attrs.RoadThickness = InferRoadThickness(sourceText, attrs.RoadThickness);
             }
-            else if (attrs.RoadThickness <= 0 && !ContainsAny(sourceText, "绿化", "原土", "无路面"))
+            else if (attrs.RoadThickness <= 0 && !ContainsAny(sourceText, "??", "??", "???"))
             {
                 attrs.RoadThickness = InferRoadThickness(sourceText, attrs.RoadThickness);
             }
@@ -1464,16 +1513,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 bool hasExplicitBranchTag = !string.IsNullOrWhiteSpace(explicitBranchType);
                 bool forceSpecialBranchStructure = ShouldForceSpecialBranchStructure(explicitBranchType);
 
-                // “按默认表重填”应以用户在 SXMRB 中保存的默认表为准。
-                // 图层标签为“砼恢复”时只用于识别支管类型，不再覆盖用户自定义的结构层；
-                // 仅“并埋 / 明管 / 原土回填”这类具有固定结构规则的支管类型，仍按标签强制调整结构层。
+                // ????????????? SXMRB ??????????
+                // ???????????????????????????????????
+                // ???? / ?? / ?????????????????????????????????
                 if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillType) || forceSpecialBranchStructure) attrs.BackfillType = InferBranchBackfillType(attrs.BranchType, sourceText);
                 if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillStructure) || forceSpecialBranchStructure) attrs.BackfillStructure = BuildDefaultBackfillStructure(attrs);
                 ApplyNoStructureThicknessRules(attrs);
             }
             else
             {
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillType)) attrs.BackfillType = ContainsAny(sourceText, "原土") ? "原土回填" : "中粗砂回填";
+                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillType)) attrs.BackfillType = ContainsAny(sourceText, "??") ? "????" : "?????";
                 if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillStructure)) attrs.BackfillStructure = BuildDefaultBackfillStructure(attrs);
             }
 
@@ -1489,6 +1538,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             attrs.LayerParentGroup = meta == null ? string.Empty : (meta.ParentGroup ?? string.Empty);
             attrs.LayerParentClass = meta == null ? string.Empty : (meta.ParentClass ?? string.Empty);
             attrs.LayerTags = meta == null ? string.Empty : (meta.TagText ?? string.Empty);
+            if (meta == null || attrs.IsSpecialObject
+                || QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind)) return;
+
+            string recognizedDiameter = InferDiameterFromSpecification(
+                meta.Specification);
+            if (!string.IsNullOrWhiteSpace(recognizedDiameter))
+            {
+                attrs.Diameter = recognizedDiameter;
+                double outerDiameter = InferOuterDiameter(recognizedDiameter);
+                if (outerDiameter > 0) attrs.PipeOuterDiameter = outerDiameter;
+            }
         }
 
         private static LayerMetadata GetLayerMetadataSafe(Database db, Transaction tr, string layerName)
@@ -1519,8 +1579,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static string InferSupportedObjectKind(string sourceText, Entity entity)
         {
-            // 保留旧签名，避免其他代码调用时编译失败；属性识别不再根据图层名/标签猜测。
-            // 多对象批量填入必须依赖图层管理中的父属性和分类。
+            // ???????????????????????????????/?????
+            // ????????????????????????
             return string.Empty;
         }
 
@@ -1534,9 +1594,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             bool isCurve = entity is Curve;
             bool isNodeEntity = entity is Circle || entity is DBPoint || entity is BlockReference;
 
-            if (TextEquals(parent, "主管") && isCurve) return QuantityPipeAttributes.KindMainPipe;
-            if (TextEquals(parent, "支管") && isCurve) return QuantityPipeAttributes.KindBranchPipe;
-            if (TextEquals(parent, "井") && isNodeEntity && IsSupportedWellClass(cls)) return QuantityPipeAttributes.KindNodeWell;
+            if (TextEquals(parent, "??") && isCurve) return QuantityPipeAttributes.KindMainPipe;
+            if (TextEquals(parent, "??") && isCurve) return QuantityPipeAttributes.KindBranchPipe;
+            if (TextEquals(parent, "?") && isNodeEntity && IsSupportedWellClass(cls)) return QuantityPipeAttributes.KindNodeWell;
 
             return string.Empty;
         }
@@ -1550,26 +1610,26 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static string InferObjectKind(string sourceText, Entity entity)
         {
-            // 从 v14 开始，不再根据图层名、标签或对象类型兜底推断主管/支管/井，防止无关对象被写入属性。
+            // ? v14 ????????????????????????/??/??????????????
             return string.Empty;
         }
 
         private static bool IsSupportedWellClass(string layerClass)
         {
-            // 井对象统一使用图层分类“检查、沉泥井”；具体井类型在对象属性表的“井类型”中区分。
+            // ?????????????????????????????????????????
             string cls = NormalizeLayerMetadataText(layerClass);
-            return TextEquals(cls, "检查沉泥井");
+            return TextEquals(cls, "?????");
         }
 
         private static string NormalizeLayerMetadataText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             return text.Replace(" ", string.Empty)
-                .Replace("　", string.Empty)
+                .Replace("?", string.Empty)
                 .Replace("/", string.Empty)
-                .Replace("、", string.Empty)
+                .Replace("?", string.Empty)
                 .Replace(",", string.Empty)
-                .Replace("，", string.Empty)
+                .Replace("?", string.Empty)
                 .Replace("\\", string.Empty)
                 .Replace("-", string.Empty)
                 .Replace("_", string.Empty)
@@ -1966,7 +2026,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     Entity entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
                     if (entity == null) continue;
 
-                    // 起终点只允许从“父属性为井/节点”的对象读取，避免附近普通图形误判。
+                    // ?????????????/????????????????????
                     if (!IsWellParentLayer(db, tr, entity)) continue;
 
                     Point3d connectionPoint;
@@ -1982,7 +2042,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
                     else
                     {
-                        // 与节点标注一致，使用井对象中心作为兜底吸附点；解决少量块参照/井符号无法 IntersectWith 的情况。
+                        // ??????????????????????????????/????? IntersectWith ????
                         Point3d center;
                         double diagonal;
                         if (!TryGetEntityCenter(entity, out center, out diagonal)) continue;
@@ -2034,8 +2094,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string parent = meta == null ? string.Empty : (meta.ParentGroup ?? string.Empty);
             string cls = meta == null ? string.Empty : (meta.ParentClass ?? string.Empty);
 
-            // 与节点标注保持一致：只允许父属性=井，分类=检查、沉泥井。
-            return TextEquals(parent, "井") && IsSupportedWellClass(cls);
+            // ????????????????=????=???????
+            return TextEquals(parent, "?") && IsSupportedWellClass(cls);
         }
 
         private static bool IsSupportedNodeGeometry(Entity entity)
@@ -2053,9 +2113,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             point = Point3d.Origin;
             if (pipeCurve == null || nodeEntity == null) return false;
 
-            // 常见井符号是“圆 + 十字”或块参照，管线端点通常落在井圆内/井块范围内，
-            // 并不一定会与块参照本身产生 AutoCAD IntersectWith 交点。
-            // 因此先判断端点是否落入节点几何范围，再判断真实几何交点。
+            // ???????? + ???????????????????/??????
+            // ????????????? AutoCAD IntersectWith ???
+            // ????????????????????????????
             if (IsPointInsideOrOnNodeEntity(pipeStart, nodeEntity))
             {
                 point = pipeStart;
@@ -2081,7 +2141,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
             }
 
-            // 对 DBPoint、极简块等无可相交边界的节点，允许端点与节点定位点重合。
+            // ? DBPoint????????????????????????????
             Point3d nodePosition;
             if (TryGetNodePosition(nodeEntity, out nodePosition))
             {
@@ -2160,8 +2220,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static bool IsPointInsideExtents2d(Point3d point, Extents3d extents, double tolerance)
         {
-            // 工程图中井块经常带真实高程 Z，而管线可能在 Z=0。
-            // 起终点拓扑识别只看平面 XY，不比较 Z。
+            // ????????????? Z??????? Z=0?
+            // ??????????? XY???? Z?
             Point3d min = extents.MinPoint;
             Point3d max = extents.MaxPoint;
             return point.X >= min.X - tolerance && point.X <= max.X + tolerance
@@ -2216,8 +2276,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static double GetNodeConnectionTolerance(Entity entity)
         {
-            // 只用于“端点落在井符号范围内/端点与节点定位点重合”的判定。
-            // 取值太大会误判相邻井，取值太小会漏掉井符号块的微小绘图误差。
+            // ??????????????/???????????????
+            // ??????????????????????????????
             double tolerance = 0.05;
             try
             {
@@ -2236,8 +2296,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static double GetNodeEndpointMatchLimit(Entity entity)
         {
-            // 即使管线与井圆/井块真实相交，也只把靠近管线起点或终点的井作为相连节点。
-            // 防止一条管线从中间穿过其他井符号时被误认为起终点。
+            // ???????/????????????????????????????
+            // ?????????????????????????
             double limit = 0.5;
             try
             {
@@ -2256,8 +2316,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (candidate == null) return false;
             if (current == null) return true;
 
-            // 优先使用已真正写入过节点属性的对象；井符号如果由圆、十字线等多实体组成，
-            // 未写属性的辅助线不应覆盖已写属性的井对象。
+            // ????????????????????????????????????
+            // ?????????????????????
             if (hasSavedAttributes != current.HasSavedAttributes) return hasSavedAttributes;
 
             bool candidateHasIdentity = !string.IsNullOrWhiteSpace(candidate.NodeNo) || candidate.WellDepth > 0;
@@ -2392,7 +2452,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static bool IsLikelyNodeNoText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
-            return Regex.IsMatch(text.Trim(), @"^[A-Za-z一-龥]*\d+(?:[-－]\d+)?$", RegexOptions.IgnoreCase);
+            return Regex.IsMatch(text.Trim(), @"^[A-Za-z?-?]*\d+(?:[-?]\d+)?$", RegexOptions.IgnoreCase);
         }
 
         private static bool TryGetEntityCenter(Entity entity, out Point3d center, out double diagonal)
@@ -2432,7 +2492,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             string value = Regex.Replace(text, @"\\[A-Za-z0-9]+;", string.Empty);
             value = value.Replace("{", string.Empty).Replace("}", string.Empty).Trim();
-            Match m = Regex.Match(value, @"[A-Za-z]*\d+(?:[-－]\d+)?", RegexOptions.IgnoreCase);
+            Match m = Regex.Match(value, @"[A-Za-z]*\d+(?:[-?]\d+)?", RegexOptions.IgnoreCase);
             return m.Success ? m.Value : value;
         }
 
@@ -2449,10 +2509,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (attrs == null) return;
             if (!QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind)) return;
 
-            // v22：起点深度、终点深度字段本身即为“井深 + 当前主管管线垫层
-            // （沉泥井再扣减）”后的管线开挖深度。
-            // 因此平均开挖深度直接取起终点深度平均值，不再额外叠加管线垫层，
-            // 否则会出现垫层被重复计算。
+            // v22??????????????????? + ????????
+            // ??????????????????
+            // ???????????????????????????????
+            // ?????????????
             double startExcavationDepth = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
             double endExcavationDepth = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
 
@@ -2557,10 +2617,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                string message = _forStart
-                    ? "\n移动鼠标选择起点井（预览自动吸附最近节点，单击确认）："
-                    : "\n移动鼠标选择终点井（预览自动吸附最近节点，单击确认）：";
-                var options = new JigPromptPointOptions(message);
+                var options = new JigPromptPointOptions("\n ");
                 options.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
                 PromptPointResult result = prompts.AcquirePoint(options);
                 if (result.Status != PromptStatus.OK) return SamplerStatus.Cancel;
@@ -2677,12 +2734,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             Match dn = Regex.Match(source, @"DN\s*(?<n>\d{2,4})", RegexOptions.IgnoreCase);
             if (dn.Success) return "DN" + dn.Groups["n"].Value;
 
-            Match numberPipe = Regex.Match(source, @"(?<!\d)(?<n>\d{2,4})(?:\s*)?(?:PVC|UPVC|HDPE|PE|管|波纹|砼管|钢管)", RegexOptions.IgnoreCase);
+            Match numberPipe = Regex.Match(source, @"(?<!\d)(?<n>\d{2,4})(?:\s*)?(?:PVC|UPVC|HDPE|PE|?|??|??|??)", RegexOptions.IgnoreCase);
             if (numberPipe.Success) return "DN" + numberPipe.Groups["n"].Value;
 
-            // 图层标签中常见只写“110PVC”“75PVC”，也可能只写“110”。
-            // 只有来源文本明确属于主管/支管/管线时，才把孤立数字识别为管径，避免井规格 500 被误判为管径。
-            if (ContainsAny(source, "主管", "支管", "管线", "管径", "管道", "PVC", "HDPE", "PE", "波纹"))
+            // ??????????110PVC??75PVC????????110??
+            // ????????????/??/????????????????????? 500 ???????
+            if (ContainsAny(source, "??", "??", "??", "??", "??", "PVC", "HDPE", "PE", "??"))
             {
                 Match isolated = Regex.Match(source, @"(?<!\d)(?<n>\d{2,4})(?!\d)");
                 if (isolated.Success) return "DN" + isolated.Groups["n"].Value;
@@ -2691,25 +2748,35 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return string.Empty;
         }
 
+        private static string InferDiameterFromSpecification(string specification)
+        {
+            string diameter = InferDiameter(specification);
+            if (!string.IsNullOrWhiteSpace(diameter)) return diameter;
+            Match number = Regex.Match(specification ?? string.Empty,
+                @"(?<!\d)(?<n>\d{2,4})(?!\d)", RegexOptions.IgnoreCase);
+            return number.Success ? "DN" + number.Groups["n"].Value
+                : string.Empty;
+        }
+
         private static string InferWellSpec(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             string source = text.Trim();
 
-            Match phi = Regex.Match(source, @"[φΦ]\s*(?<n>\d{3,4})");
-            if (phi.Success) return "φ" + phi.Groups["n"].Value;
+            Match phi = Regex.Match(source, @"[??]\s*(?<n>\d{3,4})");
+            if (phi.Success) return "?" + phi.Groups["n"].Value;
 
-            Match well = Regex.Match(source, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d).{0,8}?(?:井|井盖|检查|沉泥|跌水)", RegexOptions.IgnoreCase);
-            if (well.Success) return "φ" + well.Groups["n"].Value;
+            Match well = Regex.Match(source, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d).{0,8}?(?:?|??|??|??|??)", RegexOptions.IgnoreCase);
+            if (well.Success) return "?" + well.Groups["n"].Value;
 
-            Match anyWellNumber = Regex.Match(source, @"(?:井|井盖|检查|沉泥|跌水).{0,8}?(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
-            if (anyWellNumber.Success) return "φ" + anyWellNumber.Groups["n"].Value;
+            Match anyWellNumber = Regex.Match(source, @"(?:?|??|??|??|??).{0,8}?(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
+            if (anyWellNumber.Success) return "?" + anyWellNumber.Groups["n"].Value;
 
-            // 图层管理中父属性=井、分类=检查/沉泥井时，标签有时只写“500”“700”。
-            if (ContainsAny(source, "井", "检查", "沉泥", "跌水", "井盖"))
+            // ????????=????=??/????????????500??700??
+            if (ContainsAny(source, "?", "??", "??", "??", "??"))
             {
                 Match isolated = Regex.Match(source, @"(?<!\d)(?<n>500|700|800|1000|1200|1500)(?!\d)", RegexOptions.IgnoreCase);
-                if (isolated.Success) return "φ" + isolated.Groups["n"].Value;
+                if (isolated.Success) return "?" + isolated.Groups["n"].Value;
             }
 
             return string.Empty;
@@ -2737,18 +2804,18 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static double InferRoadThickness(string text, double fallback)
         {
-            if (ContainsAny(text, "绿化", "原土", "无路面")) return 0.0;
-            if (ContainsAny(text, "支路", "庭院")) return 0.12;
+            if (ContainsAny(text, "??", "??", "???")) return 0.0;
+            if (ContainsAny(text, "??", "??")) return 0.12;
             if (fallback > 0) return fallback;
             return 0.20;
         }
 
         private static string InferExplicitBranchType(string text)
         {
-            if (ContainsAny(text, "原土回填", "原土")) return "原土回填";
-            if (ContainsAny(text, "并埋")) return "并埋";
-            if (ContainsAny(text, "明管")) return "明管";
-            if (ContainsAny(text, "砼恢复", "混凝土恢复")) return "砼恢复";
+            if (ContainsAny(text, "????", "??")) return "????";
+            if (ContainsAny(text, "??")) return "??";
+            if (ContainsAny(text, "??")) return "??";
+            if (ContainsAny(text, "???", "?????")) return "???";
             return string.Empty;
         }
 
@@ -2756,16 +2823,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             string explicitType = InferExplicitBranchType(text);
             if (!string.IsNullOrWhiteSpace(explicitType)) return explicitType;
-            if (ContainsAny(text, "砼")) return "砼恢复";
-            if (ContainsAny(text, "雨水")) return "雨水";
-            return "砼恢复";
+            if (ContainsAny(text, "?")) return "???";
+            if (ContainsAny(text, "??")) return "??";
+            return "???";
         }
 
         private static bool ShouldIncludeBranch(string branchType, string sourceText)
         {
             string text = (branchType ?? string.Empty) + " " + (sourceText ?? string.Empty);
-            if (ContainsAny(text, "不计算", "不统计", "明管", "并埋")) return false;
-            if (ContainsAny(text, "砼恢复", "混凝土恢复", "原土回填", "原土")) return true;
+            if (ContainsAny(text, "???", "???", "??", "??")) return false;
+            if (ContainsAny(text, "???", "?????", "????", "??")) return true;
             return true;
         }
 
@@ -2773,17 +2840,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (string.IsNullOrWhiteSpace(branchType)) return false;
 
-            // 这些类型的结构层不是普通默认表可覆盖的“砼恢复”结构，
-            // 而是由支管图层标签明确决定的特殊规则。
-            return ContainsAny(branchType, "并埋", "明管", "原土回填", "原土");
+            // ???????????????????????????
+            // ???????????????????
+            return ContainsAny(branchType, "??", "??", "????", "??");
         }
 
         private static string InferBranchBackfillType(string branchType, string sourceText)
         {
             string text = (branchType ?? string.Empty) + " " + (sourceText ?? string.Empty);
-            if (ContainsAny(text, "原土回填", "原土")) return "原土回填";
-            if (ContainsAny(text, "明管", "并埋")) return "无结构层";
-            return "中粗砂回填";
+            if (ContainsAny(text, "????", "??")) return "????";
+            if (ContainsAny(text, "??", "??")) return "????";
+            return "?????";
         }
 
         private static void ApplyNoStructureThicknessRules(QuantityPipeAttributes attrs)
@@ -2792,14 +2859,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (!QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind)) return;
 
             string type = attrs.BranchType ?? string.Empty;
-            if (ContainsAny(type, "明管", "并埋"))
+            if (ContainsAny(type, "??", "??"))
             {
                 attrs.SandCushionThickness = 0.0;
                 attrs.GravelCushionThickness = 0.0;
                 attrs.C25RestoreThickness = 0.0;
                 attrs.BranchIncludeInCalculation = false;
             }
-            else if (ContainsAny(type, "原土回填", "原土"))
+            else if (ContainsAny(type, "????", "??"))
             {
                 attrs.SandCushionThickness = 0.0;
                 attrs.GravelCushionThickness = 0.0;
@@ -2810,36 +2877,36 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static string InferWellMaterialType(string text)
         {
-            if (ContainsAny(text, "砖砌", "砖井")) return "砖砌井";
-            if (ContainsAny(text, "现浇", "混凝土", "砼井")) return "现浇混凝土井";
-            return "成品塑料井";
+            if (ContainsAny(text, "??", "??")) return "???";
+            if (ContainsAny(text, "??", "???", "??")) return "??????";
+            return "?????";
         }
 
         private static string InferWellType(string text)
         {
-            // “检查、沉泥井 / 检查沉泥井”是合并分类，只用于允许识别为节点井，
-            // 不能直接作为井类型判断依据；具体类型由对象属性表中的“井类型”保存。
-            if (IsAmbiguousCheckSiltWellClass(text)) return "检查井";
+            // ??????? / ????????????????????????
+            // ??????????????????????????????????
+            if (IsAmbiguousCheckSiltWellClass(text)) return "???";
 
             string cleaned = RemoveAmbiguousWellTypePhrases(text);
-            if (ContainsAny(cleaned, "沉泥井", "沉泥")) return "沉泥井";
-            if (ContainsAny(cleaned, "跌水井", "跌水")) return "跌水井";
-            return "检查井";
+            if (ContainsAny(cleaned, "???", "??")) return "???";
+            if (ContainsAny(cleaned, "???", "??")) return "???";
+            return "???";
         }
 
         private static bool IsAmbiguousCheckSiltWellClass(string text)
         {
             string value = NormalizeLayerMetadataText(text);
-            return value.IndexOf("检查", StringComparison.CurrentCultureIgnoreCase) >= 0
-                && value.IndexOf("沉泥", StringComparison.CurrentCultureIgnoreCase) >= 0;
+            return value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0
+                && value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0;
         }
 
         private static string RemoveAmbiguousWellTypePhrases(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             string cleaned = text;
-            cleaned = Regex.Replace(cleaned, @"检查\s*井?\s*[、,，/\\;；|_\-]*\s*沉泥井", "检查井", RegexOptions.IgnoreCase);
-            cleaned = Regex.Replace(cleaned, @"检查\s*沉泥井", "检查井", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"??\s*??\s*[?,?/\\;?|_\-]*\s*???", "???", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"??\s*???", "???", RegexOptions.IgnoreCase);
             return cleaned;
         }
 
@@ -2848,31 +2915,31 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (attrs == null) return string.Empty;
             if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind))
             {
-                return "承压盖板C25基础 " + Format(attrs.C25RestoreThickness) + " 锁定"
-                    + Environment.NewLine + "承压盖板碎石垫层 " + Format(attrs.GravelCushionThickness) + " 锁定"
-                    + Environment.NewLine + "中粗砂回填 0.80"
-                    + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定 垫层";
+                return "????C25?? " + Format(attrs.C25RestoreThickness) + " ??"
+                    + Environment.NewLine + "???????? " + Format(attrs.GravelCushionThickness) + " ??"
+                    + Environment.NewLine + "????? 0.80"
+                    + Environment.NewLine + "????? " + Format(attrs.SandCushionThickness) + " ?? ??";
             }
             if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
             {
                 string branchType = attrs.BranchType ?? string.Empty;
-                if (ContainsAny(branchType, "明管", "并埋")) return string.Empty;
-                if (ContainsAny(branchType, "原土回填", "原土"))
+                if (ContainsAny(branchType, "??", "??")) return string.Empty;
+                if (ContainsAny(branchType, "????", "??"))
                 {
                     double depth = attrs.BranchDepth > 0 ? attrs.BranchDepth : 0.6;
-                    return "原土回填 " + Format(depth) + " 管线层";
+                    return "???? " + Format(depth) + " ???";
                 }
 
                 double c25 = attrs.C25RestoreThickness > 0 ? attrs.C25RestoreThickness : 0.25;
                 double sand = attrs.SandCushionThickness > 0 ? attrs.SandCushionThickness : 0.10;
-                return "C25砼恢复 " + Format(c25) + " 锁定"
-                    + Environment.NewLine + "中粗砂回填 0.25 管线层"
-                    + Environment.NewLine + "中粗砂垫层 " + Format(sand) + " 锁定 垫层";
+                return "C25??? " + Format(c25) + " ??"
+                    + Environment.NewLine + "????? 0.25 ???"
+                    + Environment.NewLine + "????? " + Format(sand) + " ?? ??";
             }
-            return "C25砼恢复 " + Format(attrs.C25RestoreThickness) + " 锁定"
-                + Environment.NewLine + "碎石垫层 " + Format(attrs.GravelCushionThickness) + " 锁定"
-                + Environment.NewLine + "中粗砂回填 0.80 管线层"
-                + Environment.NewLine + "中粗砂垫层 " + Format(attrs.SandCushionThickness) + " 锁定 垫层";
+            return "C25??? " + Format(attrs.C25RestoreThickness) + " ??"
+                + Environment.NewLine + "???? " + Format(attrs.GravelCushionThickness) + " ??"
+                + Environment.NewLine + "????? 0.80 ???"
+                + Environment.NewLine + "????? " + Format(attrs.SandCushionThickness) + " ?? ??";
         }
 
         private static bool IsLockViolation(Autodesk.AutoCAD.Runtime.Exception ex)
@@ -2893,7 +2960,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string all = status + " " + message;
 
             return all.IndexOf("LockViolation", StringComparison.OrdinalIgnoreCase) >= 0
-                || all.IndexOf("被锁定", StringComparison.OrdinalIgnoreCase) >= 0
+                || all.IndexOf("???", StringComparison.OrdinalIgnoreCase) >= 0
                 || all.IndexOf("locked", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 

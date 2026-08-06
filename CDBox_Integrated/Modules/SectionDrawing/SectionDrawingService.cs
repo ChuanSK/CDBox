@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -24,20 +24,21 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 return new SectionDrawingResult
                 {
                     Success = false,
-                    Message = "至少需要勾选一层进行绘制。"
+                    Message = "?????????????"
                 };
             }
             Editor ed = doc.Editor;
 
             ObjectId previewTextStyleId = ResolveTextStyleId(doc, drawingOptions.TextStyleName);
             var jig = new SectionPlacementJig(drawingOptions, previewTextStyleId);
-            PromptResult prompt = ed.Drag(jig);
+            PromptResult prompt = ed.DragWithHud(jig,
+                "????????????");
             if (prompt.Status != PromptStatus.OK)
             {
                 return new SectionDrawingResult
                 {
                     Success = false,
-                    Message = "已取消绘制。"
+                    Message = "??????"
                 };
             }
 
@@ -79,7 +80,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 return new SectionDrawingResult
                 {
                     Success = false,
-                    Message = "至少需要勾选一层进行绘制。"
+                    Message = "?????????????"
                 };
             }
 
@@ -221,8 +222,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             }
 
             result.Message = result.HatchFailureCount > 0
-                ? "断面图已生成，部分填充失败。"
-                : "断面图已生成。";
+                ? "??????????????"
+                : "???????";
             return result;
         }
 
@@ -263,11 +264,11 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             double safeScale = scale <= 0 ? 1.0 : scale;
             double safeAngleRadians = angleDegrees * Math.PI / 180.0;
 
-            // 先按 AutoCAD 原生预定义图案生成，这是 ANSI、AR-XXX、常用 CAD 图案最稳定的方式。
+            // ?? AutoCAD ???????????? ANSI?AR-XXX??? CAD ?????????
             ObjectId hatchId = TryDrawHatchCore(db, tr, boundaryId, innerBoundaryIds, cleanPatternName, safeScale, safeAngleRadians, layerName, HatchPatternType.PreDefined);
             if (!hatchId.IsNull) return hatchId;
 
-            // 少数从 acadiso.pat 或自定义 pat 中读取到的图案，在部分环境下需要按 CustomDefined 再尝试一次。
+            // ??? acadiso.pat ???? pat ????????????????? CustomDefined ??????
             hatchId = TryDrawHatchCore(db, tr, boundaryId, innerBoundaryIds, cleanPatternName, safeScale, safeAngleRadians, layerName, HatchPatternType.CustomDefined);
             if (!hatchId.IsNull) return hatchId;
 
@@ -288,8 +289,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
                 hatch.Layer = layerName;
                 hatch.HatchStyle = HatchStyle.Normal;
 
-                // 注意：这里必须保持 Associative=true，并且使用正式图形边界。
-                // 上一版改为非关联并使用临时边界后，在部分 AutoCAD/CASS 环境会导致所有 Hatch 都无法生成。
+                // ????????? Associative=true????????????
+                // ???????????????????? AutoCAD/CASS ??????? Hatch ??????
                 hatchId = btr.AppendEntity(hatch);
                 tr.AddNewlyCreatedDBObject(hatch, true);
                 hatch.Associative = true;
@@ -339,8 +340,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         {
             if (string.IsNullOrWhiteSpace(patternName)) return true;
             string name = patternName.Trim();
-            return string.Equals(name, "无", StringComparison.CurrentCultureIgnoreCase)
-                || string.Equals(name, "无填充", StringComparison.CurrentCultureIgnoreCase)
+            return string.Equals(name, "?", StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(name, "???", StringComparison.CurrentCultureIgnoreCase)
                 || string.Equals(name, "NONE", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "NO", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "OFF", StringComparison.OrdinalIgnoreCase);
@@ -379,8 +380,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             double height = preferredHeight <= 0 ? 0.08 : preferredHeight;
             if (rect.Height > 0) height = Math.Min(height, Math.Max(0.01, rect.Height * 0.58));
 
-            // 单行 DBText 不能像 MText 一样自动换行/裁切，因此这里按更保守的
-            // 文字宽度估算主动缩小高度，保证“C25路面恢复”等长注记不会碰框。
+            // ?? DBText ??? MText ??????/????????????
+            // ????????????????C25??????????????
             double availableWidth = Math.Max(0.01, rect.Width - Math.Max(0.035, height * 0.55));
             double widthLimitedHeight = availableWidth / Math.Max(0.1, GetLabelWeightedTextLength(cleanText) * 1.02);
             height = Math.Min(height, widthLimitedHeight);
@@ -445,7 +446,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             double diameter = radius * 2.0;
             double maxTextWidth = diameter * 0.78;
             double maxTextHeight = diameter * 0.38;
-            // 管径注记恢复为之前较保守的估算逻辑，避免 DN200/DN300 等文字撑出管圆。
+            // ???????????????????? DN200/DN300 ????????
             double weightedLength = GetPipeWeightedTextLength(text.Trim());
             double heightByWidth = maxTextWidth / Math.Max(0.1, weightedLength * 0.62);
             double height = Math.Min(maxTextHeight, heightByWidth);

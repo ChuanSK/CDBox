@@ -6,8 +6,8 @@ using System.IO;
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
     /// <summary>
-    /// 表面积标注的本机设置缓存。
-    /// 命令行直跑时读取这里的上次设置；从 CDBOX 打开界面调整后会写回这里。
+    /// ?????????????
+    /// ????????????????? CDBOX ?????????????
     /// </summary>
     internal static class SurfaceAreaAnnotationSettingsStore
     {
@@ -50,6 +50,12 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     options.AnnotationTemplate = text;
                 }
 
+                SurfaceAreaCalculationMode calculationMode;
+                if (TryGetCalculationMode(values, "CalculationMode", out calculationMode))
+                {
+                    options.CalculationMode = calculationMode;
+                }
+
                 if (TryGetString(values, "CassSurfaceLogPath", out text))
                 {
                     options.CassSurfaceLogPath = text ?? string.Empty;
@@ -82,13 +88,12 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     options.AnnotationLayerName = text;
                 }
 
-                options.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
                 options.UseBoundaryLayerForAnnotation = false;
                 options.DrawLeader = true;
             }
             catch
             {
-                // 设置读取失败时直接使用默认值，避免影响正式标注。
+                // ????????????????????????
             }
 
             return options;
@@ -104,7 +109,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             }
             catch
             {
-                // 设置保存失败不能影响正式标注流程。
+                // ?????????????????
             }
         }
 
@@ -121,6 +126,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             lines.Add("TextHeight=" + Escape(options.TextHeight.ToString(CultureInfo.InvariantCulture)));
             lines.Add("DecimalPlaces=" + Escape(options.DecimalPlaces.ToString(CultureInfo.InvariantCulture)));
             lines.Add("AnnotationTemplate=" + Escape(options.AnnotationTemplate ?? string.Empty));
+            lines.Add("CalculationMode=" + Escape(options.CalculationMode.ToString()));
             lines.Add("CassSurfaceLogPath=" + Escape(options.CassSurfaceLogPath ?? string.Empty));
             lines.Add("DeleteCassGeneratedObjects=" + Escape(options.DeleteCassGeneratedObjects ? "true" : "false"));
             lines.Add("AnnotationFontName=" + Escape(options.AnnotationFontName ?? string.Empty));
@@ -193,6 +199,16 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             string text;
             return TryGetString(values, key, out text)
                 && Enum.TryParse<AnnotationLayerMode>(text, true, out mode);
+        }
+
+        private static bool TryGetCalculationMode(Dictionary<string, string> values, string key, out SurfaceAreaCalculationMode mode)
+        {
+            mode = SurfaceAreaCalculationMode.CassCommand;
+            string text;
+            if (!TryGetString(values, key, out text)
+                || !Enum.TryParse<SurfaceAreaCalculationMode>(text, true, out mode)) return false;
+            return mode == SurfaceAreaCalculationMode.CassCommand
+                || mode == SurfaceAreaCalculationMode.PlanArea;
         }
 
         private static string Escape(string value)

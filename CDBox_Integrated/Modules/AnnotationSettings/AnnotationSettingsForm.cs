@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
@@ -13,8 +14,8 @@ using TCPipeAutoDraw.UI.Controls;
 namespace TCPipeAutoDraw.Modules.AnnotationSettings
 {
     /// <summary>
-    /// 标注设置统一界面。
-    /// 合并表面积标注、管线长度标注、节点标注三类设置，侧边栏/合集界面统一进入本窗口。
+    /// ?????????
+    /// ???????????????????????????/????????????
     /// </summary>
     public sealed class AnnotationSettingsForm : Form
     {
@@ -31,6 +32,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
         private NumericUpDown _surfInterval;
         private NumericUpDown _surfTextHeight;
         private NumericUpDown _surfDecimals;
+        private ComboBox _surfCalculationMode;
         private CheckBox _surfKeepCassObjects;
         private ComboBox _surfFonts;
         private TextBox _surfTemplate;
@@ -83,7 +85,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             _layerNames = LoadLayerNames();
             _textStyleNames = LoadTextStyleNames();
 
-            Text = "标注设置（制作：氚）";
+            Text = "??????????";
             Width = 840;
             Height = 720;
             StartPosition = FormStartPosition.CenterScreen;
@@ -107,7 +109,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             Controls.Add(root);
 
             var title = new Label();
-            title.Text = "标注设置";
+            title.Text = "????";
             title.AutoSize = true;
             title.Font = new System.Drawing.Font(title.Font.FontFamily, 12.5f, System.Drawing.FontStyle.Bold);
             title.Padding = new Padding(0, 0, 0, 8);
@@ -122,7 +124,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             root.Controls.Add(_tabs, 0, 1);
 
             var tip = new Label();
-            tip.Text = "说明：本界面统一保存三类标注设置；命令行直跑标注时会继续读取这里保存的上次设置。";
+            tip.Text = "????????????????????????????????????????";
             tip.AutoSize = true;
             tip.ForeColor = SystemColors.GrayText;
             tip.Padding = new Padding(0, 8, 0, 4);
@@ -135,13 +137,13 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             root.Controls.Add(buttons, 0, 3);
 
             var close = new Button();
-            close.Text = "关闭";
+            close.Text = "??";
             close.AutoSize = true;
             close.Click += delegate { Close(); };
             buttons.Controls.Add(close);
 
             var save = new Button();
-            save.Text = "保存设置";
+            save.Text = "????";
             save.Width = 120;
             save.Height = 30;
             save.Click += delegate { SaveAllSettings(true); };
@@ -157,7 +159,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
         private TabPage BuildSurfaceTab()
         {
-            var page = new TabPage("表面积");
+            var page = new TabPage("???");
             var panel = CreateScrollablePanel();
             page.Controls.Add(panel);
 
@@ -166,28 +168,37 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
             _surfInterval = MakeNumber(0.1M, 1000M, 5M, 1);
             SetNumberValue(_surfInterval, (decimal)_surfaceInitialOptions.BoundaryInterval);
-            AddRow(table, 0, "边界插值间隔（米）", _surfInterval);
+            AddRow(table, 0, "?????????", _surfInterval);
 
-            var calcLabel = MakeValueLabel("调用 CASS surfacearea 计算（固定）");
-            AddRow(table, 1, "计算方式", calcLabel);
+            _surfCalculationMode = new ComboBox();
+            _surfCalculationMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            _surfCalculationMode.Items.Add("?????");
+            _surfCalculationMode.Items.Add("????");
+            _surfCalculationMode.SelectedIndex = _surfaceInitialOptions.CalculationMode == SurfaceAreaCalculationMode.PlanArea ? 1 : 0;
+            _surfCalculationMode.SelectedIndexChanged += delegate
+            {
+                if (_surfKeepCassObjects != null) _surfKeepCassObjects.Enabled = _surfCalculationMode.SelectedIndex != 1;
+            };
+            AddRow(table, 1, "????", _surfCalculationMode);
 
             _surfKeepCassObjects = new CheckBox();
-            _surfKeepCassObjects.Text = "保留 CASS 生成的三角网和三角面积文字（默认不保留）";
+            _surfKeepCassObjects.Text = "?? CASS ????????????????????";
             _surfKeepCassObjects.AutoSize = true;
             _surfKeepCassObjects.Checked = !_surfaceInitialOptions.DeleteCassGeneratedObjects;
-            AddRow(table, 2, "CASS生成物", _surfKeepCassObjects);
+            _surfKeepCassObjects.Enabled = _surfCalculationMode.SelectedIndex != 1;
+            AddRow(table, 2, "CASS???", _surfKeepCassObjects);
 
             _surfTextHeight = MakeNumber(0.1M, 1000M, 1M, 1);
             SetNumberValue(_surfTextHeight, (decimal)_surfaceInitialOptions.TextHeight);
-            AddRow(table, 3, "注记文字高度", _surfTextHeight);
+            AddRow(table, 3, "??????", _surfTextHeight);
 
             _surfDecimals = MakeNumber(0M, 6M, 2M, 0);
             SetNumberValue(_surfDecimals, _surfaceInitialOptions.DecimalPlaces);
-            AddRow(table, 4, "面积小数位", _surfDecimals);
+            AddRow(table, 4, "?????", _surfDecimals);
 
             _surfFonts = MakeCombo(_textStyleNames, 260);
             SelectDefaultTextStyle(_surfFonts, _surfaceInitialOptions.AnnotationFontName);
-            AddRow(table, 5, "字体样式", _surfFonts);
+            AddRow(table, 5, "????", _surfFonts);
 
             BuildLayerRows(
                 table,
@@ -207,7 +218,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             _surfTemplate.Text = string.IsNullOrWhiteSpace(_surfaceInitialOptions.AnnotationTemplate)
                 ? SurfaceAreaAnnotationOptions.Default.AnnotationTemplate
                 : _surfaceInitialOptions.AnnotationTemplate;
-            AddRow(table, 9, "注记模板", _surfTemplate);
+            AddRow(table, 9, "????", _surfTemplate);
 
             UpdateSurfaceLayerControls();
             return page;
@@ -215,7 +226,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
         private TabPage BuildPipeTab()
         {
-            var page = new TabPage("管线长度");
+            var page = new TabPage("????");
             var panel = CreateScrollablePanel();
             page.Controls.Add(panel);
 
@@ -224,15 +235,15 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
             _pipeTextHeight = MakeNumber(0.1M, 1000M, 1M, 1);
             SetNumberValue(_pipeTextHeight, (decimal)_pipeInitialOptions.TextHeight);
-            AddRow(table, 0, "注记文字高度", _pipeTextHeight);
+            AddRow(table, 0, "??????", _pipeTextHeight);
 
             _pipePrecision = MakeNumber(0M, 6M, 2M, 0);
             SetNumberValue(_pipePrecision, _pipeInitialOptions.DecimalPlaces);
-            AddRow(table, 1, "精确位数", _pipePrecision);
+            AddRow(table, 1, "????", _pipePrecision);
 
             _pipeFonts = MakeCombo(_textStyleNames, 260);
             SelectDefaultTextStyle(_pipeFonts, _pipeInitialOptions.AnnotationFontName);
-            AddRow(table, 2, "字体样式", _pipeFonts);
+            AddRow(table, 2, "????", _pipeFonts);
 
             BuildLayerRows(
                 table,
@@ -247,51 +258,51 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 out _pipeCustomLayer,
                 UpdatePipeLayerControls);
 
-            AddRow(table, 6, "属性联动", BuildPipeLayerLinkPanel());
+            AddRow(table, 6, "????", BuildPipeLayerLinkPanel());
 
             _pipeTemplate = new TextBox();
             _pipeTemplate.Multiline = false;
             _pipeTemplate.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.AnnotationTemplate)
                 ? PipeLengthAnnotationOptions.Default.AnnotationTemplate
                 : _pipeInitialOptions.AnnotationTemplate;
-            AddRow(table, 7, "上方注记模板", _pipeTemplate);
+            AddRow(table, 7, "??????", _pipeTemplate);
 
             _pipeBottomAnnotation = new CheckBox();
-            _pipeBottomAnnotation.Text = "对象未设置属性仍生成横线下方注记";
+            _pipeBottomAnnotation.Text = "????????????????";
             _pipeBottomAnnotation.AutoSize = true;
             _pipeBottomAnnotation.Checked = _pipeInitialOptions.DrawBottomAnnotation;
             _pipeBottomAnnotation.CheckedChanged += delegate { UpdatePipeBottomAnnotationControls(); };
-            AddRow(table, 8, "下方注记", _pipeBottomAnnotation);
+            AddRow(table, 8, "????", _pipeBottomAnnotation);
 
             var excavationPanel = new FlowLayoutPanel();
             excavationPanel.Dock = DockStyle.Fill;
             excavationPanel.AutoSize = true;
             excavationPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
 
-            excavationPanel.Controls.Add(MakeInlineLabel("宽"));
+            excavationPanel.Controls.Add(MakeInlineLabel("?"));
             _pipeExcavationWidth = MakeNumber(0M, 100000M, 0M, 3);
             SetNumberValue(_pipeExcavationWidth, (decimal)_pipeInitialOptions.ExcavationWidth);
             excavationPanel.Controls.Add(_pipeExcavationWidth);
 
-            excavationPanel.Controls.Add(MakeInlineLabel("高"));
+            excavationPanel.Controls.Add(MakeInlineLabel("?"));
             _pipeExcavationHeight = MakeNumber(0M, 100000M, 0M, 3);
             SetNumberValue(_pipeExcavationHeight, (decimal)_pipeInitialOptions.ExcavationHeight);
             excavationPanel.Controls.Add(_pipeExcavationHeight);
 
-            excavationPanel.Controls.Add(MakeInlineLabel("深"));
+            excavationPanel.Controls.Add(MakeInlineLabel("?"));
             _pipeExcavationDepth = MakeNumber(0M, 100000M, 0M, 3);
             SetNumberValue(_pipeExcavationDepth, (decimal)_pipeInitialOptions.ExcavationDepth);
             excavationPanel.Controls.Add(_pipeExcavationDepth);
-            AddRow(table, 9, "自定义开挖参数", excavationPanel);
+            AddRow(table, 9, "???????", excavationPanel);
 
             _pipeBottomTemplate = new TextBox();
             _pipeBottomTemplate.Multiline = false;
             _pipeBottomTemplate.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.BottomAnnotationTemplate)
                 ? PipeLengthAnnotationOptions.Default.BottomAnnotationTemplate
                 : _pipeInitialOptions.BottomAnnotationTemplate;
-            AddRow(table, 10, "下方注记模板", _pipeBottomTemplate);
+            AddRow(table, 10, "??????", _pipeBottomTemplate);
 
-            var precisionTip = MakeValueLabel("精确位数同时作用于长度、宽、高、深的输出格式。开挖参数输入仍可保留 3 位，最终注记按精确位数显示。");
+            var precisionTip = MakeValueLabel("????????????????????????????????? 3 ??????????????");
             precisionTip.ForeColor = SystemColors.GrayText;
             AddRow(table, 11, "", precisionTip);
 
@@ -303,7 +314,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
         private TabPage BuildNodeTab()
         {
-            var page = new TabPage("节点");
+            var page = new TabPage("??");
             var panel = CreateScrollablePanel();
             page.Controls.Add(panel);
 
@@ -312,40 +323,40 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
             _nodeTextHeight = MakeNumber(0.1M, 1000M, 1M, 1);
             SetNumberValue(_nodeTextHeight, (decimal)_nodeInitialOptions.TextHeight);
-            AddRow(table, 0, "注记文字高度", _nodeTextHeight);
+            AddRow(table, 0, "??????", _nodeTextHeight);
 
-            var precisionLabel = MakeValueLabel("2（井深、井筒按既有规则固定保留两位）");
-            AddRow(table, 1, "深度小数位", precisionLabel);
+            var precisionLabel = MakeValueLabel("2??????????????????");
+            AddRow(table, 1, "?????", precisionLabel);
 
             _nodeFonts = MakeCombo(_textStyleNames, 260);
             SelectDefaultTextStyle(_nodeFonts, _nodeInitialOptions.AnnotationFontName);
-            AddRow(table, 2, "字体样式", _nodeFonts);
+            AddRow(table, 2, "????", _nodeFonts);
 
             BuildNodeLayerRows(table, 3);
 
             _nodeLineSpacing = MakeNumber(0.5M, 5M, 1.45M, 2);
             SetNumberValue(_nodeLineSpacing, (decimal)_nodeInitialOptions.LineSpacingFactor);
-            AddRow(table, 6, "行距系数", _nodeLineSpacing);
+            AddRow(table, 6, "????", _nodeLineSpacing);
 
             var colorPanel = new FlowLayoutPanel();
             colorPanel.Dock = DockStyle.Fill;
             colorPanel.AutoSize = true;
             colorPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
-            colorPanel.Controls.Add(MakeInlineLabel("节点编号"));
+            colorPanel.Controls.Add(MakeInlineLabel("????"));
             _nodeNoColor = MakeNumber(1M, 255M, 1M, 0);
             SetNumberValue(_nodeNoColor, _nodeInitialOptions.NodeNoColorIndex);
             colorPanel.Controls.Add(MakeColorIndexButton(_nodeNoColor));
-            colorPanel.Controls.Add(MakeInlineLabel("普通文字"));
+            colorPanel.Controls.Add(MakeInlineLabel("????"));
             _nodeTextColor = MakeNumber(1M, 255M, 7M, 0);
             SetNumberValue(_nodeTextColor, _nodeInitialOptions.TextColorIndex);
             colorPanel.Controls.Add(MakeColorIndexButton(_nodeTextColor));
-            colorPanel.Controls.Add(MakeInlineLabel("预览引线"));
+            colorPanel.Controls.Add(MakeInlineLabel("????"));
             _nodePreviewLeaderColor = MakeNumber(1M, 255M, 1M, 0);
             SetNumberValue(_nodePreviewLeaderColor, _nodeInitialOptions.PreviewLeaderColorIndex);
             colorPanel.Controls.Add(MakeColorIndexButton(_nodePreviewLeaderColor));
-            AddRow(table, 7, "颜色", colorPanel);
+            AddRow(table, 7, "??", colorPanel);
 
-            var tip = MakeValueLabel("点击颜色预览打开 CDBox 颜色选择器；节点标注设置当前按 ACI 保存。");
+            var tip = MakeValueLabel("???????? CDBox ??????????????? ACI ???");
             tip.ForeColor = SystemColors.GrayText;
             AddRow(table, 8, "", tip);
 
@@ -363,7 +374,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             for (int i = 0; i < 6; i++) panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             _pipeAutoLayerBySourceMetadata = new CheckBox();
-            _pipeAutoLayerBySourceMetadata.Text = "根据被标注管线父属性/标签自动分配注记图层";
+            _pipeAutoLayerBySourceMetadata.Text = "??????????/??????????";
             _pipeAutoLayerBySourceMetadata.AutoSize = true;
             _pipeAutoLayerBySourceMetadata.Checked = _pipeInitialOptions.EnableSourceMetadataLayerLink;
             _pipeAutoLayerBySourceMetadata.CheckedChanged += delegate { UpdatePipeLayerLinkControls(); UpdatePipeLayerControls(); };
@@ -372,14 +383,14 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             var modePanel = new FlowLayoutPanel();
             modePanel.AutoSize = true;
             modePanel.Dock = DockStyle.Fill;
-            modePanel.Controls.Add(MakeInlineLabel("分配方式"));
+            modePanel.Controls.Add(MakeInlineLabel("????"));
             _pipeLayerLinkMode = new ComboBox();
             _pipeLayerLinkMode.DropDownStyle = ComboBoxStyle.DropDownList;
             _pipeLayerLinkMode.Width = 210;
-            _pipeLayerLinkMode.Items.Add("按父属性：支管 → 支管注记");
-            _pipeLayerLinkMode.Items.Add("按分类：110PVC管 → 110PVC管注记");
-            _pipeLayerLinkMode.Items.Add("按标签：明管 → 明管注记");
-            _pipeLayerLinkMode.Items.Add("按父属性+标签：支管-明管注记");
+            _pipeLayerLinkMode.Items.Add("??????? ? ????");
+            _pipeLayerLinkMode.Items.Add("????110PVC? ? 110PVC???");
+            _pipeLayerLinkMode.Items.Add("?????? ? ????");
+            _pipeLayerLinkMode.Items.Add("????+?????-????");
             _pipeLayerLinkMode.SelectedIndex = ToLayerLinkModeIndex(_pipeInitialOptions.LayerLinkMode);
             modePanel.Controls.Add(_pipeLayerLinkMode);
             panel.Controls.Add(modePanel, 0, 1);
@@ -387,20 +398,20 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             var suffixPanel = new FlowLayoutPanel();
             suffixPanel.AutoSize = true;
             suffixPanel.Dock = DockStyle.Fill;
-            suffixPanel.Controls.Add(MakeInlineLabel("图层后缀"));
+            suffixPanel.Controls.Add(MakeInlineLabel("????"));
             _pipeLayerSuffix = new TextBox();
             _pipeLayerSuffix.Width = 90;
-            _pipeLayerSuffix.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.AutoAnnotationLayerSuffix) ? "注记" : _pipeInitialOptions.AutoAnnotationLayerSuffix;
+            _pipeLayerSuffix.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.AutoAnnotationLayerSuffix) ? "??" : _pipeInitialOptions.AutoAnnotationLayerSuffix;
             suffixPanel.Controls.Add(_pipeLayerSuffix);
-            suffixPanel.Controls.Add(MakeInlineLabel("未识别"));
+            suffixPanel.Controls.Add(MakeInlineLabel("???"));
             _pipeFallbackLayer = new TextBox();
             _pipeFallbackLayer.Width = 120;
-            _pipeFallbackLayer.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.FallbackAnnotationLayerName) ? "未分类注记" : _pipeInitialOptions.FallbackAnnotationLayerName;
+            _pipeFallbackLayer.Text = string.IsNullOrWhiteSpace(_pipeInitialOptions.FallbackAnnotationLayerName) ? "?????" : _pipeInitialOptions.FallbackAnnotationLayerName;
             suffixPanel.Controls.Add(_pipeFallbackLayer);
             panel.Controls.Add(suffixPanel, 0, 2);
 
             _pipeWriteAutoLayerMetadata = new CheckBox();
-            _pipeWriteAutoLayerMetadata.Text = "自动创建注记图层时写入 CDBox 父属性/标签";
+            _pipeWriteAutoLayerMetadata.Text = "??????????? CDBox ???/??";
             _pipeWriteAutoLayerMetadata.AutoSize = true;
             _pipeWriteAutoLayerMetadata.Checked = _pipeInitialOptions.WriteAutoAnnotationLayerMetadata;
             panel.Controls.Add(_pipeWriteAutoLayerMetadata, 0, 3);
@@ -408,14 +419,14 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             var tagPanel = new FlowLayoutPanel();
             tagPanel.AutoSize = true;
             tagPanel.Dock = DockStyle.Fill;
-            tagPanel.Controls.Add(MakeInlineLabel("标签分层只匹配"));
+            tagPanel.Controls.Add(MakeInlineLabel("???????"));
             _pipeSplitTags = new TextBox();
             _pipeSplitTags.Width = 280;
-            _pipeSplitTags.Text = _pipeInitialOptions.AnnotationSplitTagText ?? "明管、并埋、雨水、砼恢复";
+            _pipeSplitTags.Text = _pipeInitialOptions.AnnotationSplitTagText ?? "????????????";
             tagPanel.Controls.Add(_pipeSplitTags);
             panel.Controls.Add(tagPanel, 0, 4);
 
-            var tip = MakeValueLabel("开启后会覆盖上方“默认ZJ/已有图层/自定义图层”的实际落层，但仍保留这些设置作为关闭联动时使用。");
+            var tip = MakeValueLabel("???????????ZJ/????/??????????????????????????????");
             tip.ForeColor = SystemColors.GrayText;
             panel.Controls.Add(tip, 0, 5);
 
@@ -457,16 +468,16 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             Action updateAction)
         {
             radDefaultZJ = new RadioButton();
-            radDefaultZJ.Text = "默认注记图层：ZJ（图中没有时自动创建）";
+            radDefaultZJ.Text = "???????ZJ???????????";
             radDefaultZJ.AutoSize = true;
-            AddRow(table, startRow, "注记图层", radDefaultZJ);
+            AddRow(table, startRow, "????", radDefaultZJ);
 
             var existingPanel = new FlowLayoutPanel();
             existingPanel.Dock = DockStyle.Fill;
             existingPanel.AutoSize = true;
             existingPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
             radExistingLayer = new RadioButton();
-            radExistingLayer.Text = "选择已有图层";
+            radExistingLayer.Text = "??????";
             radExistingLayer.AutoSize = true;
             existingPanel.Controls.Add(radExistingLayer);
             layers = MakeCombo(_layerNames, 260);
@@ -479,7 +490,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             customPanel.AutoSize = true;
             customPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
             radCustomLayer = new RadioButton();
-            radCustomLayer.Text = "自定义图层";
+            radCustomLayer.Text = "?????";
             radCustomLayer.AutoSize = true;
             customPanel.Controls.Add(radCustomLayer);
             customLayer = new TextBox();
@@ -533,16 +544,16 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
         private void BuildNodeLayerRows(TableLayoutPanel table, int startRow)
         {
             _nodeRadDefaultZJ = new RadioButton();
-            _nodeRadDefaultZJ.Text = "默认注记图层：ZJ（图中没有时自动创建）";
+            _nodeRadDefaultZJ.Text = "???????ZJ???????????";
             _nodeRadDefaultZJ.AutoSize = true;
-            AddRow(table, startRow, "注记图层", _nodeRadDefaultZJ);
+            AddRow(table, startRow, "????", _nodeRadDefaultZJ);
 
             var existingPanel = new FlowLayoutPanel();
             existingPanel.Dock = DockStyle.Fill;
             existingPanel.AutoSize = true;
             existingPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
             _nodeRadExistingLayer = new RadioButton();
-            _nodeRadExistingLayer.Text = "选择已有图层";
+            _nodeRadExistingLayer.Text = "??????";
             _nodeRadExistingLayer.AutoSize = true;
             existingPanel.Controls.Add(_nodeRadExistingLayer);
             _nodeLayers = MakeCombo(_layerNames, 260);
@@ -555,7 +566,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             customPanel.AutoSize = true;
             customPanel.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
             _nodeRadCustomLayer = new RadioButton();
-            _nodeRadCustomLayer.Text = "自定义图层";
+            _nodeRadCustomLayer.Text = "?????";
             _nodeRadCustomLayer.AutoSize = true;
             customPanel.Controls.Add(_nodeRadCustomLayer);
             _nodeCustomLayer = new TextBox();
@@ -616,16 +627,16 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             switch (_tabs.SelectedIndex)
             {
                 case 0:
-                    _btnRunCurrent.Text = "计算并标注";
+                    _btnRunCurrent.Text = "?????";
                     break;
                 case 1:
-                    _btnRunCurrent.Text = "标注长度";
+                    _btnRunCurrent.Text = "????";
                     break;
                 case 2:
-                    _btnRunCurrent.Text = "节点标注";
+                    _btnRunCurrent.Text = "????";
                     break;
                 default:
-                    _btnRunCurrent.Text = "运行标注";
+                    _btnRunCurrent.Text = "????";
                     break;
             }
         }
@@ -687,7 +698,9 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 TextHeight = (double)_surfTextHeight.Value,
                 DecimalPlaces = (int)_surfDecimals.Value,
                 AnnotationTemplate = _surfTemplate.Text,
-                CalculationMode = SurfaceAreaCalculationMode.CassCommand,
+                CalculationMode = _surfCalculationMode != null && _surfCalculationMode.SelectedIndex == 1
+                    ? SurfaceAreaCalculationMode.PlanArea
+                    : SurfaceAreaCalculationMode.CassCommand,
                 CassSurfaceLogPath = string.Empty,
                 DeleteCassGeneratedObjects = !(_surfKeepCassObjects != null && _surfKeepCassObjects.Checked),
                 AnnotationFontName = textStyleName,
@@ -721,8 +734,8 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 DrawLeader = true,
                 EnableSourceMetadataLayerLink = _pipeAutoLayerBySourceMetadata != null && _pipeAutoLayerBySourceMetadata.Checked,
                 LayerLinkMode = FromLayerLinkModeIndex(_pipeLayerLinkMode == null ? 0 : _pipeLayerLinkMode.SelectedIndex),
-                AutoAnnotationLayerSuffix = _pipeLayerSuffix == null ? "注记" : _pipeLayerSuffix.Text,
-                FallbackAnnotationLayerName = _pipeFallbackLayer == null ? "未分类注记" : _pipeFallbackLayer.Text,
+                AutoAnnotationLayerSuffix = _pipeLayerSuffix == null ? "??" : _pipeLayerSuffix.Text,
+                FallbackAnnotationLayerName = _pipeFallbackLayer == null ? "?????" : _pipeFallbackLayer.Text,
                 WriteAutoAnnotationLayerMetadata = _pipeWriteAutoLayerMetadata == null || _pipeWriteAutoLayerMetadata.Checked,
                 AnnotationSplitTagText = _pipeSplitTags == null ? string.Empty : _pipeSplitTags.Text,
                 DrawBottomAnnotation = _pipeBottomAnnotation != null && _pipeBottomAnnotation.Checked,
@@ -768,7 +781,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
 
             if (showMessage)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new TCPipeAutoDraw.UI.AcadMainWindow(), "标注设置已保存。", "标注设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new TCPipeAutoDraw.UI.AcadMainWindow(), "????????", "????", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -793,7 +806,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 if (wasVisible) Hide();
 
                 SurfaceAreaAnnotationResult result = SurfaceAreaAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                _doc.Editor.WriteMessage(result.ToEditorMessage());
+                _doc.Editor.WriteHudMessage(result.ToEditorMessage());
 
                 if (result.Success || result.AsyncStarted)
                 {
@@ -808,8 +821,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             catch (Exception ex)
             {
                 restoreForm = true;
-                _doc.Editor.WriteMessage("\n[表面积标注] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "表面积标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "???????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -835,7 +847,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 while (true)
                 {
                     PipeLengthAnnotationResult result = PipeLengthAnnotationService.SelectCalculateAndAnnotate(_doc, options);
-                    _doc.Editor.WriteMessage(result.ToEditorMessage());
+                    _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                     if (result.IsCancelled)
                     {
                         restoreForm = false;
@@ -846,8 +858,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[管线长度标注] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "管线长度标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "????????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -873,7 +884,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
                 while (true)
                 {
                     NodeAnnotationResult result = NodeAnnotationService.SelectAndAnnotate(_doc, options);
-                    _doc.Editor.WriteMessage(result.ToEditorMessage());
+                    _doc.Editor.WriteHudMessage(result.ToEditorMessage());
                     if (!result.Success)
                     {
                         restoreForm = false;
@@ -884,8 +895,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             }
             catch (Exception ex)
             {
-                _doc.Editor.WriteMessage("\n[节点标注] 失败：" + ex.Message);
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "节点标注失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(ex.Message, "??????", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -959,7 +969,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             if (names.Count == 0) names.Add("STANDARD");
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
 
-            if (ContainsIgnoreCase(names, "宋体")) MoveNameToTop(names, "宋体");
+            if (ContainsIgnoreCase(names, "??")) MoveNameToTop(names, "??");
             else if (!string.IsNullOrWhiteSpace(currentStyleName) && ContainsIgnoreCase(names, currentStyleName)) MoveNameToTop(names, currentStyleName);
             else MoveNameToTop(names, "STANDARD");
 
@@ -1017,7 +1027,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationSettings
             Action update = delegate
             {
                 CDBoxColor color = CDBoxColor.FromIndex((int)valueControl.Value);
-                button.Text = "■  " + color.DisplayName;
+                button.Text = "?  " + color.DisplayName;
                 button.ForeColor = color.Index == 7
                     ? SystemColors.ControlText
                     : System.Drawing.Color.FromArgb(color.R, color.G, color.B);

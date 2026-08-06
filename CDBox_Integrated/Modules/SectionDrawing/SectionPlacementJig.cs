@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
@@ -20,7 +20,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
         }
 
         /// <summary>
-        /// 返回主体断面框左下角；用户实际点选的是左侧注记栏左下角。
+        /// ????????????????????????????
         /// </summary>
         public Point3d Position { get { return _bodyOrigin; } }
 
@@ -37,7 +37,7 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
 
         protected override SamplerStatus Sampler(JigPrompts prompts)
         {
-            var opts = new JigPromptPointOptions("\n请选择生成图左下角插入点：");
+            var opts = new JigPromptPointOptions("\n ");
             opts.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
             PromptPointResult res = prompts.AcquirePoint(opts);
             if (res.Status != PromptStatus.OK) return SamplerStatus.Cancel;
@@ -157,8 +157,8 @@ namespace TCPipeAutoDraw.Modules.SectionDrawing
             string cleanText = NormalizeSingleLine(text);
             double safeHeight = height <= 0 ? 0.08 : height;
 
-            // DrawJig 中 DBText 的居中对齐在部分 AutoCAD/CASS 环境不会立即 AdjustAlignment，
-            // 预览会表现为文字整体偏位。这里改为按估算宽度换算左下基点绘制，保证预览位置更接近最终实体。
+            // DrawJig ? DBText ???????? AutoCAD/CASS ?????? AdjustAlignment?
+            // ?????????????????????????????????????????????
             double width = EstimateTextWidth(cleanText, safeHeight);
             Point3d basePoint = new Point3d(position.X - width / 2.0, position.Y - safeHeight * 0.35, position.Z);
 

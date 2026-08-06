@@ -26,7 +26,7 @@ namespace TCPipeAutoDraw.UI.Studio
                         GetCategory(module.Id),
                         module.Description,
                         module.CommandName,
-                        module.Enabled ? BuildBadge(module.CommandName, string.Empty) : "暂未启用",
+                        module.Enabled ? BuildBadge(module.CommandName, string.Empty) : "????",
                         CDBoxStudioActionKind.Module,
                         module.Enabled,
                         true,
@@ -34,17 +34,17 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
             }
 
-            AddCommand(actions, "cmd:PLDM", "批量生成断面", "断面", string.Empty, "PLDM", string.Empty);
-            AddCommand(actions, "cmd:CDZDM", "纵断面生成", "断面",
-                "选择一条或多条由井节点连接的主管管线，生成纵断面图。",
-                "CDZDM", "CDZDM");
+            AddCommand(actions, "cmd:PLDM", "??????", "??", string.Empty, "PLDM", string.Empty);
+            AddCommand(actions, "cmd:ZDM", "?????", "??",
+                "??????????????????????????",
+                "ZDM", "ZDM");
             actions.Add(new CDBoxStudioAction(
                 "module:longitudinal-profile-settings",
-                "纵断面设置",
-                "断面",
-                "设置纵断面表头、比例、数据栏和显示样式。",
-                "CDZDMSZ",
-                "CDZDMSZ",
+                "?????",
+                "??",
+                "????????????????????",
+                "ZDMSZ",
+                "ZDMSZ",
                 CDBoxStudioActionKind.Module,
                 true,
                 true,
@@ -53,30 +53,30 @@ namespace TCPipeAutoDraw.UI.Studio
                     CDBoxStudioLongitudinalProfileSettingsWindow
                         .ShowWindow(new AcadMainWindow());
                 }));
-            AddCommand(actions, "cmd:SXMRB", "属性默认表", "管线属性", string.Empty, "SXMRB", string.Empty);
-            AddCommand(actions, "cmd:SXQC", "属性清除", "管线属性", string.Empty, "SXQC", string.Empty);
-            AddCommand(actions, "cmd:CDQBOARD", "工程量看板", "工程量", string.Empty, "CDQBOARD", string.Empty);
-            AddCommand(actions, "cmd:TCFRAMELAYOUT", "裁图区域布框", "图框工具", string.Empty, "TCFRAMELAYOUT", string.Empty);
-            AddCommand(actions, "cmd:TCFRAMEPLACE", "直接布置图框", "图框工具", string.Empty, "TCFRAMEPLACE", string.Empty);
+            AddCommand(actions, "cmd:SXMRB", "?????", "????", string.Empty, "SXMRB", string.Empty);
+            AddCommand(actions, "cmd:SXQC", "????", "????", string.Empty, "SXQC", string.Empty);
+            AddCommand(actions, "cmd:CDQBOARD", "?????", "???", string.Empty, "CDQBOARD", string.Empty);
+            AddCommand(actions, "cmd:TCFRAMELAYOUT", "??????", "????", string.Empty, "TCFRAMELAYOUT", string.Empty);
+            AddCommand(actions, "cmd:TCFRAMEPLACE", "??????", "????", string.Empty, "TCFRAMEPLACE", string.Empty);
             actions.Add(new CDBoxStudioAction(
                 "module:frame-settings",
-                "图框设置",
-                "图框工具",
-                "管理自定义图框模板、裁图留白、指北针、比例标注和布框间距。",
+                "????",
+                "????",
+                "?????????????????????????????",
                 "TCFRAMESET",
                 "TCFRAMESET",
                 CDBoxStudioActionKind.Module,
                 true,
                 true,
                 delegate { CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow()); }));
-            AddCommand(actions, "cmd:CDJMSB", "简码识别", "测绘工具",
-                "读取带简码的 CASS DAT/TXT/CSV 坐标文件并自动连线。",
+            AddCommand(actions, "cmd:CDJMSB", "????", "????",
+                "?????? CASS DAT/TXT/CSV ??????????",
                 "CDJMSB", "CDJMSB");
             actions.Add(new CDBoxStudioAction(
                 "module:short-code-settings",
-                "简码识别设置",
-                "测绘工具",
-                "设置简码关系符号、开头与结尾相邻点连接和自动闭合。",
+                "??????",
+                "????",
+                "?????????????????????????",
                 "CDJMSZ",
                 "CDJMSZ",
                 CDBoxStudioActionKind.Module,
@@ -87,7 +87,7 @@ namespace TCPipeAutoDraw.UI.Studio
                     CDBoxStudioShortCodeSettingsWindow.ShowWindow(
                         new AcadMainWindow());
                 }));
-            AddCommand(actions, "cmd:CDSET", "CDBox设置", "系统", string.Empty, "CDSET", string.Empty);
+            AddCommand(actions, "cmd:CDSET", "CDBox??", "??", string.Empty, "CDSET", string.Empty);
 
             return actions;
         }
@@ -109,30 +109,30 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static string GetCategory(string moduleId)
         {
-            if (string.IsNullOrWhiteSpace(moduleId)) return "其他";
+            if (string.IsNullOrWhiteSpace(moduleId)) return "??";
 
             switch (moduleId.ToLowerInvariant())
             {
                 case "layer-manager":
-                    return "图层管理器";
+                    return "?????";
                 case "annotation-settings":
                 case "surface-area-annotation":
                 case "pipe-length-annotation":
                 case "node-annotation":
-                    return "标注";
+                    return "??";
                 case "section-drawing":
-                    return "断面";
+                    return "??";
                 case "quantity-pipe-attributes":
-                    return "管线属性";
+                    return "????";
                 case "quantity-calculation":
-                    return "工程量";
+                    return "???";
                 case "frame-template-add":
                 case "frame-cut-layout":
-                    return "图框工具";
+                    return "????";
                 case "excel-to-cad":
-                    return "表格工具";
+                    return "????";
                 default:
-                    return "其他";
+                    return "??";
             }
         }
 
@@ -148,7 +148,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
             if (doc == null)
             {
-                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "未找到当前图纸。", "CDBox Studio", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                TCPipeAutoDraw.UI.CDBoxMessageBox.Show(new AcadMainWindow(), "????????", "CDBox Studio", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
                 return;
             }
 

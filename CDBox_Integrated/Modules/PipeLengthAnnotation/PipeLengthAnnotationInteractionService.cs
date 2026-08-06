@@ -270,7 +270,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             catch (Exception ex)
             {
-                doc.Editor.WriteMessage("\n[CDBox 标注浮窗] 打开失败：" + ex.Message);
+                doc.Editor.WriteHudMessage("\n[CDBox ????] ?????" + ex.Message);
             }
         }
 
@@ -330,7 +330,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private static PipeLengthAnnotationEditModel ApplyModel(PipeLengthAnnotationEditModel submitted)
         {
-            if (_document == null) throw new InvalidOperationException("当前图纸已关闭。 ");
+            if (_document == null) throw new InvalidOperationException("???????? ");
             PipeLengthAnnotationEditModel saved =
                 PipeLengthAnnotationObjectService.SaveEditModel(_document, submitted);
             _model = saved;
@@ -340,7 +340,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         private static PipeLengthAnnotationEditModel ToggleBinding(PipeLengthAnnotationEditModel submitted)
         {
-            if (_document == null) throw new InvalidOperationException("当前图纸已关闭。 ");
+            if (_document == null) throw new InvalidOperationException("???????? ");
             PipeLengthAnnotationEditModel result;
             if (submitted.IsBound)
             {

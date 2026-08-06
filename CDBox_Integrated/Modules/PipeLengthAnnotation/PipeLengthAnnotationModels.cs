@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
@@ -24,43 +25,43 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public bool DrawLeader { get; set; }
 
         /// <summary>
-        /// 开启后，注记图层不再只按上方图层设置，而是根据被标注管线图层的父属性/标签自动分配。
+        /// ??????????????????????????????????/???????
         /// </summary>
         public bool EnableSourceMetadataLayerLink { get; set; }
 
         /// <summary>
-        /// 自动分配方式。第一版主要使用 ParentGroup：主管 -> 主管注记，支管 -> 支管注记。
+        /// ?????????????? ParentGroup??? -> ??????? -> ?????
         /// </summary>
         public AnnotationLayerLinkMode LayerLinkMode { get; set; }
 
         /// <summary>
-        /// 自动注记图层后缀。默认“注记”。
+        /// ????????????????
         /// </summary>
         public string AutoAnnotationLayerSuffix { get; set; }
 
         /// <summary>
-        /// 被标注管线没有父属性/标签时使用的图层。
+        /// ??????????/?????????
         /// </summary>
         public string FallbackAnnotationLayerName { get; set; }
 
         /// <summary>
-        /// 自动创建注记图层时，同时写入 CDBox 父属性/标签。
+        /// ?????????????? CDBox ???/???
         /// </summary>
         public bool WriteAutoAnnotationLayerMetadata { get; set; }
 
         /// <summary>
-        /// 按标签分层时参与匹配的标签，逗号/顿号/分号分隔。为空时使用全部标签中的第一个。
+        /// ????????????????/??/????????????????????
         /// </summary>
         public string AnnotationSplitTagText { get; set; }
 
         /// <summary>
-        /// 是否在横线下方额外生成开挖等补充注记。
+        /// ???????????????????
         /// </summary>
         public bool DrawBottomAnnotation { get; set; }
 
         /// <summary>
-        /// 横线下方补充注记模板。
-        /// 支持：{长度}/{长}/{Length}、{宽}/{Width}、{高}/{Height}、{深}/{Depth}、{图层名}。
+        /// ???????????
+        /// ???{??}/{?}/{Length}?{?}/{Width}?{?}/{Height}?{?}/{Depth}?{???}?
         /// </summary>
         public string BottomAnnotationTemplate { get; set; }
 
@@ -76,20 +77,20 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     TextHeight = 1.0,
                     DecimalPlaces = 2,
-                    AnnotationTemplate = "{图层名}长度：{长度}m",
-                    AnnotationFontName = "宋体",
+                    AnnotationTemplate = "{???}???{??}m",
+                    AnnotationFontName = "??",
                     LayerMode = AnnotationLayerMode.DefaultZJ,
                     SelectedLayerName = "ZJ",
                     AnnotationLayerName = "ZJ",
                     DrawLeader = true,
                     EnableSourceMetadataLayerLink = false,
                     LayerLinkMode = AnnotationLayerLinkMode.ParentGroup,
-                    AutoAnnotationLayerSuffix = "注记",
-                    FallbackAnnotationLayerName = "未分类注记",
+                    AutoAnnotationLayerSuffix = "??",
+                    FallbackAnnotationLayerName = "?????",
                     WriteAutoAnnotationLayerMetadata = true,
-                    AnnotationSplitTagText = "明管、并埋、雨水、砼恢复",
+                    AnnotationSplitTagText = "????????????",
                     DrawBottomAnnotation = false,
-                    BottomAnnotationTemplate = "开挖：长{长度}m、宽{宽}m、高{深}m",
+                    BottomAnnotationTemplate = "????{??}m??{?}m??{?}m",
                     ExcavationWidth = 0.0,
                     ExcavationHeight = 0.0,
                     ExcavationDepth = 0.0
@@ -119,6 +120,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         public ObjectId PipeObjectId { get; set; }
         public ObjectId AnnotationObjectId { get; set; }
         public ObjectId BottomAnnotationObjectId { get; set; }
+        public List<ObjectId> BottomAnnotationObjectIds { get; private set; }
         public ObjectId LeaderObjectId { get; set; }
         public string AnnotationId { get; set; }
         public string SourceCDBoxObjectId { get; set; }
@@ -148,6 +150,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             PipeObjectId = ObjectId.Null;
             AnnotationObjectId = ObjectId.Null;
             BottomAnnotationObjectId = ObjectId.Null;
+            BottomAnnotationObjectIds = new List<ObjectId>();
             LeaderObjectId = ObjectId.Null;
             AnnotationId = string.Empty;
             SourceCDBoxObjectId = string.Empty;
@@ -161,17 +164,17 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
         public string ToEditorMessage()
         {
-            if (!Success) return "\n[管线长度标注] " + Message;
+            if (!Success) return "\n[??????] " + Message;
 
             string meta = string.Empty;
-            if (!string.IsNullOrWhiteSpace(PipeParentGroup)) meta += "；父属性：" + PipeParentGroup;
-            if (!string.IsNullOrWhiteSpace(PipeParentClass)) meta += "；分类：" + PipeParentClass;
+            if (!string.IsNullOrWhiteSpace(PipeParentGroup)) meta += "?????" + PipeParentGroup;
+            if (!string.IsNullOrWhiteSpace(PipeParentClass)) meta += "????" + PipeParentClass;
 
-            return "\n[管线长度标注] 完成。管线图层：" + PipeLayerName
+            return "\n[??????] ????????" + PipeLayerName
                 + meta
-                + "；注记图层：" + AnnotationLayerName
-                + "；字体样式：" + AnnotationFontName
-                + "；长度：" + Length.ToString("0.###") + "m。";
+                + "??????" + AnnotationLayerName
+                + "??????" + AnnotationFontName
+                + "????" + Length.ToString("0.###") + "m?";
         }
     }
 }

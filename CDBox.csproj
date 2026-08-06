@@ -1,6 +1,6 @@
 <!-- CDBoxNet.AutoCAD2023.csproj -->
-<!-- 面向 AutoCAD 2023 / CASS11 宿主环境的 .NET Framework 4.8 项目模板。 -->
-<!-- 非默认安装位置可通过 /p:AutoCADManagedDir="..." 覆盖。 -->
+<!-- ?? AutoCAD 2023 / CASS11 ????? .NET Framework 4.8 ????? -->
+<!-- ?????????? /p:AutoCADManagedDir="..." ??? -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -10,19 +10,19 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>3.3.0</Version>
+    <Version>3.4.1</Version>
 
-    <AssemblyVersion>3.3.0.0</AssemblyVersion>
-    <FileVersion>3.3.0.0</FileVersion>
-    <InformationalVersion>3.3.0</InformationalVersion>
+    <AssemblyVersion>3.4.1.0</AssemblyVersion>
+    <FileVersion>3.4.1.0</FileVersion>
+    <InformationalVersion>3.4.1</InformationalVersion>
 
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <CDBoxVersionCode>30300</CDBoxVersionCode>
+    <CDBoxVersionCode>30401</CDBoxVersionCode>
 
-    <CDBoxReleaseIdentity>CDBox-Studio-Preview-3.3.0</CDBoxReleaseIdentity>
-    <CDBoxReleaseTitle>CDBox Studio Preview 3.3.0</CDBoxReleaseTitle>
-    <CDBoxPackageFileName>CDBox.Studio.Preview.3.3.0.zip</CDBoxPackageFileName>
-    <CDBoxAppVersion>3.3.0</CDBoxAppVersion>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-3.4.1</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 3.4.1</CDBoxReleaseTitle>
+    <CDBoxPackageFileName>CDBox.Studio.Preview.3.4.1.zip</CDBoxPackageFileName>
+    <CDBoxAppVersion>3.4.1</CDBoxAppVersion>
 
     <CDBoxUpdateChannel>studio-preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>
@@ -71,9 +71,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>SkiaSharp.dll</TargetPath>
     </Content>
-    <Content Include="CDBox_Integrated\Templates\工程量计算表模板.xls">
+    <Content Include="CDBox_Integrated\Templates\????????.xls">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Templates\工程量计算表模板.xls</TargetPath>
+      <TargetPath>Templates\????????.xls</TargetPath>
     </Content>
     <Content Include="CDBox_Integrated\Config\CDBoxColors.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -117,7 +117,7 @@
   <Target Name="ValidateAutoCADManagedReferences" BeforeTargets="ResolveAssemblyReferences">
     <Error
       Condition="!Exists('$(AutoCADManagedDir)\AcMgd.dll') Or !Exists('$(AutoCADManagedDir)\AcDbMgd.dll') Or !Exists('$(AutoCADManagedDir)\AcCoreMgd.dll')"
-      Text="未在 $(AutoCADManagedDir) 找到 AutoCAD 2023 托管程序集。请安装 AutoCAD 2023，或通过 /p:AutoCADManagedDir=&quot;实际目录&quot; 指定路径。" />
+      Text="?? $(AutoCADManagedDir) ?? AutoCAD 2023 ????????? AutoCAD 2023???? /p:AutoCADManagedDir=&quot;????&quot; ?????" />
 
   </Target>
 </Project>

@@ -60,9 +60,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             HeaderWidth = 45.0;
             HeaderChartGap = 5.0;
             HeaderTextHeight = 6.0;
-            HeaderTextStyleName = "Standard";
+            HeaderTextStyleName = "??";
             HeaderTextColorIndex = 7;
-            HeaderTextAlignment = "中间对齐";
+            HeaderTextAlignment = "????";
             HorizontalScale = 1000.0;
             VerticalScale = 100.0;
             HorizontalGridInterval = 5.0;
@@ -71,7 +71,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             ElevationDecimals = 3;
             ValueDecimals = 2;
             SlopeDecimals = 2;
-            LayerName = "CDBox-纵断面";
+            LayerName = "CDBox-???";
             Rows = DefaultRows();
             Styles = DefaultStyles();
         }
@@ -92,9 +92,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             HeaderWidth = Positive(HeaderWidth, 45.0);
             HeaderChartGap = NonNegative(HeaderChartGap, 5.0);
             HeaderTextHeight = Positive(HeaderTextHeight, 6.0);
-            HeaderTextStyleName = Clean(HeaderTextStyleName, "Standard");
+            HeaderTextStyleName = Clean(HeaderTextStyleName, "??");
             HeaderTextColorIndex = Color(HeaderTextColorIndex, 7);
-            HeaderTextAlignment = Clean(HeaderTextAlignment, "中间对齐");
+            HeaderTextAlignment = Clean(HeaderTextAlignment, "????");
             HorizontalScale = Positive(HorizontalScale, 1000.0);
             VerticalScale = Positive(VerticalScale, 100.0);
             HorizontalGridInterval =
@@ -105,7 +105,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             ElevationDecimals = Clamp(ElevationDecimals, 0, 6, 3);
             ValueDecimals = Clamp(ValueDecimals, 0, 6, 2);
             SlopeDecimals = Clamp(SlopeDecimals, 0, 6, 2);
-            LayerName = Clean(LayerName, "CDBox-纵断面");
+            LayerName = Clean(LayerName, "CDBox-???");
 
             List<LongitudinalProfileRowSettings> defaults = DefaultRows();
             var supplied = (Rows ?? new List<LongitudinalProfileRowSettings>())
@@ -175,13 +175,14 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         {
             return new List<LongitudinalProfileRowSettings>
             {
-                Row("GroundElevation", "自然地面标高", 15.0),
-                Row("DesignInvertElevation", "设计管内底标高", 10.0),
-                Row("PipeBottomDepth", "管内底埋深", 10.0),
-                Row("WellDepth", "井深", 10.0),
-                Row("DiameterSlope", "管径及坡度", 10.0),
-                Row("PlanDistance", "平面距离", 10.0),
-                Row("WellNumber", "井编号", 10.0)
+                Row("GroundElevation", "??????", 15.0),
+                Row("DesignInvertElevation", "???????", 10.0),
+                Row("PipeBottomDepth", "?????", 10.0),
+                Row("WellDepth", "??", 10.0),
+                Row("DiameterSlope", "?????", 10.0),
+                Row("PlanDistance", "????", 10.0),
+                Row("PipeFoundation", "????", 10.0),
+                Row("WellNumber", "???", 10.0)
             };
         }
 
@@ -189,9 +190,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         {
             return new List<LongitudinalProfileEntityStyle>
             {
-                Style("坐标网格", 8),
-                Style("表头", 7),
-                Style("表头栏", 7)
+                Style("????", 8),
+                Style("??", 7),
+                Style("???", 7)
             };
         }
 
@@ -204,7 +205,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 Name = name,
                 Height = height,
                 TextHeight = 2.5,
-                TextStyleName = "Standard"
+                TextStyleName = "??"
             };
         }
 
@@ -278,6 +279,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     if (!File.Exists(SettingsPath)) return settings;
                     XElement root = XDocument.Load(SettingsPath).Root;
                     if (root == null) return settings;
+                    int version = AttrInteger(root, "Version", 1);
                     settings.HeaderWidth = Number(root, "HeaderWidth",
                         settings.HeaderWidth);
                     settings.HeaderChartGap = Number(root, "HeaderChartGap",
@@ -347,6 +349,12 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                                     Attr(x, "LineWeight", "ByBlock")
                             }).ToList();
                     }
+
+                    // ??????????? Version 1/2 ???????
+                    // ?????????????????????Version 3
+                    // ????????????.dwg???????
+                    if (version < 3)
+                        settings = new LongitudinalProfileSettings();
                 }
                 catch
                 {
@@ -368,7 +376,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 if (!string.IsNullOrWhiteSpace(folder))
                     Directory.CreateDirectory(folder);
                 XElement root = new XElement("LongitudinalProfileSettings",
-                    new XAttribute("Version", "1"),
+                    new XAttribute("Version", "3"),
                     Element("HeaderWidth", settings.HeaderWidth),
                     Element("HeaderChartGap", settings.HeaderChartGap),
                     Element("HeaderTextHeight", settings.HeaderTextHeight),

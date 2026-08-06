@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.Script.Serialization;
@@ -67,7 +67,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         public static void SavePayload(string payload)
         {
-            if (string.IsNullOrWhiteSpace(payload)) throw new InvalidOperationException("标注设置保存数据为空。");
+            if (string.IsNullOrWhiteSpace(payload)) throw new InvalidOperationException("???????????");
 
             CDBoxStudioAnnotationSettingsValues submitted;
             try
@@ -76,12 +76,12 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("标注设置数据格式无效。", ex);
+                throw new InvalidOperationException("???????????", ex);
             }
 
             if (submitted == null || submitted.surface == null || submitted.pipeLength == null || submitted.node == null)
             {
-                throw new InvalidOperationException("标注设置数据不完整。");
+                throw new InvalidOperationException("??????????");
             }
 
             SurfaceAreaAnnotationOptions loadedSurface = SurfaceAreaAnnotationSettingsStore.Load();
@@ -112,7 +112,7 @@ namespace TCPipeAutoDraw.UI.Studio
         public static void OpenLegacyWindow()
         {
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
-            if (doc == null) throw new InvalidOperationException("未找到当前 AutoCAD 图纸。");
+            if (doc == null) throw new InvalidOperationException("????? AutoCAD ???");
 
             using (var form = new AnnotationSettingsForm(doc))
             {
@@ -134,7 +134,9 @@ namespace TCPipeAutoDraw.UI.Studio
                 surface = new CDBoxStudioSurfaceAnnotationSettings
                 {
                     boundaryInterval = surface.BoundaryInterval,
-                    calculationMode = "调用 CASS surfacearea 计算（固定）",
+                    calculationMode = surface.CalculationMode == SurfaceAreaCalculationMode.PlanArea
+                        ? "PlanArea"
+                        : "SurfaceArea",
                     keepCassGeneratedObjects = !surface.DeleteCassGeneratedObjects,
                     textHeight = surface.TextHeight,
                     decimalPlaces = surface.DecimalPlaces,
@@ -181,7 +183,9 @@ namespace TCPipeAutoDraw.UI.Studio
             current.AnnotationFontName = NonEmpty(value.annotationFontName, current.AnnotationFontName, SurfaceAreaAnnotationOptions.Default.AnnotationFontName);
             current.AnnotationTemplate = NonEmpty(value.annotationTemplate, current.AnnotationTemplate, SurfaceAreaAnnotationOptions.Default.AnnotationTemplate);
             current.DeleteCassGeneratedObjects = !value.keepCassGeneratedObjects;
-            current.CalculationMode = SurfaceAreaCalculationMode.CassCommand;
+            current.CalculationMode = string.Equals(value.calculationMode, "PlanArea", StringComparison.OrdinalIgnoreCase)
+                ? SurfaceAreaCalculationMode.PlanArea
+                : SurfaceAreaCalculationMode.CassCommand;
             return current;
         }
 
@@ -251,18 +255,18 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
-                CDBoxStudioLogger.Warn("读取 CAD 文字样式失败，将使用兼容列表：" + ex.Message);
+                CDBoxStudioLogger.Warn("?? CAD ???????????????" + ex.Message);
             }
 
             if (configuredNames != null)
             {
                 foreach (string name in configuredNames) AddIfMissing(names, name);
             }
-            AddIfMissing(names, "宋体");
+            AddIfMissing(names, "??");
             AddIfMissing(names, "STANDARD");
             names.Sort(StringComparer.CurrentCultureIgnoreCase);
 
-            if (Contains(names, "宋体")) MoveToTop(names, "宋体");
+            if (Contains(names, "??")) MoveToTop(names, "??");
             else if (!string.IsNullOrWhiteSpace(currentStyle)) MoveToTop(names, currentStyle);
             return names;
         }
@@ -271,10 +275,10 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             return new List<CDBoxStudioAnnotationSelectOption>
             {
-                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentGroup.ToString(), label = "按父属性：支管 → 支管注记" },
-                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentClass.ToString(), label = "按分类：110PVC管 → 110PVC管注记" },
-                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.FirstMatchedTag.ToString(), label = "按标签：明管 → 明管注记" },
-                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentGroupAndTag.ToString(), label = "按父属性+标签：支管-明管注记" }
+                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentGroup.ToString(), label = "??????? ? ????" },
+                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentClass.ToString(), label = "????110PVC? ? 110PVC???" },
+                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.FirstMatchedTag.ToString(), label = "?????? ? ????" },
+                new CDBoxStudioAnnotationSelectOption { value = AnnotationLayerLinkMode.ParentGroupAndTag.ToString(), label = "????+?????-????" }
             };
         }
 
@@ -298,21 +302,21 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             switch (index)
             {
-                case 1: return "红色";
-                case 2: return "黄色";
-                case 3: return "绿色";
-                case 4: return "青色";
-                case 5: return "蓝色";
-                case 6: return "洋红";
-                case 7: return "白色/黑色";
-                case 8: return "深灰色";
-                case 9: return "浅灰色";
-                case 250: return "灰色 250";
-                case 251: return "灰色 251";
-                case 252: return "灰色 252";
-                case 253: return "灰色 253";
-                case 254: return "灰色 254";
-                case 255: return "灰色 255";
+                case 1: return "??";
+                case 2: return "??";
+                case 3: return "??";
+                case 4: return "??";
+                case 5: return "??";
+                case 6: return "??";
+                case 7: return "??/??";
+                case 8: return "???";
+                case 9: return "???";
+                case 250: return "?? 250";
+                case 251: return "?? 251";
+                case 252: return "?? 252";
+                case 253: return "?? 253";
+                case 254: return "?? 254";
+                case 255: return "?? 255";
                 default: return "ACI " + index;
             }
         }

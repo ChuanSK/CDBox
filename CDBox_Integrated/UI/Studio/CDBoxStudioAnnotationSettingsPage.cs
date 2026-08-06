@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 
 namespace TCPipeAutoDraw.UI.Studio
@@ -17,14 +17,14 @@ namespace TCPipeAutoDraw.UI.Studio
             initialSection = NormalizeSection(initialSection);
 
             var html = new StringBuilder();
-            html.Append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>CDBox Studio - 标注设置</title><style>");
+            html.Append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>CDBox Studio - ????</title><style>");
             html.Append(BuildStandaloneVariables());
             html.Append(BuildStyles(true));
             html.Append("</style></head><body data-theme=\"").Append(HtmlAttr(settings.Theme)).Append("\" class=\"").Append(settings.AnimationsEnabled ? string.Empty : "no-animations").Append("\">");
             html.Append(BuildSection(true));
             html.Append("<div id=\"toastStack\" class=\"as-toast-stack\"></div><script>");
             html.Append(BuildComponentScript());
-            html.Append("\n(function(){function post(name,arg){if(window.chrome&&chrome.webview)chrome.webview.postMessage('studio|'+name+'|'+encodeURIComponent(arg||''));}function toast(message,kind){var stack=document.getElementById('toastStack');if(!stack)return;var n=document.createElement('div');n.className='as-toast '+(kind||'info');n.textContent=message||'';stack.appendChild(n);setTimeout(function(){n.classList.add('leave');},2600);setTimeout(function(){if(n.parentNode)n.parentNode.removeChild(n);},3100);}window.CDBoxStudioToast=toast;try{window.CDBoxAnnotationSettingsPage.create({rootId:'annotationSettingsPage',post:post,toast:toast,standalone:true,initialSection:").Append(ToJsString(initialSection)).Append(",syncHash:true});setTimeout(function(){post('ready','annotation-settings');},60);}catch(ex){var msg=(ex&&ex.stack)||String(ex||'未知错误');document.body.innerHTML='<div class=\"as-fatal\"><div><h2>标注设置页面初始化失败</h2><pre>'+String(msg).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];})+'</pre></div></div>';post('annotationSettingsPageError',msg);}})();");
+            html.Append("\n(function(){function post(name,arg){if(window.chrome&&chrome.webview)chrome.webview.postMessage('studio|'+name+'|'+encodeURIComponent(arg||''));}function toast(message,kind){var stack=document.getElementById('toastStack');if(!stack)return;var n=document.createElement('div');n.className='as-toast '+(kind||'info');n.textContent=message||'';stack.appendChild(n);setTimeout(function(){n.classList.add('leave');},2600);setTimeout(function(){if(n.parentNode)n.parentNode.removeChild(n);},3100);}window.CDBoxStudioToast=toast;try{window.CDBoxAnnotationSettingsPage.create({rootId:'annotationSettingsPage',post:post,toast:toast,standalone:true,initialSection:").Append(ToJsString(initialSection)).Append(",syncHash:true});setTimeout(function(){post('ready','annotation-settings');},60);}catch(ex){var msg=(ex&&ex.stack)||String(ex||'????');document.body.innerHTML='<div class=\"as-fatal\"><div><h2>???????????</h2><pre>'+String(msg).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];})+'</pre></div></div>';post('annotationSettingsPageError',msg);}})();");
             html.Append("</script></body></html>");
             return html.ToString();
         }
@@ -35,25 +35,25 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("<section id=\"annotationSettingsPage\" class=\"annotation-settings-page ").Append(standalone ? "as-standalone" : "as-embedded").Append("\" data-route=\"annotation-settings\"");
             if (!standalone) page.Append(" style=\"display:none\"");
             page.Append(">");
-            page.Append("<div class=\"as-page\"><header class=\"as-head\"><div class=\"as-heading\"><h2>标注设置</h2></div><div class=\"as-head-actions\">");
-            page.Append("<button type=\"button\" class=\"as-btn primary\" data-action=\"save\" disabled><span data-save-label>保存设置</span></button>");
+            page.Append("<div class=\"as-page\"><header class=\"as-head\"><div class=\"as-heading\"><h2>????</h2></div><div class=\"as-head-actions\">");
+            page.Append("<button type=\"button\" class=\"as-btn primary\" data-action=\"save\" disabled><span data-save-label>????</span></button>");
             page.Append("</div></header>");
 
             page.Append("<div class=\"as-mode-cards\">");
-            AppendModeCard(page, "surface", "表面积标注", "CASS 表面积计算与注记");
-            AppendModeCard(page, "pipeLength", "管线长度标注", "长度、开挖信息与属性联动");
-            AppendModeCard(page, "node", "节点标注", "井号、井深和井类型注记");
+            AppendModeCard(page, "surface", "?????", "?????????????");
+            AppendModeCard(page, "pipeLength", "??????", "????????????");
+            AppendModeCard(page, "node", "????", "???????????");
             page.Append("</div>");
 
-            page.Append("<div class=\"as-content-card\"><div class=\"as-loading\" data-loading><span></span><strong>正在读取当前标注设置…</strong></div><div class=\"as-content\" data-content></div></div>");
-            page.Append("<div class=\"as-confirm-backdrop\" data-confirm-backdrop><div class=\"as-confirm\"><h3>当前设置尚未保存，是否放弃修改？</h3><p>切换页面或关闭窗口前，请选择继续编辑，或放弃当前未保存内容。</p><div><button class=\"as-btn ghost\" data-action=\"continue-editing\">继续编辑</button><button class=\"as-btn danger\" data-action=\"discard-and-leave\">放弃修改并关闭</button></div></div></div>");
+            page.Append("<div class=\"as-content-card\"><div class=\"as-loading\" data-loading><span></span><strong>???????????</strong></div><div class=\"as-content\" data-content></div></div>");
+            page.Append("<div class=\"as-confirm-backdrop\" data-confirm-backdrop><div class=\"as-confirm\"><h3>????????????????</h3><p>??????????????????????????????</p><div><button class=\"as-btn ghost\" data-action=\"continue-editing\">????</button><button class=\"as-btn danger\" data-action=\"discard-and-leave\">???????</button></div></div></div>");
             page.Append("</div></section>");
             return page.ToString();
         }
 
         private static void AppendModeCard(StringBuilder page, string section, string title, string description)
         {
-            page.Append("<button type=\"button\" class=\"as-mode-card\" data-mode=\"").Append(HtmlAttr(section)).Append("\"><span class=\"as-dirty-dot\"></span><strong>").Append(Html(title)).Append("</strong><small data-summary>读取中…</small></button>");
+            page.Append("<button type=\"button\" class=\"as-mode-card\" data-mode=\"").Append(HtmlAttr(section)).Append("\"><span class=\"as-dirty-dot\"></span><strong>").Append(Html(title)).Append("</strong><small data-summary>????</small></button>");
         }
 
         public static string BuildStyles(bool standalone)
@@ -80,8 +80,11 @@ body.no-animations .annotation-settings-page *,body.no-animations .annotation-se
             script = script.Replace("step=\"0.05\"", "step=\"0.01\"");
             script = script.Replace("step=\"0.001\"", "step=\"0.01\"");
             script = script.Replace(
-                "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var h='<div class=\"as-color-control\"><span class=\"as-color-swatch\"></span><select class=\"as-select\" data-color-select data-field=\"'+path+'\" data-type=\"int\">';this.colors.forEach(function(c){h+='<option value=\"'+c.index+'\" data-color=\"'+esc(c.cssColor)+'\" '+(Number(c.index)===Number(value)?'selected':'')+'>'+esc(c.name)+' · '+c.index+'</option>';});return h+'</select></div>';};",
-                "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var c=null;for(var i=0;i<this.colors.length;i++){if(Number(this.colors[i].index)===Number(value)){c=this.colors[i];break;}}c=c||{index:value,name:'ACI '+value,cssColor:'#94a3b8',rgb:''};return '<div class=\"as-color-control\"><button type=\"button\" class=\"as-color-picker\" data-color-picker data-field=\"'+path+'\" data-index=\"'+c.index+'\"><span class=\"as-color-swatch\" style=\"background:'+esc(c.cssColor)+'\"></span><span class=\"as-color-copy\"><strong>'+esc(c.name)+'</strong><small>'+esc(c.rgb||('ACI '+c.index+' · '+c.cssColor))+'</small></span><span class=\"as-color-arrow\">›</span></button></div>';};");
+                "this.field('????','<div class=\"as-readonly\">'+esc(v.calculationMode||'?? CASS surfacearea ??????')+'</div>')",
+                "this.field('????',this.select('surface.calculationMode',v.calculationMode,[{value:'SurfaceArea',label:'?????'},{value:'PlanArea',label:'????'}],false))");
+            script = script.Replace(
+                "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var h='<div class=\"as-color-control\"><span class=\"as-color-swatch\"></span><select class=\"as-select\" data-color-select data-field=\"'+path+'\" data-type=\"int\">';this.colors.forEach(function(c){h+='<option value=\"'+c.index+'\" data-color=\"'+esc(c.cssColor)+'\" '+(Number(c.index)===Number(value)?'selected':'')+'>'+esc(c.name)+' ? '+c.index+'</option>';});return h+'</select></div>';};",
+                "AnnotationSettingsPage.prototype.colorSelect=function(path,value){var c=null;for(var i=0;i<this.colors.length;i++){if(Number(this.colors[i].index)===Number(value)){c=this.colors[i];break;}}c=c||{index:value,name:'ACI '+value,cssColor:'#94a3b8',rgb:''};return '<div class=\"as-color-control\"><button type=\"button\" class=\"as-color-picker\" data-color-picker data-field=\"'+path+'\" data-index=\"'+c.index+'\"><span class=\"as-color-swatch\" style=\"background:'+esc(c.cssColor)+'\"></span><span class=\"as-color-copy\"><strong>'+esc(c.name)+'</strong><small>'+esc(c.rgb||('ACI '+c.index+' ? '+c.cssColor))+'</small></span><span class=\"as-color-arrow\">?</span></button></div>';};");
             script = script.Replace("this.$$('[data-field]').forEach", "this.$$('[data-field]:not([data-color-picker])').forEach");
             script = script.Replace(
                 "document.addEventListener('click',function(ev){var s=self.$('.as-reset-split');",

@@ -13,19 +13,24 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
     public enum SurfaceAreaCalculationMode
     {
         /// <summary>
-        /// 已弃用：插件内置 TIN 估算算法。正式界面不再提供该模式。
+        /// ???????? TIN ?????????????????
         /// </summary>
         BuiltInTin = 0,
 
         /// <summary>
-        /// 读取已有 CASS surface.log 结果。保留为备用模式。
+        /// ???? CASS surface.log ???????????
         /// </summary>
         CassSurfaceLog = 1,
 
         /// <summary>
-        /// 自动调用 CASS surfacearea 命令计算，然后读取 CASS 输出结果并自动注记。
+        /// ???? CASS surfacearea ????????? CASS ??????????
         /// </summary>
-        CassCommand = 2
+        CassCommand = 2,
+
+        /// <summary>
+        /// ???????????????????? CASS?
+        /// </summary>
+        PlanArea = 3
     }
 
     public sealed class SurfaceAreaAnnotationOptions
@@ -36,42 +41,42 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         public string AnnotationTemplate { get; set; }
 
         /// <summary>
-        /// 计算方式。正式版固定为自动调用 CASS surfacearea。
+        /// ?????CASS ?????????????
         /// </summary>
         public SurfaceAreaCalculationMode CalculationMode { get; set; }
 
         /// <summary>
-        /// CASS surface.log 文件路径。为空时自动尝试从当前 DWG 所在目录和 AutoCAD 当前目录查找。
+        /// CASS surface.log ??????????????? DWG ????? AutoCAD ???????
         /// </summary>
         public string CassSurfaceLogPath { get; set; }
 
         /// <summary>
-        /// CASS 命令执行后是否删除其自动生成的三角网、三角面积文字等对象。默认删除。
+        /// CASS ??????????????????????????????????
         /// </summary>
         public bool DeleteCassGeneratedObjects { get; set; }
 
         /// <summary>
-        /// 注记文字样式名称。仅从当前 CAD 图形已有文字样式中选择，默认优先“宋体”。
+        /// ????????????? CAD ?????????????????????
         /// </summary>
         public string AnnotationFontName { get; set; }
 
         /// <summary>
-        /// 注记图层模式：默认 ZJ / 已有图层 / 自定义图层。
+        /// ????????? ZJ / ???? / ??????
         /// </summary>
         public AnnotationLayerMode LayerMode { get; set; }
 
         /// <summary>
-        /// 已有图层模式下选择的图层名。
+        /// ??????????????
         /// </summary>
         public string SelectedLayerName { get; set; }
 
         /// <summary>
-        /// 自定义图层模式下输入的图层名；默认也作为 ZJ 图层名。
+        /// ???????????????????? ZJ ????
         /// </summary>
         public string AnnotationLayerName { get; set; }
 
         /// <summary>
-        /// 为兼容旧代码保留。新版本默认不再使用被选边界图层作为注记图层。
+        /// ???????????????????????????????
         /// </summary>
         public bool UseBoundaryLayerForAnnotation { get; set; }
 
@@ -86,11 +91,11 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                     BoundaryInterval = 5.0,
                     TextHeight = 1.0,
                     DecimalPlaces = 2,
-                    AnnotationTemplate = "{图层名}表面积：{表面积}㎡",
+                    AnnotationTemplate = "{???}????{???}?",
                     CalculationMode = SurfaceAreaCalculationMode.CassCommand,
                     CassSurfaceLogPath = string.Empty,
                     DeleteCassGeneratedObjects = true,
-                    AnnotationFontName = "宋体",
+                    AnnotationFontName = "??",
                     LayerMode = AnnotationLayerMode.DefaultZJ,
                     SelectedLayerName = "ZJ",
                     AnnotationLayerName = "ZJ",
@@ -142,40 +147,41 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 
         public string ToEditorMessage()
         {
-            if (!Success) return "\n[表面积标注] " + Message;
+            if (!Success) return "\n[?????] " + Message;
 
-            string modeText = PlanAreaFallback ? "平面面积标注" : "CASS surfacearea";
+            bool isPlanArea = PlanAreaFallback || CalculationMode == SurfaceAreaCalculationMode.PlanArea;
+            string modeText = isPlanArea ? "????" : "CASS surfacearea";
 
             if (AsyncStarted)
             {
-                return "\n[表面积标注] " + Message;
+                return "\n[?????] " + Message;
             }
 
-            string text = "\n[表面积标注] 完成。计算方式：" + modeText
-                + "；边界图层：" + BoundaryLayerName
-                + "；注记图层：" + AnnotationLayerName
-                + "；字体样式：" + AnnotationFontName
-                + (PlanAreaFallback ? "；面积：" : "；表面积：") + SurfaceArea.ToString("0.###") + "㎡"
-                + "；平面面积：" + PlanArea.ToString("0.###") + "㎡";
+            string text = "\n[?????] ????????" + modeText
+                + "??????" + BoundaryLayerName
+                + "??????" + AnnotationLayerName
+                + "??????" + AnnotationFontName
+                + (isPlanArea ? "????" : "?????") + SurfaceArea.ToString("0.###") + "?"
+                + (isPlanArea ? string.Empty : "??????" + PlanArea.ToString("0.###") + "?");
 
             if (PlanAreaFallback)
             {
-                text += "；提示：" + (string.IsNullOrWhiteSpace(Message) ? "已改为面积标注" : Message.TrimEnd('。'));
+                text += "????" + (string.IsNullOrWhiteSpace(Message) ? "???????" : Message.TrimEnd('?'));
                 if (CassGeneratedObjectCount > 0 || CassDeletedObjectCount > 0)
                 {
-                    text += "；CASS生成对象：" + CassGeneratedObjectCount + "；已删除：" + CassDeletedObjectCount;
+                    text += "?CASS?????" + CassGeneratedObjectCount + "?????" + CassDeletedObjectCount;
                 }
             }
             else
             {
-                if (!string.IsNullOrWhiteSpace(CassSurfaceLogPath)) text += "；CASS结果文件：" + CassSurfaceLogPath;
+                if (!string.IsNullOrWhiteSpace(CassSurfaceLogPath)) text += "?CASS?????" + CassSurfaceLogPath;
                 if (CassGeneratedObjectCount > 0 || CassDeletedObjectCount > 0)
                 {
-                    text += "；CASS生成对象：" + CassGeneratedObjectCount + "；已删除：" + CassDeletedObjectCount;
+                    text += "?CASS?????" + CassGeneratedObjectCount + "?????" + CassDeletedObjectCount;
                 }
             }
 
-            return text + "。";
+            return text + "?";
         }
     }
 }

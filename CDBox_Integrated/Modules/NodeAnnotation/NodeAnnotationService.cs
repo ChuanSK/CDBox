@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -15,8 +15,8 @@ using TCPipeAutoDraw.Modules.QuantityCalculation;
 namespace TCPipeAutoDraw.Modules.NodeAnnotation
 {
     /// <summary>
-    /// 节点/检查井标注。
-    /// 交互方式：移动光标指定文字位置，预览自动吸附最近井对象并显示红色预览引线；落图时只生成文字，不生成引线。
+    /// ??/??????
+    /// ????????????????????????????????????????????????????
     /// </summary>
     public static class NodeAnnotationService
     {
@@ -31,7 +31,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             List<NodeAnnotationCandidate> candidates = CollectNodeCandidates(doc);
             if (candidates.Count == 0)
             {
-                return new NodeAnnotationResult { Success = false, Message = "未找到可识别的节点/检查井对象。请使用图层管理器进行图层识别。" };
+                return new NodeAnnotationResult { Success = false, Message = "?????????/?????????????????????" };
             }
 
             ObjectId textStyleId = ResolveTextStyleId(doc, options.AnnotationFontName);
@@ -39,13 +39,13 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             PromptResult dragResult = doc.Editor.Drag(jig);
             if (dragResult.Status != PromptStatus.OK)
             {
-                return new NodeAnnotationResult { Success = false, Message = "已取消节点标注。" };
+                return new NodeAnnotationResult { Success = false, Message = "????????" };
             }
 
             NodeAnnotationCandidate selected = jig.SelectedCandidate ?? FindNearestCandidate(candidates, jig.AnnotationPoint);
             if (selected == null)
             {
-                return new NodeAnnotationResult { Success = false, Message = "未吸附到有效节点/检查井对象。" };
+                return new NodeAnnotationResult { Success = false, Message = "????????/??????" };
             }
 
             return DrawAnnotation(doc, selected, jig.AnnotationPoint, options);
@@ -65,7 +65,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (candidate == null)
             {
                 result.Success = false;
-                result.Message = "节点对象无效。";
+                result.Message = "???????";
                 return result;
             }
 
@@ -73,7 +73,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (lines.Count == 0)
             {
                 result.Success = false;
-                result.Message = "没有可标注的节点内容。";
+                result.Message = "???????????";
                 return result;
             }
 
@@ -100,7 +100,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             }
 
             result.Success = result.TextObjectIds.Count > 0;
-            result.Message = result.Success ? "标注已生成。" : "文字生成失败。";
+            result.Message = result.Success ? "??????" : "???????";
             return result;
         }
 
@@ -186,8 +186,8 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (!IsSupportedNodeGeometry(entity)) return false;
             if (IsExcluded315Well(attrs, sourceText, layerMetadata)) return false;
 
-            // 节点标注吸附范围固定为：图层管理父属性=“井”，分类=“检查、沉泥井”。
-            // “检查、沉泥井”只是可吸附分类，不参与判断井类型；井类型必须读取对象属性中的 WellType。
+            // ???????????????????=??????=?????????
+            // ?????????????????????????????????????? WellType?
             return IsApprovedWellLayer(layerMetadata, attrs);
         }
 
@@ -206,12 +206,12 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             string parentGroup = layerMetadata == null ? string.Empty : (layerMetadata.ParentGroup ?? string.Empty);
             string parentClass = layerMetadata == null ? string.Empty : (layerMetadata.ParentClass ?? string.Empty);
 
-            // 若当前图层元数据为空，允许使用对象已保存属性中的图层父属性/分类作为兜底，
-            // 但仍必须满足同一套固定规则，避免 315井 或其他无关块因名称相似被吸附。
+            // ?????????????????????????????/???????
+            // ???????????????? 315? ???????????????
             if (string.IsNullOrWhiteSpace(parentGroup) && attrs != null) parentGroup = attrs.LayerParentGroup ?? string.Empty;
             if (string.IsNullOrWhiteSpace(parentClass) && attrs != null) parentClass = attrs.LayerParentClass ?? string.Empty;
 
-            return TextEquals(parentGroup, "井") && TextEquals(parentClass, "检查沉泥井");
+            return TextEquals(parentGroup, "?") && TextEquals(parentClass, "?????");
         }
 
         private static bool IsExcluded315Well(QuantityPipeAttributes attrs, string sourceText, LayerMetadata layerMetadata)
@@ -226,7 +226,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             }
 
             string text = (sourceText ?? string.Empty) + " " + layerMetaText;
-            return Regex.IsMatch(text, @"(?<![A-Za-z0-9])(?:φ|Φ)?\s*315\s*(?:井|检查井|沉泥井|圆井)", RegexOptions.IgnoreCase);
+            return Regex.IsMatch(text, @"(?<![A-Za-z0-9])(?:?|?)?\s*315\s*(?:?|???|???|??)", RegexOptions.IgnoreCase);
         }
 
         private static LayerMetadata GetEntityLayerMetadata(Database db, Transaction tr, Entity entity)
@@ -486,14 +486,14 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
         }
 
         /// <summary>
-        /// 解析节点井类型。
-        /// 注意：图层分类“检查、沉泥井 / 检查沉泥井”只表示可参与节点吸附，不能直接判定为沉泥井；
-        /// 否则所有检查井都会被误标成“沉泥井”。
+        /// ????????
+        /// ?????????????? / ????????????????????????????
+        /// ???????????????????
         /// </summary>
         private static string ResolveCandidateWellType(Transaction tr, Entity entity, QuantityPipeAttributes attrs, bool hasSavedAttributes, LayerMetadata layerMetadata)
         {
-            // 井对象所属分类固定为“检查、沉泥井”，该分类只说明“这是可标注井对象”。
-            // 真正的“检查井/沉泥井”必须读取对象属性表里的“井类型”(WellType)。
+            // ????????????????????????????????????
+            // ???????/????????????????????(WellType)?
             if (hasSavedAttributes && attrs != null)
             {
                 string savedType = NormalizeWellTypeValue(attrs.WellType);
@@ -507,7 +507,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             string entityType = InferWellTypeFromExplicitText(entityTypeSource);
             if (!string.IsNullOrWhiteSpace(entityType)) return entityType;
 
-            return "检查井";
+            return "???";
         }
 
         private static string BuildEntityTypeSourceText(Transaction tr, Entity entity)
@@ -529,11 +529,11 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             string value = NormalizeWellClassText(parentClass);
             if (value.Length == 0) return string.Empty;
 
-            if (value == "沉泥" || value == "沉泥井") return "沉泥井";
-            if (value == "检查" || value == "检查井") return "检查井";
-            if (value == "跌水" || value == "跌水井") return "跌水井";
+            if (value == "??" || value == "???") return "???";
+            if (value == "??" || value == "???") return "???";
+            if (value == "??" || value == "???") return "???";
 
-            // “检查沉泥井”是合并分类，只用于筛选可吸附对象，不用于判定井类型。
+            // ?????????????????????????????????
             return string.Empty;
         }
 
@@ -542,16 +542,16 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
 
             string cleaned = RemoveAmbiguousWellTypePhrases(NormalizeDbTextString(text));
-            if (ContainsAny(cleaned, "沉泥井", "沉泥")) return "沉泥井";
-            if (ContainsAny(cleaned, "跌水井", "跌水")) return "跌水井";
-            if (ContainsAny(cleaned, "检查井", "检查", "雨水", "污水")) return "检查井";
+            if (ContainsAny(cleaned, "???", "??")) return "???";
+            if (ContainsAny(cleaned, "???", "??")) return "???";
+            if (ContainsAny(cleaned, "???", "??", "??", "??")) return "???";
             return string.Empty;
         }
 
         private static bool IsSiltWellType(string wellType)
         {
             string value = NormalizeWellTypeValue(wellType);
-            return string.Equals(value, "沉泥井", StringComparison.CurrentCultureIgnoreCase);
+            return string.Equals(value, "???", StringComparison.CurrentCultureIgnoreCase);
         }
 
         private static string NormalizeWellTypeValue(string wellType)
@@ -560,16 +560,16 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             string value = NormalizeWellClassText(NormalizeDbTextString(wellType));
             if (value.Length == 0) return string.Empty;
 
-            // “检查、沉泥井”是图层分类，不是具体井类型；若误写入井类型，不能按沉泥井处理。
-            if (value.IndexOf("检查", StringComparison.CurrentCultureIgnoreCase) >= 0
-                && value.IndexOf("沉泥", StringComparison.CurrentCultureIgnoreCase) >= 0)
+            // ???????????????????????????????????????
+            if (value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0
+                && value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0)
             {
                 return string.Empty;
             }
 
-            if (value == "沉泥" || value == "沉泥井") return "沉泥井";
-            if (value == "检查" || value == "检查井") return "检查井";
-            if (value == "跌水" || value == "跌水井") return "跌水井";
+            if (value == "??" || value == "???") return "???";
+            if (value == "??" || value == "???") return "???";
+            if (value == "??" || value == "???") return "???";
             return NormalizeDbTextString(wellType).Trim();
         }
 
@@ -577,17 +577,17 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
         {
             string value = NormalizeWellClassText(parentClass);
             if (value.Length == 0) return false;
-            return value == "检查沉泥井" || (value.IndexOf("检查", StringComparison.CurrentCultureIgnoreCase) >= 0 && value.IndexOf("沉泥", StringComparison.CurrentCultureIgnoreCase) >= 0);
+            return value == "?????" || (value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0 && value.IndexOf("??", StringComparison.CurrentCultureIgnoreCase) >= 0);
         }
 
         private static string NormalizeWellClassText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             return text.Replace(" ", string.Empty)
-                .Replace("　", string.Empty)
-                .Replace("、", string.Empty)
+                .Replace("?", string.Empty)
+                .Replace("?", string.Empty)
                 .Replace(",", string.Empty)
-                .Replace("，", string.Empty)
+                .Replace("?", string.Empty)
                 .Replace("/", string.Empty)
                 .Replace("\\", string.Empty)
                 .Replace("|", string.Empty)
@@ -605,8 +605,8 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             string cleaned = text;
-            cleaned = Regex.Replace(cleaned, @"检查\s*井?\s*[、,，/\\;；|_\-]*\s*沉泥井", "检查井", RegexOptions.IgnoreCase);
-            cleaned = Regex.Replace(cleaned, @"检查\s*沉泥井", "检查井", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"??\s*??\s*[?,?/\\;?|_\-]*\s*???", "???", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"??\s*???", "???", RegexOptions.IgnoreCase);
             return cleaned;
         }
 
@@ -678,7 +678,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             options = options ?? NodeAnnotationOptions.Default;
             if (options.TextHeight <= 0) options.TextHeight = 1.0;
             options.DecimalPlaces = Math.Max(0, Math.Min(6, options.DecimalPlaces));
-            if (string.IsNullOrWhiteSpace(options.AnnotationFontName)) options.AnnotationFontName = "宋体";
+            if (string.IsNullOrWhiteSpace(options.AnnotationFontName)) options.AnnotationFontName = "??";
             if (string.IsNullOrWhiteSpace(options.AnnotationLayerName)) options.AnnotationLayerName = "ZJ";
             if (options.LineSpacingFactor <= 0.5) options.LineSpacingFactor = 1.45;
             if (options.NodeNoColorIndex <= 0) options.NodeNoColorIndex = 1;
@@ -732,9 +732,9 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
             string value = NormalizeDbTextString(text);
             int lineBreak = value.IndexOf(' ');
-            if (lineBreak > 0 && value.IndexOf("井", StringComparison.CurrentCultureIgnoreCase) >= 0) value = value.Substring(0, lineBreak);
-            value = Regex.Replace(value, @"[（(]\s*[-+]?\d+(?:\.\d+)?\s*m?\s*[）)]\s*$", string.Empty, RegexOptions.IgnoreCase).Trim();
-            value = value.Trim('：', ':', '，', ',', ';', '；');
+            if (lineBreak > 0 && value.IndexOf("?", StringComparison.CurrentCultureIgnoreCase) >= 0) value = value.Substring(0, lineBreak);
+            value = Regex.Replace(value, @"[?(]\s*[-+]?\d+(?:\.\d+)?\s*m?\s*[?)]\s*$", string.Empty, RegexOptions.IgnoreCase).Trim();
+            value = value.Trim('?', ':', '?', ',', ';', '?');
             return value;
         }
 
@@ -743,23 +743,23 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             if (string.IsNullOrWhiteSpace(text)) return false;
             string value = text.Trim();
             if (value.Length > 32) return false;
-            if (ContainsAny(value, "井深", "井筒", "沉泥", "面积", "长度", "开挖", "表面积", "m", "M", "㎡")) return false;
-            return Regex.IsMatch(value, @"^[A-Za-z]*\d+(?:[-—–]\d+)?(?:[A-Za-z0-9_-]*)$", RegexOptions.IgnoreCase);
+            if (ContainsAny(value, "??", "??", "??", "??", "??", "??", "???", "m", "M", "?")) return false;
+            return Regex.IsMatch(value, @"^[A-Za-z]*\d+(?:[-??]\d+)?(?:[A-Za-z0-9_-]*)$", RegexOptions.IgnoreCase);
         }
 
         private static string InferWellType(string sourceText)
         {
             string type = InferWellTypeFromExplicitText(sourceText);
-            return string.IsNullOrWhiteSpace(type) ? "检查井" : type;
+            return string.IsNullOrWhiteSpace(type) ? "???" : type;
         }
 
         private static string InferWellSpec(string sourceText)
         {
             if (string.IsNullOrWhiteSpace(sourceText)) return string.Empty;
-            Match phi = Regex.Match(sourceText, @"[φΦ]\s*(?<n>\d{3,4})");
-            if (phi.Success) return "φ" + phi.Groups["n"].Value;
-            Match well = Regex.Match(sourceText, @"(?<n>\d{3,4})(?:\s*)?(?:检查井|沉泥井|跌水井|井)");
-            if (well.Success) return "φ" + well.Groups["n"].Value;
+            Match phi = Regex.Match(sourceText, @"[??]\s*(?<n>\d{3,4})");
+            if (phi.Success) return "?" + phi.Groups["n"].Value;
+            Match well = Regex.Match(sourceText, @"(?<n>\d{3,4})(?:\s*)?(?:???|???|???|?)");
+            if (well.Success) return "?" + well.Groups["n"].Value;
             return string.Empty;
         }
 
@@ -915,7 +915,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
-                var options = new JigPromptPointOptions("\n指定节点标注文字位置（预览自动吸附最近井对象）");
+                var options = new JigPromptPointOptions("\n????????????????????????");
                 options.UserInputControls = UserInputControls.Accept3dCoordinates | UserInputControls.NoZeroResponseAccepted;
                 PromptPointResult result = prompts.AcquirePoint(options);
                 if (result.Status != PromptStatus.OK) return SamplerStatus.Cancel;

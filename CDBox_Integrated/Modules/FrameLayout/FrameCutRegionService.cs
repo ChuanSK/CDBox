@@ -35,7 +35,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
 
     internal sealed class FrameCutRegionService
     {
-        public const string RegionLayerName = "CDBOX_裁图区域";
+        public const string RegionLayerName = "CDBOX_????";
         public const string MetadataKey = "CDBOX_FRAME_CUT_REGION";
 
         public ObjectId CreateRectangle(Database db, Transaction tr,
@@ -43,7 +43,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             string templateId, string paperSize)
         {
             if (width <= GeometryHelper.Eps || height <= GeometryHelper.Eps)
-                throw new InvalidOperationException("裁图区域尺寸无效。");
+                throw new InvalidOperationException("?????????");
 
             Vector3d axisU = new Vector3d(Math.Cos(rotation),
                 Math.Sin(rotation), 0).GetNormal();
@@ -61,7 +61,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             double rectangleRotation)
         {
             if (width <= GeometryHelper.Eps || height <= GeometryHelper.Eps)
-                throw new InvalidOperationException("裁图区域尺寸无效。");
+                throw new InvalidOperationException("?????????");
 
             Vector3d axisU = new Vector3d(Math.Cos(rectangleRotation),
                 Math.Sin(rectangleRotation), 0).GetNormal();
@@ -78,11 +78,11 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             string templateId, string paperSize, double cutRotation)
         {
             if (tr == null || rectangleId.IsNull)
-                throw new InvalidOperationException("裁图矩形无效。");
+                throw new InvalidOperationException("???????");
             Entity rectangle = tr.GetObject(rectangleId, OpenMode.ForWrite,
                 false) as Entity;
             if (rectangle == null)
-                throw new InvalidOperationException("找不到裁图矩形。");
+                throw new InvalidOperationException("????????");
             AttachMetadata(tr, rectangle, templateId, paperSize, cutRotation);
         }
 
@@ -173,7 +173,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             List<Point3d> points;
             if (!TryGetBoundary(entity, out points))
             {
-                message = "所选对象不是可用的闭合曲线。";
+                message = "??????????????";
                 return false;
             }
             Vector3d axisU = new Vector3d(Math.Cos(rotation),
@@ -190,12 +190,12 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             if (width > maxWidth + 1e-6 || height > maxHeight + 1e-6)
             {
                 message = string.Format(CultureInfo.CurrentCulture,
-                    "闭合曲线尺寸 {0:0.###} × {1:0.###} 超过该模板裁图区域 {2:0.###} × {3:0.###}。",
+                    "?????? {0:0.###} ? {1:0.###} ????????? {2:0.###} ? {3:0.###}?",
                     width, height, maxWidth, maxHeight);
                 return false;
             }
             message = string.Format(CultureInfo.CurrentCulture,
-                "裁图区域 {0:0.###} × {1:0.###}", width, height);
+                "???? {0:0.###} ? {1:0.###}", width, height);
             return true;
         }
 
@@ -205,9 +205,9 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             List<FrameCutRegionInfo> result = new List<FrameCutRegionInfo>();
             PromptSelectionOptions options = new PromptSelectionOptions
             {
-                MessageForAdding = "\n选择已布置的裁图区域："
+                MessageForAdding = "\n???????????"
             };
-            PromptSelectionResult selection = editor.GetSelection(options);
+            PromptSelectionResult selection = editor.GetHudSelection(options);
             if (selection.Status != PromptStatus.OK) return result;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {

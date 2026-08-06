@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -11,7 +12,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 {
     /// <summary>
-    /// 为标准 DBText/Polyline 提供两类受控夹点，同时保持 DWG 对象仍为普通 CAD 图元。
+    /// ??? DBText/Polyline ????????????? DWG ?????? CAD ???
     /// </summary>
     internal sealed class PipeLengthAnnotationGripOverrule : GripOverrule
     {
@@ -88,7 +89,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
             DBText text = entity as DBText;
             if (text != null && (string.Equals(part, "MainText", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(part, "SecondaryText", StringComparison.OrdinalIgnoreCase)))
+                || PipeLengthAnnotationObjectService.IsSecondaryAnnotationPart(part)))
             {
                 grips.Add(new TextGripData(GetTextPoint(text)));
             }
@@ -134,7 +135,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     continue;
                 }
 
-                // 文字夹点通过 OnHotGrip 进入与新建标注相同的定位预览，不执行原生拉伸。
+                // ?????? OnHotGrip ???????????????????????
             }
         }
 
@@ -300,7 +301,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         }
                         catch (System.Exception ex)
                         {
-                            try { doc.Editor.WriteMessage("\n[CDBox 标注绑定] 自动更新失败：" + ex.Message); }
+                            try { doc.Editor.WriteHudMessage("\n[CDBox ????] ???????" + ex.Message); }
                             catch { }
                         }
                         finally
@@ -314,7 +315,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 }
                 catch (System.Exception ex)
                 {
-                    try { doc.Editor.WriteMessage("\n[CDBox 标注绑定] 自动更新调度失败：" + ex.Message); }
+                    try { doc.Editor.WriteHudMessage("\n[CDBox ????] ?????????" + ex.Message); }
                     catch { }
                     PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(
                         doc, edit.AnnotationId);
@@ -422,7 +423,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 GripPoint = point;
                 DrawAtDragImageGripPoint = true;
             }
-            public override string GetTooltip() { return "拖动绑定点并直接落在目标管线上"; }
+            public override string GetTooltip() { return "???????????????"; }
 
             public override bool WorldDraw(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw,
                 ObjectId entityId, DrawType type, Point3d? imageGripPoint, double gripSize)
@@ -477,7 +478,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 TriggerGrip = true;
                 RubberBandLineDisabled = true;
             }
-            public override string GetTooltip() { return "拖动文字与横线"; }
+            public override string GetTooltip() { return "???????"; }
             public override ReturnValue OnHotGrip(ObjectId entityId, Context context)
             {
                 string annotationId;

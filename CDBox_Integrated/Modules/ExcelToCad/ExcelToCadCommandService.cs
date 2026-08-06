@@ -15,7 +15,7 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
         {
             if (document == null)
             {
-                CDBoxMessageBox.Show(owner, "未找到当前图纸。", "Excel 转 CAD 表格",
+                CDBoxMessageBox.Show(owner, "????????", "Excel ? CAD ??",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -36,22 +36,22 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
             message = string.Empty;
             if (document == null || options == null || model == null)
             {
-                message = "Excel 表格数据尚未准备完成。";
+                message = "Excel ???????????";
                 return false;
             }
 
             ExcelSelectionBridge.DeleteSnapshot(options.TemporarySourcePath);
             options.TemporarySourcePath = string.Empty;
 
-            string summary = model.SheetName + "!" + model.SourceRange + "（"
-                + model.RowCount + " 行 × " + model.ColumnCount + " 列，合并区域 "
-                + model.MergedRanges.Count + " 个）";
+            string summary = model.SheetName + "!" + model.SourceRange + "?"
+                + model.RowCount + " ? ? " + model.ColumnCount + " ?????? "
+                + model.MergedRanges.Count + " ??";
             var pointOptions = new PromptPointOptions(
-                "\n指定 Excel 表格左上角插入点 " + summary + "：");
-            PromptPointResult point = document.Editor.GetPoint(pointOptions);
+                "\n?? Excel ???????? " + summary + "?");
+            PromptPointResult point = document.Editor.GetHudPoint(pointOptions);
             if (point.Status != PromptStatus.OK)
             {
-                message = "已取消指定表格插入点。";
+                message = "???????????";
                 return false;
             }
 
@@ -60,8 +60,8 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
                 ExcelToCadInsertResult result = ExcelToCadService.Insert(document, model,
                     options, point.Value);
                 message = result.Message;
-                document.Editor.WriteMessage("\n[Excel 转 CAD 表格] " + result.Message
-                    + " 来源：" + summary + "。");
+                document.Editor.WriteHudMessage("\n[Excel ? CAD ??] " + result.Message
+                    + " ???" + summary + "?");
                 if (!result.ObjectId.IsNull)
                 {
                     try { document.Editor.SetImpliedSelection(new[] { result.ObjectId }); }
@@ -72,10 +72,9 @@ namespace TCPipeAutoDraw.Modules.ExcelToCad
             catch (Exception ex)
             {
                 message = ex.Message;
-                document.Editor.WriteMessage("\n[Excel 转 CAD 表格] 生成失败：" + ex.Message);
-                CDBoxStudioLogger.Error("Excel 转 CAD 表格生成失败。来源："
+                CDBoxStudioLogger.Error("Excel ? CAD ??????????"
                     + summary, ex);
-                CDBoxMessageBox.Show(owner, ex.Message, "Excel 转 CAD 表格失败",
+                CDBoxMessageBox.Show(owner, ex.Message, "Excel ? CAD ????",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
