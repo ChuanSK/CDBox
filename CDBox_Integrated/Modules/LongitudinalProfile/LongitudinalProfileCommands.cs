@@ -4,6 +4,7 @@ using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.UI;
@@ -53,55 +54,119 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 var wells =
                     new List<LongitudinalProfileWellData>();
                 int order = 0;
-                foreach (ObjectId id in
-                    QuantityPipeAttributeService
-                        .FindObjectsWithSavedAttributes(document))
+                LongitudinalProfileBuildResult built;
+                using (var progress = CDBoxProgressSession.Start(document,
+                    "纵断面数据准备", "正在检索图纸中的主管和井对象…",
+                    "LongitudinalProfile", "profile-data-progress"))
                 {
-                    QuantityPipeSelectionInfo info =
-                        QuantityPipeAttributeService.ReadPipe(
-                            document, id);
-                    if (info == null || info.Attributes == null)
-                        continue;
-                    QuantityPipeAttributes attrs = info.Attributes;
-                    if (QuantityPipeAttributes.IsMainPipeKind(
-                            attrs.ObjectKind)
-                        && info.HasSavedAttributes
-                        && info.CadLength > 0)
+                    progress.ReportMarquee(
+                        "正在检索图纸中的主管和井对象...");
+                    List<ObjectId> sourceIds =
+                        QuantityPipeAttributeService
+                            .FindObjectsWithSavedAttributes(document)
+                            .ToList();
+                    int total = Math.Max(1, sourceIds.Count + 1);
+                    int reportStep = Math.Max(1,
+                        sourceIds.Count / 100);
+                    progress.Report(0, total,
+                        "正在读取主管和井属性...");
+                    for (int sourceIndex = 0;
+                        sourceIndex < sourceIds.Count; sourceIndex++)
                     {
-                        pipes.Add(new LongitudinalProfilePipeData
+                        ObjectId id = sourceIds[sourceIndex];
+                        QuantityPipeSelectionInfo info =
+                            QuantityPipeAttributeService.ReadPipe(
+                                document, id);
+                        if (info != null && info.Attributes != null)
                         {
-                            SourceId = info.HandleText,
-                            StartNode = attrs.StartNode,
-                            EndNode = attrs.EndNode,
-                            Diameter = attrs.Diameter,
-                            Foundation = ResolveFoundation(attrs),
-                            OuterDiameter = attrs.PipeOuterDiameter,
-                            PlanLength = info.CadLength,
-                            SelectionOrder = order++
-                        });
-                    }
-                    else if (QuantityPipeAttributes.IsNodeKind(
-                        attrs.ObjectKind))
-                    {
-                        wells.Add(new LongitudinalProfileWellData
+                            QuantityPipeAttributes attrs =
+                                info.Attributes;
+                            if (QuantityPipeAttributes.IsMainPipeKind(
+                                    attrs.ObjectKind)
+                                && info.HasSavedAttributes
+                                && info.CadLength > 0)
+                            {
+                                var pipe =
+                                    new LongitudinalProfilePipeData
+                                {
+                                    SourceId = info.HandleText,
+                                    StartNode = attrs.StartNode,
+                                    EndNode = attrs.EndNode,
+                                    Diameter = attrs.Diameter,
+                                    Foundation = ResolveFoundation(attrs),
+                                    OuterDiameter =
+                                        attrs.PipeOuterDiameter,
+                                    PlanLength = info.CadLength,
+                                    SelectionOrder = order++,
+                                    StartDepth = attrs.StartDepth,
+                                    EndDepth = attrs.EndDepth
+                                };
+                                Point3d geometryStart;
+                                Point3d geometryEnd;
+                                if (TryReadCurveEndpoints(document, id,
+                                    out geometryStart,
+                                    out geometryEnd))
+                                {
+                                    pipe.HasGeometry = true;
+                                    pipe.GeometryStartX =
+                                        geometryStart.X;
+                                    pipe.GeometryStartY =
+                                        geometryStart.Y;
+                                    pipe.GeometryEndX = geometryEnd.X;
+                                    pipe.GeometryEndY = geometryEnd.Y;
+                                }
+                                pipes.Add(pipe);
+                            }
+                            else if (QuantityPipeAttributes.IsNodeKind(
+                                attrs.ObjectKind))
+                            {
+                                var well =
+                                    new LongitudinalProfileWellData
+                                {
+                                    SourceId = info.HandleText,
+                                    NodeNo = attrs.NodeNo,
+                                    WellSpec = attrs.WellSpec,
+                                    WellType = attrs.WellType,
+                                    GroundElevation =
+                                        attrs.GroundElevation,
+                                    WellDepth = attrs.WellDepth,
+                                    SiltWellDeductDepth500 =
+                                        attrs.SiltWellDeductDepth500,
+                                    SiltWellDeductDepth700 =
+                                        attrs.SiltWellDeductDepth700
+                                };
+                                Point3d position;
+                                if (TryReadEntityPosition(document, id,
+                                    out position))
+                                {
+                                    well.HasPosition = true;
+                                    well.PositionX = position.X;
+                                    well.PositionY = position.Y;
+                                }
+                                wells.Add(well);
+                            }
+                        }
+                        if ((sourceIndex + 1) % reportStep == 0
+                            || sourceIndex + 1 == sourceIds.Count)
                         {
-                            SourceId = info.HandleText,
-                            NodeNo = attrs.NodeNo,
-                            WellSpec = attrs.WellSpec,
-                            WellType = attrs.WellType,
-                            GroundElevation = attrs.GroundElevation,
-                            WellDepth = attrs.WellDepth,
-                            SiltWellDeductDepth500 =
-                                attrs.SiltWellDeductDepth500,
-                            SiltWellDeductDepth700 =
-                                attrs.SiltWellDeductDepth700
-                        });
+                            progress.Report(sourceIndex + 1, total,
+                                "正在读取对象属性（"
+                                + (sourceIndex + 1) + " / "
+                                + sourceIds.Count + "）...");
+                        }
                     }
+                    progress.Report(sourceIds.Count, total,
+                        "正在检查管线连通关系并计算纵断面...");
+                    built = LongitudinalProfileCalculator
+                        .BuildBetweenNodes(pipes, wells, startNo, endNo);
+                    progress.Report(total, total,
+                        built.Success
+                            ? "纵断面数据准备完成。"
+                            : "纵断面数据检查完成。");
+                    progress.Complete(built.Success
+                        ? "纵断面数据准备完成。"
+                        : "纵断面数据检查完成。");
                 }
-
-                LongitudinalProfileBuildResult built =
-                    LongitudinalProfileCalculator.BuildBetweenNodes(
-                        pipes, wells, startNo, endNo);
                 if (!built.Success)
                 {
                     CDBoxMessageBox.Show(new AcadMainWindow(),
@@ -159,6 +224,69 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             return names.Length > 0
                 ? string.Join("、", names)
                 : string.Empty;
+        }
+
+        private static bool TryReadCurveEndpoints(
+            Document document, ObjectId id,
+            out Point3d start, out Point3d end)
+        {
+            start = Point3d.Origin;
+            end = Point3d.Origin;
+            try
+            {
+                using (Transaction tr = document.Database
+                    .TransactionManager.StartOpenCloseTransaction())
+                {
+                    Curve curve = tr.GetObject(id, OpenMode.ForRead,
+                        false) as Curve;
+                    if (curve == null) return false;
+                    start = curve.StartPoint;
+                    end = curve.EndPoint;
+                    return start.DistanceTo(end) > 1e-8;
+                }
+            }
+            catch { return false; }
+        }
+
+        private static bool TryReadEntityPosition(
+            Document document, ObjectId id, out Point3d position)
+        {
+            position = Point3d.Origin;
+            try
+            {
+                using (Transaction tr = document.Database
+                    .TransactionManager.StartOpenCloseTransaction())
+                {
+                    Entity entity = tr.GetObject(id, OpenMode.ForRead,
+                        false) as Entity;
+                    if (entity == null) return false;
+                    BlockReference block = entity as BlockReference;
+                    if (block != null)
+                    {
+                        position = block.Position;
+                        return true;
+                    }
+                    DBPoint point = entity as DBPoint;
+                    if (point != null)
+                    {
+                        position = point.Position;
+                        return true;
+                    }
+                    Circle circle = entity as Circle;
+                    if (circle != null)
+                    {
+                        position = circle.Center;
+                        return true;
+                    }
+                    Extents3d extents = entity.GeometricExtents;
+                    position = new Point3d(
+                        (extents.MinPoint.X + extents.MaxPoint.X) / 2.0,
+                        (extents.MinPoint.Y + extents.MaxPoint.Y) / 2.0,
+                        (extents.MinPoint.Z + extents.MaxPoint.Z) / 2.0);
+                    return true;
+                }
+            }
+            catch { return false; }
         }
     }
 }

@@ -14,6 +14,27 @@ using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
+    public sealed class QuantityAttributesChangedEventArgs : EventArgs
+    {
+        public QuantityAttributesChangedEventArgs(Document document,
+            IEnumerable<string> objectHandles, string reason,
+            bool annotationsRefreshed)
+        {
+            Document = document;
+            ObjectHandles = (objectHandles ?? Enumerable.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            Reason = reason ?? string.Empty;
+            AnnotationsRefreshed = annotationsRefreshed;
+        }
+
+        public Document Document { get; private set; }
+        public List<string> ObjectHandles { get; private set; }
+        public string Reason { get; private set; }
+        public bool AnnotationsRefreshed { get; private set; }
+    }
+
     /// <summary>
     /// 属性读写服务。
     /// 统一支持主管、支管、节点/检查井；使用对象 ExtensionDictionary + Xrecord 保存。
@@ -22,6 +43,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     {
         public const string PipeAttributeXrecordName = "CDBoxQuantityPipeAttributes";
         private const string PipeAttributeIndexDictionaryName = "CDBoxQuantityAttributeIndex";
+
+        public static event EventHandler<QuantityAttributesChangedEventArgs>
+            AttributesChanged;
 
         public static QuantityPipeSelectionInfo SelectPipeAndRead(Document doc)
         {
@@ -321,7 +345,32 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (!string.IsNullOrWhiteSpace(changedPipeHandle)) linkedPipeHandles.Add(changedPipeHandle);
             RefreshBoundPipeAnnotations(doc, linkedPipeHandles);
 
+            var affectedHandles = new List<string>();
+            if (!string.IsNullOrWhiteSpace(changedNodeHandle))
+                affectedHandles.Add(changedNodeHandle);
+            affectedHandles.AddRange(linkedPipeHandles);
+            RaiseAttributesChanged(doc, affectedHandles, "Save", true);
+
             return new QuantityPipeWriteResult { Success = true, SuccessCount = 1, Message = "已写入当前对象属性。" };
+        }
+
+        private static void RaiseAttributesChanged(Document doc,
+            IEnumerable<string> handles, string reason,
+            bool annotationsRefreshed)
+        {
+            EventHandler<QuantityAttributesChangedEventArgs> handler =
+                AttributesChanged;
+            if (handler == null || doc == null) return;
+            var args = new QuantityAttributesChangedEventArgs(doc,
+                handles, reason, annotationsRefreshed);
+            if (args.ObjectHandles.Count == 0) return;
+            foreach (Delegate callback in handler.GetInvocationList())
+                try
+                {
+                    ((EventHandler<QuantityAttributesChangedEventArgs>)callback)(
+                        null, args);
+                }
+                catch { }
         }
 
         private static void RefreshBoundNodeAnnotations(Document doc,
@@ -548,6 +597,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             RefreshBoundAnnotationsAfterBatch(doc,
                 changedAnnotationSourceHandles);
+            RaiseAttributesChanged(doc, changedAnnotationSourceHandles,
+                "BatchWrite", true);
 
             string message = "批量写入完成：成功 " + success + " 个，跳过 " + skip + " 个，失败 " + fail + " 个。";
             if (unavailableLayerSkip > 0) message += "\n其中 " + unavailableLayerSkip + " 个对象因图层锁定、冻结或关闭而跳过。";
@@ -697,6 +748,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
             RefreshBoundAnnotationsAfterBatch(doc,
                 changedAnnotationSourceHandles);
+            RaiseAttributesChanged(doc, changedAnnotationSourceHandles,
+                "ApplyDefaults", true);
 
             string message = "默认表补填完成：成功 " + success + " 个";
             if (success > 0) message += "（主管 " + mainCount + "，支管 " + branchCount + "，节点/井 " + nodeCount + "）";

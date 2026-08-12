@@ -14,6 +14,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         public string TemplateId { get; set; }
         public string PaperSize { get; set; }
         public double Rotation { get; set; }
+        public double? BoundaryRotation { get; set; }
         public List<Point3d> Boundary { get; set; }
 
         public Point3d Center
@@ -52,7 +53,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 + axisV * (height * 0.5);
             ObjectId id = CreateRectanglePreview(db, tr, center, width,
                 height, rotation);
-            FinalizeRectangle(tr, id, templateId, paperSize, rotation);
+            FinalizeRectangle(tr, id, templateId, paperSize, rotation,
+                rotation);
             return id;
         }
 
@@ -75,7 +77,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         }
 
         public void FinalizeRectangle(Transaction tr, ObjectId rectangleId,
-            string templateId, string paperSize, double cutRotation)
+            string templateId, string paperSize, double rectangleRotation,
+            double cutRotation)
         {
             if (tr == null || rectangleId.IsNull)
                 throw new InvalidOperationException("裁图矩形无效。");
@@ -83,11 +86,13 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 false) as Entity;
             if (rectangle == null)
                 throw new InvalidOperationException("找不到裁图矩形。");
-            AttachMetadata(tr, rectangle, templateId, paperSize, cutRotation);
+            AttachMetadata(tr, rectangle, templateId, paperSize,
+                cutRotation, rectangleRotation);
         }
 
         public void AttachMetadata(Transaction tr, Entity entity,
-            string templateId, string paperSize, double rotation)
+            string templateId, string paperSize, double rotation,
+            double? boundaryRotation = null)
         {
             if (tr == null || entity == null) return;
             if (!entity.IsWriteEnabled) entity.UpgradeOpen();
@@ -108,10 +113,14 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 tr.AddNewlyCreatedDBObject(record, true);
             }
             record.Data = new ResultBuffer(
-                new TypedValue((int)DxfCode.Text, "2"),
+                new TypedValue((int)DxfCode.Text, "3"),
                 new TypedValue((int)DxfCode.Text, templateId ?? string.Empty),
                 new TypedValue((int)DxfCode.Text, paperSize ?? string.Empty),
                 new TypedValue((int)DxfCode.Real, rotation),
+                new TypedValue((int)DxfCode.Text, boundaryRotation.HasValue
+                    ? boundaryRotation.Value.ToString("R",
+                        CultureInfo.InvariantCulture)
+                    : string.Empty),
                 new TypedValue((int)DxfCode.Text,
                     DateTime.Now.ToString("o", CultureInfo.InvariantCulture)));
         }
@@ -134,6 +143,23 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 if (values == null || values.Length < 4) return false;
                 List<Point3d> boundary;
                 if (!TryGetBoundary(entity, out boundary)) return false;
+                double? boundaryRotation = null;
+                if (values.Length >= 5)
+                {
+                    double parsedRotation;
+                    if (double.TryParse(Convert.ToString(values[4].Value,
+                            CultureInfo.InvariantCulture),
+                        NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out parsedRotation))
+                        boundaryRotation = parsedRotation;
+                }
+                if (!boundaryRotation.HasValue)
+                {
+                    double inferredRotation;
+                    if (TryGetRectangleRotation(boundary,
+                            out inferredRotation))
+                        boundaryRotation = inferredRotation;
+                }
                 info = new FrameCutRegionInfo
                 {
                     ObjectId = entity.ObjectId,
@@ -141,6 +167,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     PaperSize = Convert.ToString(values[2].Value),
                     Rotation = Convert.ToDouble(values[3].Value,
                         CultureInfo.InvariantCulture),
+                    BoundaryRotation = boundaryRotation,
                     Boundary = boundary
                 };
                 return true;
@@ -187,7 +214,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 out minU, out maxU, out minV, out maxV);
             double width = maxU - minU;
             double height = maxV - minV;
-            if (width > maxWidth + 1e-6 || height > maxHeight + 1e-6)
+            if (!FrameCutRegionMath.Fits(width, height,
+                    maxWidth, maxHeight))
             {
                 message = string.Format(CultureInfo.CurrentCulture,
                     "闭合曲线尺寸 {0:0.###} × {1:0.###} 超过该模板裁图区域 {2:0.###} × {3:0.###}。",
@@ -283,6 +311,38 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 minV = Math.Min(minV, v);
                 maxV = Math.Max(maxV, v);
             }
+        }
+
+        private static bool TryGetRectangleRotation(IList<Point3d> points,
+            out double rotation)
+        {
+            rotation = 0.0;
+            if (points == null || points.Count != 4) return false;
+            Vector3d first = points[1] - points[0];
+            Vector3d second = points[2] - points[1];
+            Vector3d third = points[3] - points[2];
+            Vector3d fourth = points[0] - points[3];
+            double firstLength = first.Length;
+            double secondLength = second.Length;
+            double thirdLength = third.Length;
+            double fourthLength = fourth.Length;
+            if (firstLength <= GeometryHelper.Eps
+                || secondLength <= GeometryHelper.Eps
+                || thirdLength <= GeometryHelper.Eps
+                || fourthLength <= GeometryHelper.Eps)
+                return false;
+            const double tolerance = 1e-6;
+            if (Math.Abs(first.DotProduct(second))
+                    > firstLength * secondLength * tolerance
+                || Math.Abs(second.DotProduct(third))
+                    > secondLength * thirdLength * tolerance
+                || Math.Abs(firstLength - thirdLength)
+                    > Math.Max(firstLength, thirdLength) * tolerance
+                || Math.Abs(secondLength - fourthLength)
+                    > Math.Max(secondLength, fourthLength) * tolerance)
+                return false;
+            rotation = Math.Atan2(first.Y, first.X);
+            return true;
         }
     }
 }

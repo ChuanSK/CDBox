@@ -391,6 +391,7 @@ namespace TCPipeAutoDraw.UI
 
             object table = AddSubMenu(topMenu, "▤ 表格工具", "CDBox_Table");
             AddCommandItem(table, "▦ Excel 转 CAD 表格", "CDEXCEL");
+            AddCommandItem(table, "▦ 污水管成果表", "WSGCGB");
             AddSeparator(topMenu);
 
             AddCommandItem(topMenu, "▦ CDBox 工作台", "CDSTUDIO");

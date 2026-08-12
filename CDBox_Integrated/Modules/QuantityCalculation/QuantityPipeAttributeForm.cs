@@ -327,9 +327,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 Hide();
                 QuantityPipeWriteResult result;
-                using (var progress = new CDBoxProgressForm("属性批量赋值", new AcadMainWindow()))
+                using (var progress = CDBoxProgressSession.Start(_doc,
+                    "属性批量赋值", "正在批量写入属性…",
+                    "QuantityAttributes", "quantity-batch-write-progress"))
                 {
                     result = QuantityPipeAttributeService.ApplyToSelection(_doc, ReadFromUi(), _chkBatchKeepIdentity.Checked, progress.Report);
+                    progress.Complete(result.Message);
                 }
                 Show();
                 AppendLog(result.Message);

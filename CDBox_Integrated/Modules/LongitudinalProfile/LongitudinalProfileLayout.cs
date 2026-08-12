@@ -62,16 +62,34 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             return Rows.First(x => string.Equals(x.Settings.Key, key,
                 StringComparison.OrdinalIgnoreCase));
         }
+
+        public bool TryRow(string key,
+            out LongitudinalProfileRowLayout row)
+        {
+            row = Rows.FirstOrDefault(x => string.Equals(x.Settings.Key,
+                key, StringComparison.OrdinalIgnoreCase));
+            return row != null;
+        }
+
+        public IEnumerable<LongitudinalProfileRowLayout> RowsFor(string key)
+        {
+            return Rows.Where(x => string.Equals(x.Settings.Key, key,
+                StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     internal static class LongitudinalProfileLayoutCalculator
     {
-        // 管立得纵断面样式中的尺寸、行高和文字高度最终按 0.5
-        // 落入模型空间。保留同一换算后，横向 1:1000、纵向 1:100
-        // 分别对应 0.5 和 5.0 的坐标换算。
+        // 管立得纵断面样式中的几何尺寸与行高按 0.5 落入模型空间；
+        // 用户设置的文字高度则是模型空间真实高度，不再重复缩放。
+        // 横向 1:1000、纵向 1:100 分别对应 0.5 和 5.0 的坐标换算。
         internal const double ReferenceOutputScale = 0.5;
         internal const double ChartGap = 5.0;
         internal const double ElevationStaffWidth = 2.0;
+        internal const double WellHalfWidth = 0.5;
+        internal const double BoundaryExtensionLength = 0.5;
+        internal const double BoundaryBreakHalfSize = 0.375;
+        internal const double BoundaryBreakStraightLength = 3.125;
 
         public static LongitudinalProfileLayout Calculate(
             LongitudinalProfileData profile,
@@ -150,6 +168,16 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 * horizontalInterval;
             double plotWidth = roundedDistance * layout.HorizontalFactor;
             layout.PlotRight = layout.PlotLeft + plotWidth;
+            double requiredRight = layout.DataRight + WellHalfWidth;
+            if (profile.EndExtension != null)
+            {
+                requiredRight += BoundaryExtensionLength
+                    + BoundaryBreakHalfSize;
+            }
+            double gridWidth = horizontalInterval
+                * layout.HorizontalFactor;
+            while (layout.PlotRight < requiredRight - 1e-8)
+                layout.PlotRight += gridWidth;
             return layout;
         }
     }

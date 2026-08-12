@@ -1,9 +1,12 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using Autodesk.AutoCAD.ApplicationServices;
+using TCPipeAutoDraw.Core.FloatingCenter;
 using TCPipeAutoDraw.UI.Studio;
+using TCPipeAutoDraw.UI.FloatingCenter;
+using FloatingCenterHub = TCPipeAutoDraw.Core.FloatingCenter.FloatingCenter;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 using WinForms = System.Windows.Forms;
 
@@ -11,14 +14,8 @@ namespace TCPipeAutoDraw.UI
 {
     internal static class CDBoxNotificationService
     {
-        private const int MaximumQueuedToasts = 8;
         private static readonly object SyncRoot = new object();
-        private static readonly Queue<ToastRequest> ToastQueue =
-            new Queue<ToastRequest>();
         private static Dispatcher _dispatcher;
-        private static CDBoxNotificationWindow _activeToast;
-        private static CDBoxNotificationWindow _activePrompt;
-        private static bool _replacingPrompt;
 
         [ThreadStatic]
         private static Action<string, string> _workbenchToast;
@@ -51,19 +48,27 @@ namespace TCPipeAutoDraw.UI
             WinForms.MessageBoxButtons buttons, WinForms.MessageBoxIcon icon,
             WinForms.MessageBoxDefaultButton defaultButton)
         {
-            if (buttons == WinForms.MessageBoxButtons.OK
-                && TryPostWorkbench(text, ResolveToastKind(icon)))
+            if (!FloatingLegacyRoutingPolicy.RequiresSynchronousDecision(
+                buttons.ToString()))
+            {
+                if (TryPostWorkbench(text, ResolveToastKind(icon)))
+                    return WinForms.DialogResult.OK;
+                PublishStructured(caption, text, ResolveKind(icon));
+                if (!FloatingCenterController.CanPresent)
+                    WriteEditorFallback(caption, text);
                 return WinForms.DialogResult.OK;
+            }
 
-            var window = new CDBoxNotificationWindow(caption, text,
-                ResolveKind(icon), buttons, defaultButton, false, false,
-                false);
+            var window = new CDBoxDecisionWindow(caption, text,
+                ResolveKind(icon), buttons, defaultButton, false);
             ApplyAppearance(window);
             SetOwner(window, owner);
             try
             {
                 try { AcadApp.ShowModalWindow(window); }
                 catch { window.ShowDialog(); }
+                PublishDialogResult(caption, text, icon, buttons,
+                    window.Result);
                 return window.Result;
             }
             finally
@@ -76,11 +81,11 @@ namespace TCPipeAutoDraw.UI
             WinForms.IWin32Window owner, string title, string message,
             string yesText, string noText, out bool doNotAskAgain)
         {
-            var window = new CDBoxNotificationWindow(title, message,
+            var window = new CDBoxDecisionWindow(title, message,
                 CDBoxNotificationKind.Question,
                 WinForms.MessageBoxButtons.YesNo,
-                WinForms.MessageBoxDefaultButton.Button1, false, false,
-                true, yesText, noText);
+                WinForms.MessageBoxDefaultButton.Button1, true,
+                yesText, noText);
             ApplyAppearance(window);
             SetOwner(window, owner);
             try
@@ -88,6 +93,8 @@ namespace TCPipeAutoDraw.UI
                 try { AcadApp.ShowModalWindow(window); }
                 catch { window.ShowDialog(); }
                 doNotAskAgain = window.DoNotAskAgain;
+                PublishDecisionResult(title, message, window.Result,
+                    doNotAskAgain);
                 return window.Result;
             }
             finally
@@ -101,16 +108,9 @@ namespace TCPipeAutoDraw.UI
         {
             if (string.IsNullOrWhiteSpace(message)) return;
             if (TryPostWorkbench(message, ResolveToastKind(kind))) return;
-            Dispatch(delegate
-            {
-                EnqueueToast(new ToastRequest
-                {
-                    Title = string.IsNullOrWhiteSpace(title)
-                        ? "CDBox" : title.Trim(),
-                    Message = message.Trim(),
-                    Kind = kind
-                });
-            });
+            PublishStructured(title, message, kind);
+            if (FloatingCenterController.CanPresent) return;
+            WriteEditorFallback(title, message);
         }
 
         public static IDisposable BeginCommandPrompt(string title,
@@ -118,101 +118,27 @@ namespace TCPipeAutoDraw.UI
         {
             if (string.IsNullOrWhiteSpace(message))
                 return DelegateScope.Empty;
-            CDBoxNotificationWindow created = null;
-            DispatchSynchronously(delegate
-            {
-                if (_activePrompt != null)
+            IPromptSession structuredPrompt = FloatingCenterHub.Current.BeginPrompt(
+                new FloatingPrompt
                 {
-                    _replacingPrompt = true;
-                    try
-                    {
-                        try { _activePrompt.CloseImmediately(); }
-                        catch { }
-                        _activePrompt = null;
-                    }
-                    finally
-                    {
-                        _replacingPrompt = false;
-                    }
-                }
-                created = CreateModelessWindow(title, message,
-                    CDBoxNotificationKind.Information, false);
-                _activePrompt = created;
-                if (_activeToast != null)
+                    Source = "LegacyCommandPrompt",
+                    Title = title,
+                    Message = message
+                });
+            if (FloatingCenterController.CanPresent)
+                return new DelegateScope(delegate
                 {
-                    try { _activeToast.CloseImmediately(); }
+                    try { structuredPrompt.Dispose(); }
                     catch { }
-                    _activeToast = null;
-                }
-                created.Closed += delegate
-                {
-                    if (ReferenceEquals(_activePrompt, created))
-                        _activePrompt = null;
-                    if (!_replacingPrompt && _activeToast == null
-                        && ToastQueue.Count > 0)
-                        ShowToast(ToastQueue.Dequeue());
-                };
-                created.Show();
-            });
+                });
+            WriteEditorFallback(title, message);
             return new DelegateScope(delegate
             {
-                Dispatch(delegate
-                {
-                    if (created == null) return;
-                    try
-                    {
-                        if (created.IsVisible)
-                            created.RequestAnimatedClose();
-                    }
-                    catch
-                    {
-                    }
-                });
+                try { structuredPrompt.Dispose(); } catch { }
             });
         }
 
-        private static void EnqueueToast(ToastRequest request)
-        {
-            if (request == null) return;
-            if (_activeToast != null || _activePrompt != null)
-            {
-                while (ToastQueue.Count >= MaximumQueuedToasts)
-                    ToastQueue.Dequeue();
-                ToastQueue.Enqueue(request);
-                return;
-            }
-            ShowToast(request);
-        }
-
-        private static void ShowToast(ToastRequest request)
-        {
-            CDBoxNotificationWindow window = CreateModelessWindow(
-                request.Title, request.Message, request.Kind, true);
-            _activeToast = window;
-            window.Closed += delegate
-            {
-                if (ReferenceEquals(_activeToast, window))
-                    _activeToast = null;
-                if (_activePrompt == null && ToastQueue.Count > 0)
-                    ShowToast(ToastQueue.Dequeue());
-            };
-            window.Show();
-        }
-
-        private static CDBoxNotificationWindow CreateModelessWindow(
-            string title, string message, CDBoxNotificationKind kind,
-            bool autoClose)
-        {
-            var window = new CDBoxNotificationWindow(title, message, kind,
-                WinForms.MessageBoxButtons.OK,
-                WinForms.MessageBoxDefaultButton.Button1, true, autoClose,
-                false);
-            ApplyAppearance(window);
-            SetOwner(window, null);
-            return window;
-        }
-
-        private static void ApplyAppearance(CDBoxNotificationWindow window)
+        private static void ApplyAppearance(CDBoxDecisionWindow window)
         {
             CDBoxStudioSettings settings = CDBoxStudioSettingsStore.Load();
             window.ApplyAppearance(settings.AnnotationHudNormalOpacity,
@@ -221,7 +147,7 @@ namespace TCPipeAutoDraw.UI
                 settings.AnnotationHudGlowIntensity);
         }
 
-        private static void SetOwner(CDBoxNotificationWindow window,
+        private static void SetOwner(CDBoxDecisionWindow window,
             WinForms.IWin32Window owner)
         {
             if (window == null) return;
@@ -254,30 +180,18 @@ namespace TCPipeAutoDraw.UI
             }
         }
 
-        private static void Dispatch(Action action)
+        private static void WriteEditorFallback(string title, string message)
         {
-            if (action == null) return;
-            InitializeForCurrentThread();
-            Dispatcher dispatcher = _dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess())
+            try
             {
-                action();
-                return;
+                Document document = AcadApp.DocumentManager.MdiActiveDocument;
+                if (document == null || document.Editor == null) return;
+                string caption = string.IsNullOrWhiteSpace(title)
+                    ? "CDBox" : title.Trim();
+                document.Editor.WriteMessage("\n[" + caption + "] "
+                    + (message ?? string.Empty).Trim() + "\n");
             }
-            dispatcher.BeginInvoke(DispatcherPriority.Normal, action);
-        }
-
-        private static void DispatchSynchronously(Action action)
-        {
-            if (action == null) return;
-            InitializeForCurrentThread();
-            Dispatcher dispatcher = _dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess())
-            {
-                action();
-                return;
-            }
-            dispatcher.Invoke(DispatcherPriority.Normal, action);
+            catch { }
         }
 
         private static CDBoxNotificationKind ResolveKind(
@@ -308,11 +222,75 @@ namespace TCPipeAutoDraw.UI
             return "info";
         }
 
-        private sealed class ToastRequest
+        private static void PublishStructured(string title, string message,
+            CDBoxNotificationKind kind)
         {
-            public string Title;
-            public string Message;
-            public CDBoxNotificationKind Kind;
+            try
+            {
+                FloatingCenterHub.Current.Publish(new FloatingMessage
+                {
+                    Source = "LegacyNotification",
+                    Kind = ResolveFloatingKind(kind),
+                    Title = string.IsNullOrWhiteSpace(title)
+                        ? "CDBox" : title.Trim(),
+                    Summary = (message ?? string.Empty).Trim(),
+                    MergeKey = "legacy:" + kind + ":"
+                        + (title ?? string.Empty).Trim(),
+                    PresentAsCard = true,
+                    RecordInHistory = true
+                });
+            }
+            catch { }
+        }
+
+        private static void PublishDialogResult(string title, string message,
+            WinForms.MessageBoxIcon icon, WinForms.MessageBoxButtons buttons,
+            WinForms.DialogResult result)
+        {
+            if (buttons == WinForms.MessageBoxButtons.OK)
+            {
+                PublishStructured(title, message, ResolveKind(icon));
+                return;
+            }
+            PublishDecisionResult(title, message, result, false);
+        }
+
+        private static void PublishDecisionResult(string title,
+            string message, WinForms.DialogResult result,
+            bool doNotAskAgain)
+        {
+            try
+            {
+                FloatingCenterHub.Current.Publish(new FloatingMessage
+                {
+                    Source = "LegacyDecision",
+                    Kind = FloatingMessageKind.Decision,
+                    Priority = FloatingMessagePriority.High,
+                    Title = string.IsNullOrWhiteSpace(title)
+                        ? "CDBox" : title.Trim(),
+                    Summary = (message ?? string.Empty).Trim(),
+                    Detail = "选择结果：" + result
+                        + (doNotAskAgain ? "；以后不再提示" : string.Empty),
+                    MergeKey = "legacy-decision:"
+                        + (title ?? string.Empty).Trim(),
+                    RecordInHistory = true
+                });
+            }
+            catch { }
+        }
+
+        private static FloatingMessageKind ResolveFloatingKind(
+            CDBoxNotificationKind kind)
+        {
+            if (kind == CDBoxNotificationKind.Success)
+                return FloatingMessageKind.Success;
+            if (kind == CDBoxNotificationKind.Warning)
+                return FloatingMessageKind.Warning;
+            if (kind == CDBoxNotificationKind.Error)
+                return FloatingMessageKind.Error;
+            if (kind == CDBoxNotificationKind.Question)
+                return FloatingMessageKind.Decision;
+            return FloatingMessageKind.Information;
         }
 
         private sealed class DelegateScope : IDisposable

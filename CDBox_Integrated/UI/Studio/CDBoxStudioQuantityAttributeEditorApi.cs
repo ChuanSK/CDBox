@@ -49,7 +49,8 @@ namespace TCPipeAutoDraw.UI.Studio
             CDBoxStudioQuantityAttributeEditorContext context = FromInfo(doc, QuantityPipeAttributeService.ReadPipe(doc, id));
             context.message = write.Message;
             context.requestId = -1;
-            QuantityDashboardLiveMonitor.MarkDirty("quantity-attribute-saved");
+            QuantityDashboardLiveMonitor.MarkDirty(doc,
+                "quantity-attribute-saved");
             return context;
         }
 

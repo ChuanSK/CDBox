@@ -56,6 +56,9 @@ namespace TCPipeAutoDraw.UI.Studio
             AddCommand(actions, "cmd:SXMRB", "属性默认表", "管线属性", string.Empty, "SXMRB", string.Empty);
             AddCommand(actions, "cmd:SXQC", "属性清除", "管线属性", string.Empty, "SXQC", string.Empty);
             AddCommand(actions, "cmd:CDQBOARD", "工程量看板", "工程量", string.Empty, "CDQBOARD", string.Empty);
+            AddCommand(actions, "cmd:WSGCGB", "污水管成果表", "表格工具",
+                "读取井属性与井图块中心坐标，按固定模板绘制成果表。",
+                "WSGCGB", "WSGCGB");
             AddCommand(actions, "cmd:TCFRAMELAYOUT", "裁图区域布框", "图框工具", string.Empty, "TCFRAMELAYOUT", string.Empty);
             AddCommand(actions, "cmd:TCFRAMEPLACE", "直接布置图框", "图框工具", string.Empty, "TCFRAMEPLACE", string.Empty);
             actions.Add(new CDBoxStudioAction(

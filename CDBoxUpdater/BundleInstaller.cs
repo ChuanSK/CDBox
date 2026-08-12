@@ -83,8 +83,24 @@ namespace CDBoxUpdater
                     MoveDirectoryWithRetry(localNewBundle, targetBundle);
                     ValidateBundle(targetBundle);
                     Report(progress, 98, "正在完成最终校验…");
+                    int cleaned = 0;
+                    try
+                    {
+                        cleaned = CleanupObsoleteInstallArtifacts(
+                            targetParent, outcome.BackupBundlePath);
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        UpdaterLogger.Warn("清理旧更新备份失败，不影响本次更新："
+                            + cleanupEx.Message);
+                    }
                     outcome.Success = true;
-                    outcome.Message = "CDBox.bundle 已成功替换。旧版本备份保留在：" + (string.IsNullOrWhiteSpace(outcome.BackupBundlePath) ? "无" : outcome.BackupBundlePath);
+                    outcome.Message = "CDBox.bundle 已成功替换。旧版本备份保留在："
+                        + (string.IsNullOrWhiteSpace(outcome.BackupBundlePath)
+                            ? "无" : outcome.BackupBundlePath)
+                        + (cleaned > 0
+                            ? "；已清理旧备份/临时目录 " + cleaned + " 个。"
+                            : string.Empty);
                     UpdaterLogger.Info(outcome.Message);
                     return outcome;
                 }
@@ -323,6 +339,63 @@ namespace CDBoxUpdater
                 NormalizeAttributes(path);
                 Directory.Delete(path, true);
             }, "删除目录 " + path);
+        }
+
+        private static int CleanupObsoleteInstallArtifacts(
+            string targetParent, string retainedBackup)
+        {
+            if (string.IsNullOrWhiteSpace(targetParent)
+                || !Directory.Exists(targetParent)) return 0;
+
+            string parent = NormalizeDirectoryPath(targetParent);
+            string retained = string.IsNullOrWhiteSpace(retainedBackup)
+                ? string.Empty : NormalizeDirectoryPath(retainedBackup);
+            int cleaned = 0;
+            string[] patterns =
+            {
+                "CDBox.bundle.backup.*",
+                "CDBox.bundle.update-backup",
+                "CDBox.bundle.new.*"
+            };
+            foreach (string pattern in patterns)
+            {
+                string[] directories;
+                try
+                {
+                    directories = Directory.GetDirectories(parent, pattern,
+                        SearchOption.TopDirectoryOnly);
+                }
+                catch (Exception ex)
+                {
+                    UpdaterLogger.Warn("扫描更新备份目录失败：" + ex.Message);
+                    continue;
+                }
+
+                foreach (string candidate in directories)
+                {
+                    string full = NormalizeDirectoryPath(candidate);
+                    DirectoryInfo owner = Directory.GetParent(full);
+                    if (owner == null
+                        || !string.Equals(owner.FullName, parent,
+                            StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(full, retained,
+                            StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    try
+                    {
+                        DeleteDirectoryIfExists(full);
+                        cleaned++;
+                        UpdaterLogger.Info("已清理旧更新备份/临时目录："
+                            + full);
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdaterLogger.Warn("清理旧更新备份/临时目录失败："
+                            + full + "，" + ex.Message);
+                    }
+                }
+            }
+            return cleaned;
         }
 
         private static void NormalizeAttributes(string root)

@@ -170,6 +170,15 @@ namespace TCPipeAutoDraw.UI.Studio
             if (appSettings.PromptInstallOnLoad) page.Append(" checked");
             page.Append("/><span></span><em>未安装时提示安装自动加载</em></label></article>");
 
+            page.Append("<article class=\"setting-card wide\"><h3>悬浮球</h3><div class=\"hud-appearance\">");
+            AppendSwitch(page, "floatingCenterEnabledToggle", "悬浮球", "启用悬浮球", settings.FloatingCenterEnabled);
+            AppendSwitch(page, "floatingCenterShowOnStartupToggle", "启动显示", "加载插件后显示", settings.FloatingCenterShowOnStartup);
+            AppendSwitch(page, "floatingCenterSnapToEdgesToggle", "屏幕边缘", "拖动后自动吸附", settings.FloatingCenterSnapToEdges);
+            page.Append("<label class=\"hud-control\"><strong>普通提示自动关闭</strong><input id=\"floatingCenterAutoCloseSeconds\" type=\"number\" min=\"1\" max=\"30\" step=\"1\" value=\"").Append(settings.FloatingCenterAutoCloseSeconds.ToString(CultureInfo.InvariantCulture)).Append("\"/></label>");
+            AppendSwitch(page, "floatingCenterAutoCheckEnabledToggle", "图纸检查", "启用自动检查", settings.FloatingCenterAutoCheckEnabled);
+            AppendSwitch(page, "floatingCenterSafeAutoSyncEnabledToggle", "安全自动同步", "允许安全小范围同步", settings.FloatingCenterSafeAutoSyncEnabled);
+            page.Append("</div><p class=\"hud-hint\">自动检查与安全自动同步仅保存偏好，当前阶段不会执行真实检查或写入图纸。</p></article>");
+
             page.Append("<article class=\"setting-card\"><h3>颜色输出</h3><div class=\"update-controls\"><label><span>CAD 颜色写入方式</span><select id=\"colorOutputMode\">");
             AppendColorOutputOption(page, CDBoxColorOutputMode.PreserveOriginalType, "保持原类型", settings.ColorOutputMode);
             AppendColorOutputOption(page, CDBoxColorOutputMode.PreferIndexColor, "优先索引颜色", settings.ColorOutputMode);
@@ -278,6 +287,17 @@ namespace TCPipeAutoDraw.UI.Studio
                 .Append(HtmlAttr(id)).Append("\" type=\"range\" min=\"0")
                 .Append("\" max=\"100\" step=\"1\" value=\"").Append(percent)
                 .Append("\" /></label>");
+        }
+
+        private static void AppendSwitch(StringBuilder page, string id,
+            string title, string description, bool enabled)
+        {
+            page.Append("<div class=\"hud-control\"><strong>")
+                .Append(Html(title)).Append("</strong><label class=\"switch\"><input id=\"")
+                .Append(HtmlAttr(id)).Append("\" type=\"checkbox\"");
+            if (enabled) page.Append(" checked");
+            page.Append("/><span></span><em>").Append(Html(description))
+                .Append("</em></label></div>");
         }
 
         private static string Template()
@@ -417,7 +437,8 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   var latestUpdateManifest=null;
   function hudFraction(id){return (Number((document.getElementById(id)||{}).value||0)/100).toFixed(2);}
   function hudOpacity(id){return (0.2+Number((document.getElementById(id)||{}).value||0)*0.008).toFixed(2);}
-  function buildSettingsPayload(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=document.getElementById('animationsToggle').checked?'1':'0';var promptInstall=document.getElementById('promptInstallToggle').checked?'1':'0';var glow=document.getElementById('hudGlowEnabled').checked?'1':'0';var doubleClickOpen=document.getElementById('doubleClickOpenToggle').checked?'1':'0';var colorOutput=(document.getElementById('colorOutputMode')||{}).value||'PreserveOriginalType';return 'theme='+encodeURIComponent(theme)+'&animations='+animations+'&promptInstall='+promptInstall+'&colorOutputMode='+encodeURIComponent(colorOutput)+'&hudNormalOpacity='+hudOpacity('hudNormalOpacity')+'&hudHoverOpacity='+hudOpacity('hudHoverOpacity')+'&hudGlowEnabled='+glow+'&hudGlowIntensity='+hudFraction('hudGlowIntensity')+'&doubleClickOpen='+doubleClickOpen;}
+  function settingOn(id){return document.getElementById(id).checked?'1':'0';}
+  function buildSettingsPayload(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=settingOn('animationsToggle');var promptInstall=settingOn('promptInstallToggle');var glow=settingOn('hudGlowEnabled');var doubleClickOpen=settingOn('doubleClickOpenToggle');var colorOutput=(document.getElementById('colorOutputMode')||{}).value||'PreserveOriginalType';return 'theme='+encodeURIComponent(theme)+'&animations='+animations+'&promptInstall='+promptInstall+'&colorOutputMode='+encodeURIComponent(colorOutput)+'&hudNormalOpacity='+hudOpacity('hudNormalOpacity')+'&hudHoverOpacity='+hudOpacity('hudHoverOpacity')+'&hudGlowEnabled='+glow+'&hudGlowIntensity='+hudFraction('hudGlowIntensity')+'&doubleClickOpen='+doubleClickOpen+'&floatingCenterEnabled='+settingOn('floatingCenterEnabledToggle')+'&floatingCenterShowOnStartup='+settingOn('floatingCenterShowOnStartupToggle')+'&floatingCenterSnapToEdges='+settingOn('floatingCenterSnapToEdgesToggle')+'&floatingCenterAutoCloseSeconds='+encodeURIComponent(document.getElementById('floatingCenterAutoCloseSeconds').value||'5')+'&floatingCenterAutoCheckEnabled='+settingOn('floatingCenterAutoCheckEnabledToggle')+'&floatingCenterSafeAutoSyncEnabled='+settingOn('floatingCenterSafeAutoSyncEnabledToggle');}
   function saveSettings(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=document.getElementById('animationsToggle').checked?'1':'0';document.body.setAttribute('data-theme',theme);document.body.classList.toggle('no-animations',animations!=='1');post('settings',buildSettingsPayload());}
   function setUpdateProgress(kind,text){var bar=document.getElementById('updateProgress');if(!bar)return;bar.className='update-progress '+(kind||'idle');var em=bar.querySelector('em');if(em)em.textContent=text||'等待操作';}
   window.CDBoxStudioUpdateProgress=function(data){data=data||{};var bar=document.getElementById('updateProgress');if(!bar)return;var percent=Math.max(0,Math.min(100,Number(data.percent||0)));bar.className='update-progress '+(data.kind||'progress');var span=bar.querySelector('span');if(span)span.style.width=percent+'%';var em=bar.querySelector('em');if(em)em.textContent=(data.message||'下载进度')+(percent>0?' · '+percent+'%':'');};
@@ -452,6 +473,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   document.getElementById('hudGlowEnabled').addEventListener('change',saveSettings);
   document.getElementById('doubleClickOpenToggle').addEventListener('change',saveSettings);
   document.getElementById('colorOutputMode').addEventListener('change',saveSettings);
+  ['floatingCenterEnabledToggle','floatingCenterShowOnStartupToggle','floatingCenterSnapToEdgesToggle','floatingCenterAutoCloseSeconds','floatingCenterAutoCheckEnabledToggle','floatingCenterSafeAutoSyncEnabledToggle'].forEach(function(id){document.getElementById(id).addEventListener('change',saveSettings);});
   [['hudNormalOpacity','hudNormalOpacityValue'],['hudHoverOpacity','hudHoverOpacityValue'],['hudGlowIntensity','hudGlowIntensityValue']].forEach(function(pair){var input=document.getElementById(pair[0]),output=document.getElementById(pair[1]);input.addEventListener('input',function(){output.textContent=input.value+'%';});input.addEventListener('change',saveSettings);});
   document.getElementById('checkUpdateButton').addEventListener('click',checkUpdate);
   document.getElementById('downloadUpdateButton').addEventListener('click',downloadUpdate);

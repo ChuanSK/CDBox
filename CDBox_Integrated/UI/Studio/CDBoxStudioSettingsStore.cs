@@ -53,6 +53,20 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (bool.TryParse((string)root.Element("DoubleClickOpenEnabled"),
                     out doubleClickOpenEnabled))
                     settings.DoubleClickOpenEnabled = doubleClickOpenEnabled;
+                settings.FloatingCenterEnabled = ReadBoolean(root,
+                    "FloatingCenterEnabled", settings.FloatingCenterEnabled);
+                settings.FloatingCenterShowOnStartup = ReadBoolean(root,
+                    "FloatingCenterShowOnStartup", settings.FloatingCenterShowOnStartup);
+                settings.FloatingCenterSnapToEdges = ReadBoolean(root,
+                    "FloatingCenterSnapToEdges", settings.FloatingCenterSnapToEdges);
+                settings.FloatingCenterAutoCheckEnabled = ReadBoolean(root,
+                    "FloatingCenterAutoCheckEnabled", settings.FloatingCenterAutoCheckEnabled);
+                settings.FloatingCenterSafeAutoSyncEnabled = ReadBoolean(root,
+                    "FloatingCenterSafeAutoSyncEnabled", settings.FloatingCenterSafeAutoSyncEnabled);
+                int autoCloseSeconds;
+                if (int.TryParse((string)root.Element("FloatingCenterAutoCloseSeconds"),
+                    NumberStyles.Integer, CultureInfo.InvariantCulture, out autoCloseSeconds))
+                    settings.FloatingCenterAutoCloseSeconds = autoCloseSeconds;
 
                 settings.Normalize();
                 TCPipeAutoDraw.Core.Colors.CDBoxColorService.OutputMode = settings.ColorOutputMode;
@@ -79,7 +93,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioLogger.EnsureLogDirectory();
 
                 var root = new XElement("CDBoxStudioSettings",
-                    new XAttribute("Version", "5"),
+                    new XAttribute("Version", "6"),
                     new XElement("Theme", settings.Theme),
                     new XElement("AnimationsEnabled", settings.AnimationsEnabled),
                     new XElement("AnnotationHudNormalOpacity",
@@ -89,6 +103,15 @@ namespace TCPipeAutoDraw.UI.Studio
                     new XElement("AnnotationHudGlowEnabled", settings.AnnotationHudGlowEnabled),
                     new XElement("AnnotationHudGlowIntensity",
                         settings.AnnotationHudGlowIntensity.ToString("0.##", CultureInfo.InvariantCulture)),
+                    new XElement("FloatingCenterEnabled", settings.FloatingCenterEnabled),
+                    new XElement("FloatingCenterShowOnStartup", settings.FloatingCenterShowOnStartup),
+                    new XElement("FloatingCenterSnapToEdges", settings.FloatingCenterSnapToEdges),
+                    new XElement("FloatingCenterAutoCloseSeconds",
+                        settings.FloatingCenterAutoCloseSeconds.ToString(CultureInfo.InvariantCulture)),
+                    new XElement("FloatingCenterAutoCheckEnabled",
+                        settings.FloatingCenterAutoCheckEnabled),
+                    new XElement("FloatingCenterSafeAutoSyncEnabled",
+                        settings.FloatingCenterSafeAutoSyncEnabled),
                     new XElement("DoubleClickOpenEnabled", settings.DoubleClickOpenEnabled),
                     new XElement("ColorOutputMode", settings.ColorOutputMode.ToString()),
                     new XElement("UpdateChannel", settings.UpdateChannel));
@@ -106,6 +129,13 @@ namespace TCPipeAutoDraw.UI.Studio
             double value;
             return double.TryParse((string)root.Element(name), NumberStyles.Float,
                 CultureInfo.InvariantCulture, out value) ? value : fallback;
+        }
+
+        private static bool ReadBoolean(XElement root, string name, bool fallback)
+        {
+            bool value;
+            return bool.TryParse((string)root.Element(name), out value)
+                ? value : fallback;
         }
     }
 }

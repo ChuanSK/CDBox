@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using TCPipeAutoDraw.Modules.AnnotationHud;
 using WinForms = System.Windows.Forms;
 
@@ -20,37 +19,26 @@ namespace TCPipeAutoDraw.UI
         Question
     }
 
-    internal sealed class CDBoxNotificationWindow : AnnotationHudWindowBase
+    internal sealed class CDBoxDecisionWindow : AnnotationHudWindowBase
     {
-        private readonly bool _modeless;
-        private readonly bool _autoClose;
         private readonly WinForms.DialogResult _escapeResult;
         private readonly CheckBox _doNotAskCheckBox;
-        private readonly DispatcherTimer _autoCloseTimer;
-        private TextBlock _countdownTextBlock;
-        private TimeSpan _autoCloseRemaining;
-        private DateTime _autoCloseDeadlineUtc;
         private bool _closeRequested;
 
-        private static readonly TimeSpan AutoCloseDuration = TimeSpan.FromSeconds(5);
-
-        public CDBoxNotificationWindow(string title, string message,
+        public CDBoxDecisionWindow(string title, string message,
             CDBoxNotificationKind kind, WinForms.MessageBoxButtons buttons,
-            WinForms.MessageBoxDefaultButton defaultButton, bool modeless,
-            bool autoClose, bool showDoNotAsk, string yesText = null,
+            WinForms.MessageBoxDefaultButton defaultButton,
+            bool showDoNotAsk, string yesText = null,
             string noText = null)
             : base(string.IsNullOrWhiteSpace(title) ? "CDBox" : title.Trim(),
                 ResolveWidth(message))
         {
-            _modeless = modeless;
-            _autoClose = autoClose;
             MaxHeight = 580;
-            ShowActivated = !modeless;
-            Focusable = !modeless;
+            ShowActivated = true;
+            Focusable = true;
 
-            IList<NotificationButtonSpec> buttonSpecs = modeless
-                ? new List<NotificationButtonSpec>()
-                : BuildButtons(buttons, yesText, noText);
+            IList<NotificationButtonSpec> buttonSpecs =
+                BuildButtons(buttons, yesText, noText);
             _escapeResult = ResolveEscapeResult(buttonSpecs);
             Result = _escapeResult;
 
@@ -72,7 +60,7 @@ namespace TCPipeAutoDraw.UI
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(7),
                 Padding = new Thickness(11, 9, 11, 9),
-                Margin = new Thickness(0, 0, 0, modeless ? 0 : 10),
+                Margin = new Thickness(0, 0, 0, 10),
                 Child = new ScrollViewer
                 {
                     Content = messageBlock,
@@ -100,30 +88,8 @@ namespace TCPipeAutoDraw.UI
             UserMoved += delegate { SavePosition(); };
             Closed += delegate
             {
-                if (_autoCloseTimer != null) _autoCloseTimer.Stop();
                 SavePosition();
             };
-
-            if (_autoClose)
-            {
-                _autoCloseRemaining = AutoCloseDuration;
-                _autoCloseTimer = new DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(200)
-                };
-                _autoCloseTimer.Tick += delegate
-                {
-                    UpdateAutoCloseCountdown();
-                };
-                MouseEnter += delegate
-                {
-                    PauseAutoCloseCountdown();
-                };
-                MouseLeave += delegate
-                {
-                    ResumeAutoCloseCountdown();
-                };
-            }
         }
 
         public WinForms.DialogResult Result { get; private set; }
@@ -137,21 +103,8 @@ namespace TCPipeAutoDraw.UI
             }
         }
 
-        public void RequestAnimatedClose()
-        {
-            if (_closeRequested) return;
-            _closeRequested = true;
-            if (_autoCloseTimer != null) _autoCloseTimer.Stop();
-            Close();
-        }
-
         protected override void OnEscapePressed()
         {
-            if (_modeless)
-            {
-                RequestAnimatedClose();
-                return;
-            }
             Complete(_escapeResult);
         }
 
@@ -162,14 +115,6 @@ namespace TCPipeAutoDraw.UI
                 { Width = new GridLength(34) });
             grid.ColumnDefinitions.Add(new ColumnDefinition
                 { Width = new GridLength(1, GridUnitType.Star) });
-            if (_modeless)
-            {
-                if (_autoClose)
-                    grid.ColumnDefinitions.Add(new ColumnDefinition
-                        { Width = new GridLength(44) });
-                grid.ColumnDefinitions.Add(new ColumnDefinition
-                    { Width = new GridLength(30) });
-            }
 
             Border icon = BuildIcon(kind);
             Grid.SetColumn(icon, 0);
@@ -189,95 +134,7 @@ namespace TCPipeAutoDraw.UI
             Grid.SetColumn(titleBlock, 1);
             grid.Children.Add(titleBlock);
 
-            if (_modeless)
-            {
-                int closeColumn = 2;
-                if (_autoClose)
-                {
-                    _countdownTextBlock = new TextBlock
-                    {
-                        Text = FormatCountdown(AutoCloseDuration),
-                        Foreground = Brush("#64748B"),
-                        FontSize = 11,
-                        FontWeight = FontWeights.SemiBold,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        ToolTip = "自动关闭倒计时"
-                    };
-                    Grid.SetColumn(_countdownTextBlock, 2);
-                    grid.Children.Add(_countdownTextBlock);
-                    closeColumn = 3;
-                }
-                var close = new Button
-                {
-                    Content = "×",
-                    Width = 26,
-                    Height = 26,
-                    Padding = new Thickness(0),
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent,
-                    Foreground = Brush("#64748B"),
-                    FontSize = 17,
-                    Cursor = Cursors.Hand,
-                    ToolTip = "关闭"
-                };
-                close.Click += delegate { RequestAnimatedClose(); };
-                Grid.SetColumn(close, closeColumn);
-                grid.Children.Add(close);
-            }
             return grid;
-        }
-
-        private void ResumeAutoCloseCountdown()
-        {
-            if (!_autoClose || _autoCloseTimer == null || _closeRequested) return;
-            if (_autoCloseRemaining <= TimeSpan.Zero)
-            {
-                RequestAnimatedClose();
-                return;
-            }
-            _autoCloseDeadlineUtc = DateTime.UtcNow + _autoCloseRemaining;
-            UpdateCountdownText(_autoCloseRemaining, false);
-            _autoCloseTimer.Start();
-        }
-
-        private void PauseAutoCloseCountdown()
-        {
-            if (!_autoClose || _autoCloseTimer == null || _closeRequested) return;
-            if (_autoCloseTimer.IsEnabled)
-            {
-                _autoCloseRemaining = _autoCloseDeadlineUtc - DateTime.UtcNow;
-                if (_autoCloseRemaining < TimeSpan.Zero) _autoCloseRemaining = TimeSpan.Zero;
-                _autoCloseTimer.Stop();
-            }
-            UpdateCountdownText(_autoCloseRemaining, true);
-        }
-
-        private void UpdateAutoCloseCountdown()
-        {
-            if (_closeRequested || _autoCloseTimer == null) return;
-            _autoCloseRemaining = _autoCloseDeadlineUtc - DateTime.UtcNow;
-            if (_autoCloseRemaining <= TimeSpan.Zero)
-            {
-                _autoCloseRemaining = TimeSpan.Zero;
-                UpdateCountdownText(_autoCloseRemaining, false);
-                _autoCloseTimer.Stop();
-                RequestAnimatedClose();
-                return;
-            }
-            UpdateCountdownText(_autoCloseRemaining, false);
-        }
-
-        private void UpdateCountdownText(TimeSpan remaining, bool paused)
-        {
-            if (_countdownTextBlock == null) return;
-            _countdownTextBlock.Text = paused ? "暂停" : FormatCountdown(remaining);
-        }
-
-        private static string FormatCountdown(TimeSpan remaining)
-        {
-            int seconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
-            return seconds.ToString() + "s";
         }
 
         private static Border BuildIcon(CDBoxNotificationKind kind)
@@ -388,12 +245,8 @@ namespace TCPipeAutoDraw.UI
             ShowAnimated(GetCursorScreenPosition(),
                 remembered ? (double?)left : null,
                 remembered ? (double?)top : null);
-            if (!_modeless)
-            {
-                Activate();
-                Focus();
-            }
-            if (_autoCloseTimer != null) ResumeAutoCloseCountdown();
+            Activate();
+            Focus();
         }
 
         private void SavePosition()

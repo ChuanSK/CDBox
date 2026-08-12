@@ -63,7 +63,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             try { text.AdjustAlignment(db); } catch { }
         }
 
-        private static Point3d ResolvePosition(FrameTemplateCatalogItem template,
+        internal static Point3d ResolvePosition(FrameTemplateCatalogItem template,
             Point3d insertPoint, double rotation, string reference,
             double horizontalOffset, double verticalOffset)
         {

@@ -14,6 +14,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public double Height { get; set; }
         public double TextHeight { get; set; }
         public string TextStyleName { get; set; }
+        public short TextColorIndex { get; set; }
 
         public LongitudinalProfileRowSettings Clone()
         {
@@ -91,12 +92,13 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         {
             HeaderWidth = Positive(HeaderWidth, 45.0);
             HeaderChartGap = NonNegative(HeaderChartGap, 5.0);
+            // 横纵比例仍使用参考纵断面的内置基准；表头文字允许按图纸样式调整。
             HeaderTextHeight = Positive(HeaderTextHeight, 6.0);
             HeaderTextStyleName = Clean(HeaderTextStyleName, "宋体");
             HeaderTextColorIndex = Color(HeaderTextColorIndex, 7);
             HeaderTextAlignment = Clean(HeaderTextAlignment, "中间对齐");
-            HorizontalScale = Positive(HorizontalScale, 1000.0);
-            VerticalScale = Positive(VerticalScale, 100.0);
+            HorizontalScale = 1000.0;
+            VerticalScale = 100.0;
             HorizontalGridInterval =
                 Positive(HorizontalGridInterval, 5.0);
             ElevationGridInterval =
@@ -108,26 +110,32 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             LayerName = Clean(LayerName, "CDBox-纵断面");
 
             List<LongitudinalProfileRowSettings> defaults = DefaultRows();
-            var supplied = (Rows ?? new List<LongitudinalProfileRowSettings>())
-                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.Key))
-                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(x => x.Key, x => x.First(),
-                    StringComparer.OrdinalIgnoreCase);
-            Rows = new List<LongitudinalProfileRowSettings>();
-            foreach (LongitudinalProfileRowSettings fallback in defaults)
+            var fallbackByKey = defaults.ToDictionary(x => x.Key,
+                StringComparer.OrdinalIgnoreCase);
+            var normalizedRows = new List<LongitudinalProfileRowSettings>();
+            foreach (LongitudinalProfileRowSettings supplied in
+                Rows ?? new List<LongitudinalProfileRowSettings>())
             {
-                LongitudinalProfileRowSettings row;
-                if (!supplied.TryGetValue(fallback.Key, out row))
-                    row = fallback;
+                if (supplied == null || string.IsNullOrWhiteSpace(
+                    supplied.Key)) continue;
+                LongitudinalProfileRowSettings fallback;
+                if (!fallbackByKey.TryGetValue(supplied.Key.Trim(),
+                    out fallback)) continue;
+                LongitudinalProfileRowSettings row = supplied.Clone();
                 row.Key = fallback.Key;
-                row.Name = Clean(row.Name, fallback.Name);
+                // 栏类型只允许使用内置项，显示名称随类型保持一致。
+                row.Name = fallback.Name;
                 row.Height = Positive(row.Height, fallback.Height);
                 row.TextHeight =
                     Positive(row.TextHeight, fallback.TextHeight);
                 row.TextStyleName =
                     Clean(row.TextStyleName, fallback.TextStyleName);
-                Rows.Add(row);
+                row.TextColorIndex = Color(row.TextColorIndex,
+                    fallback.TextColorIndex);
+                normalizedRows.Add(row);
             }
+            // 兼容旧配置和损坏配置；正常删除部分栏目时保留用户选择。
+            Rows = normalizedRows.Count > 0 ? normalizedRows : defaults;
 
             List<LongitudinalProfileEntityStyle> styleDefaults =
                 DefaultStyles();
@@ -205,7 +213,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 Name = name,
                 Height = height,
                 TextHeight = 2.5,
-                TextStyleName = "宋体"
+                TextStyleName = "宋体",
+                TextColorIndex = 7
             };
         }
 
@@ -329,7 +338,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                                 TextHeight =
                                     AttrNumber(x, "TextHeight", 2.5),
                                 TextStyleName =
-                                    Attr(x, "TextStyleName", "Standard")
+                                    Attr(x, "TextStyleName", "宋体"),
+                                TextColorIndex =
+                                    (short)AttrInteger(x, "TextColorIndex", 7)
                             }).ToList();
                     }
                     XElement styles = root.Element("Styles");
@@ -376,7 +387,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 if (!string.IsNullOrWhiteSpace(folder))
                     Directory.CreateDirectory(folder);
                 XElement root = new XElement("LongitudinalProfileSettings",
-                    new XAttribute("Version", "3"),
+                    new XAttribute("Version", "4"),
                     Element("HeaderWidth", settings.HeaderWidth),
                     Element("HeaderChartGap", settings.HeaderChartGap),
                     Element("HeaderTextHeight", settings.HeaderTextHeight),
@@ -405,7 +416,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                             AttrElement("Height", x.Height),
                             AttrElement("TextHeight", x.TextHeight),
                             new XAttribute("TextStyleName",
-                                x.TextStyleName)))),
+                                x.TextStyleName),
+                            new XAttribute("TextColorIndex",
+                                x.TextColorIndex)))),
                     new XElement("Styles", settings.Styles.Select(x =>
                         new XElement("Style",
                             new XAttribute("Name", x.Name),

@@ -31,6 +31,21 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         public static void Crop(Transaction tr,
             BlockTableRecord contentBlock, IList<Point3d> boundary)
         {
+            Crop(tr, contentBlock, boundary, null);
+        }
+
+        public static void Crop(Transaction tr,
+            BlockTableRecord contentBlock, IList<Point3d> boundary,
+            ISet<ObjectId> protectedTopLevelEntities)
+        {
+            Crop(tr, contentBlock, boundary, protectedTopLevelEntities, null);
+        }
+
+        public static void Crop(Transaction tr,
+            BlockTableRecord contentBlock, IList<Point3d> boundary,
+            ISet<ObjectId> protectedTopLevelEntities,
+            ISet<ObjectId> forceExplodeTopLevelEntities)
+        {
             if (tr == null || contentBlock == null || boundary == null
                 || boundary.Count < 3)
                 return;
@@ -41,6 +56,9 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             var pending = new Queue<CropWorkItem>();
             foreach (ObjectId id in contentBlock)
             {
+                if (protectedTopLevelEntities != null
+                    && protectedTopLevelEntities.Contains(id))
+                    continue;
                 pending.Enqueue(new CropWorkItem
                 {
                     ObjectId = id,
@@ -68,6 +86,13 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     continue;
                 }
                 if (entity == null || entity.IsErased)
+                    continue;
+
+                if (item.Depth == 0
+                    && forceExplodeTopLevelEntities != null
+                    && forceExplodeTopLevelEntities.Contains(item.ObjectId)
+                    && TryExplodeForCrop(tr, contentBlock, entity,
+                        item.Depth + 1, pending))
                     continue;
 
                 Extents3d extents;

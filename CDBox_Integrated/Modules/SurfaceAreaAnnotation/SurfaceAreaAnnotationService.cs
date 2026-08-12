@@ -13,6 +13,7 @@ using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Core.Cad;
 using TCPipeAutoDraw.Modules.AnnotationHud;
+using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
@@ -178,8 +179,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 session.BeforeObjectIds = SnapshotCurrentSpaceEntityIds(doc);
                 try { doc.Database.ObjectAppended += CassDatabase_ObjectAppended; } catch { }
 
-                ed.WriteMessage("\n[表面积标注] 已选择边界，正在通过 LISP 调用 CASS surfacearea 计算。边界图层：" + boundaryLayer);
-                ed.WriteMessage("\n[表面积标注] CASS 完成后将自动进入引线/注记位置选择。\n");
+                CDBoxNotificationService.Notify("表面积标注",
+                    "已选择边界，正在调用 CASS surfacearea 计算；完成后将自动进入引线和注记位置选择。边界图层："
+                    + boundaryLayer, CDBoxNotificationKind.Information);
 
                 RunCassSurfaceAreaCommandSynchronously(doc, per.ObjectId, options.BoundaryInterval, boundaryHandle);
 

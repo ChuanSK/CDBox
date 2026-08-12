@@ -1,33 +1,34 @@
 {
     "channel":  "studio-preview",
-    "latestVersion":  "CDBox-Studio-Preview-3.4.1",
-    "versionCode":  30401,
-    "title":  "CDBox Studio Preview 3.4.1",
-    "releaseDate":  "2026-08-06",
+    "latestVersion":  "CDBox-Studio-Preview-3.6.1",
+    "versionCode":  30601,
+    "title":  "CDBox Studio Preview 3.6.1",
+    "releaseDate":  "2026-08-12",
     "mandatory":  false,
     "package":  {
-                    "fileName":  "CDBox.Studio.Preview.3.4.1.zip",
-                    "size":  7597139,
-                    "sha256":  "EC93B1F8BB8AB59486CD5FB7D22F0F24FB5A4EFFAC483FEFB4F06165493E590F",
+                    "fileName":  "CDBox.Studio.Preview.3.6.1.zip",
+                    "size":  7704648,
+                    "sha256":  "9091007F490E566E8C883795ED17A0E19593314C791BF264FA578719C3516D50",
                     "urls":  [
                                  {
                                      "name":  "Gitee",
-                                     "url":  "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.4.1.zip"
+                                     "url":  "https://gitee.com/chaun-skye/cdbox-studio-preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.6.1.zip"
                                  },
                                  {
                                      "name":  "GitCode",
-                                     "url":  "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.4.1.zip"
+                                     "url":  "https://gitcode.com/ChuanSK/CDBox_Studio_Preview/releases/download/CDBox-Studio-Preview/CDBox.Studio.Preview.3.6.1.zip"
                                  },
                                  {
                                      "name":  "GitHub备用",
-                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.4.1/CDBox.Studio.Preview.3.4.1.zip"
+                                     "url":  "https://github.com/ChuanSK/CDBox/releases/download/CDBox-Studio-Preview-3.6.1/CDBox.Studio.Preview.3.6.1.zip"
                                  }
                              ]
                 },
     "notes":  [
-                  "统一通知、提示与选择浮窗样式、动画、透明度和位置记忆。",
-                  "完善管长、节点、面积与表面积标注及属性变化后的绑定刷新。",
-                  "重构纵断面生成流程，并按参考图完善结构层、图层、井轮廓和管线样式。",
-                  "优化图框裁图、锁定图层、模板导入、工程量看板和更新器目标版本识别。"
+                  "完成悬浮球阶段性架构，统一通知、提示、进度、图纸检查、同步任务及问题忽略恢复。",
+                  "优化纵断面设置、预览和绘制，完善侧面接入、起终点外主管与高程逻辑。",
+                  "新增污水管成果表范围选择、落图预览和专用图层。",
+                  "优化图框裁图与连续布框，修复旋转矩形误判并保留裁后嵌套块。",
+                  "完善属性标注同步、面积标注、更新器清理和多项稳定性处理。"
               ]
 }

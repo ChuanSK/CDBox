@@ -16,6 +16,12 @@ namespace TCPipeAutoDraw.UI.Studio
             AnnotationHudHoverOpacity = 1.0;
             AnnotationHudGlowEnabled = true;
             AnnotationHudGlowIntensity = 0.28;
+            FloatingCenterEnabled = true;
+            FloatingCenterShowOnStartup = true;
+            FloatingCenterSnapToEdges = true;
+            FloatingCenterAutoCloseSeconds = 5;
+            FloatingCenterAutoCheckEnabled = false;
+            FloatingCenterSafeAutoSyncEnabled = false;
             DoubleClickOpenEnabled = true;
             ColorOutputMode = TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode.PreserveOriginalType;
             UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
@@ -27,6 +33,12 @@ namespace TCPipeAutoDraw.UI.Studio
         public double AnnotationHudHoverOpacity { get; set; }
         public bool AnnotationHudGlowEnabled { get; set; }
         public double AnnotationHudGlowIntensity { get; set; }
+        public bool FloatingCenterEnabled { get; set; }
+        public bool FloatingCenterShowOnStartup { get; set; }
+        public bool FloatingCenterSnapToEdges { get; set; }
+        public int FloatingCenterAutoCloseSeconds { get; set; }
+        public bool FloatingCenterAutoCheckEnabled { get; set; }
+        public bool FloatingCenterSafeAutoSyncEnabled { get; set; }
         public bool DoubleClickOpenEnabled { get; set; }
         public TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode ColorOutputMode { get; set; }
         public string UpdateChannel { get; set; }
@@ -37,6 +49,8 @@ namespace TCPipeAutoDraw.UI.Studio
             AnnotationHudNormalOpacity = Clamp(AnnotationHudNormalOpacity, 0.20, 1.0, 0.68);
             AnnotationHudHoverOpacity = Clamp(AnnotationHudHoverOpacity, 0.20, 1.0, 1.0);
             AnnotationHudGlowIntensity = Clamp(AnnotationHudGlowIntensity, 0.0, 1.0, 0.28);
+            FloatingCenterAutoCloseSeconds = Math.Max(1,
+                Math.Min(30, FloatingCenterAutoCloseSeconds));
             if (!Enum.IsDefined(typeof(TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode), ColorOutputMode))
                 ColorOutputMode = TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode.PreserveOriginalType;
             if (string.IsNullOrWhiteSpace(UpdateChannel)) UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;

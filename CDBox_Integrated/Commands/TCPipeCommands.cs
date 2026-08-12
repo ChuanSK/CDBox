@@ -10,6 +10,9 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Core.Modules;
+using TCPipeAutoDraw.Core.FloatingCenter;
+using TCPipeAutoDraw.Core.Check;
+using TCPipeAutoDraw.Core.Sync;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.AnnotationSettings;
@@ -22,6 +25,7 @@ using TCPipeAutoDraw.Modules.SectionDrawing;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
 using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.UI;
+using TCPipeAutoDraw.UI.FloatingCenter;
 using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -42,6 +46,9 @@ namespace TCPipeAutoDraw.Commands
         {
             _initializedAtUtc = DateTime.UtcNow;
             _startupWorkflowFinished = false;
+            FloatingCenter.Configure(new FloatingCenterService(
+                CadFloatingDocumentIdentity.GetCurrentDocumentId));
+            CadFloatingCenterLifetime.Initialize(FloatingCenter.Current);
             CDBoxNotificationService.InitializeForCurrentThread();
 
             Document doc = AcadApp.DocumentManager.MdiActiveDocument;
@@ -54,6 +61,9 @@ namespace TCPipeAutoDraw.Commands
             }
 
             EnsureMenuBar();
+            FloatingCenterController.Initialize(FloatingCenter.Current);
+            CadDrawingCheckCoordinator.Initialize();
+            CadSyncCoordinator.Initialize();
             PipeLengthAnnotationInteractionService.Initialize();
             QueueStartupWorkflow();
         }
@@ -61,6 +71,11 @@ namespace TCPipeAutoDraw.Commands
         public void Terminate()
         {
             PipeLengthAnnotationInteractionService.Terminate();
+            CadSyncCoordinator.Terminate();
+            CadDrawingCheckCoordinator.Terminate();
+            FloatingCenterController.Terminate();
+            CadFloatingCenterLifetime.Terminate();
+            try { FloatingCenter.Current.ClearAll(); } catch { }
             if (IsHeadlessSelfTest()) return;
             CDBoxMenuService.RemoveMenu();
         }
@@ -82,8 +97,8 @@ namespace TCPipeAutoDraw.Commands
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
-            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.4.1", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 30401, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.6.1", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 30601, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -130,6 +145,16 @@ namespace TCPipeAutoDraw.Commands
                 foreach (string line in results) Console.WriteLine(line);
                 Console.WriteLine("CDBOX_SELFTEST_RESULT=" + (failureCount == 0 ? "PASS" : "FAIL"));
             }
+        }
+
+        [CommandMethod("CDBCHECK", CommandFlags.Modal)]
+        public void RunDrawingCheck()
+        {
+            Document document = AcadApp.DocumentManager.MdiActiveDocument;
+            if (document == null) return;
+            if (CadDrawingCheckCoordinator.IsRunning(document))
+                CadDrawingCheckCoordinator.RequestCancel(document);
+            else CadDrawingCheckCoordinator.Start(document, true);
         }
 
         private static bool IsHeadlessSelfTest()
@@ -224,6 +249,31 @@ namespace TCPipeAutoDraw.Commands
         public void OpenSettings()
         {
             CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+        }
+
+        [CommandMethod("CDBALL", CommandFlags.Modal)]
+        public void ToggleFloatingCenter()
+        {
+            FloatingCenterController.ToggleVisibility();
+        }
+
+        [CommandMethod("CDBALLRESET", CommandFlags.Modal)]
+        public void ResetFloatingCenterPosition()
+        {
+            FloatingCenterController.ResetPosition();
+        }
+
+        [CommandMethod("CDBALLDEMO", CommandFlags.Modal)]
+        public void ShowFloatingCenterDemo()
+        {
+            FloatingCenterController.ShowDemo(FloatingHealthState.Warning,
+                FloatingActivityState.Working, 3, 42.0);
+        }
+
+        [CommandMethod("CDBALLDEMOCLEAR", CommandFlags.Modal)]
+        public void ClearFloatingCenterDemo()
+        {
+            FloatingCenterController.ClearDemo();
         }
 
         [CommandMethod("CDABOUT", CommandFlags.Modal)]
@@ -865,9 +915,13 @@ namespace TCPipeAutoDraw.Commands
             try
             {
                 SectionBatchDrawingResult result;
-                using (var progress = new CDBoxProgressForm("批量断面图生成", new AcadMainWindow()))
+                using (var progress = CDBoxProgressSession.Start(doc,
+                    "批量断面图生成", "正在读取断面数据…",
+                    "SectionBatch", "section-batch-progress"))
                 {
                     result = SectionBatchDrawingService.Run(doc, progress.Report);
+                    progress.Complete(result.Success
+                        ? "批量断面图生成完成。" : "批量断面图处理结束。");
                 }
                 if (result.Success)
                 {
@@ -966,9 +1020,12 @@ namespace TCPipeAutoDraw.Commands
                 }
 
                 QuantityPipeWriteResult result;
-                using (var progress = new CDBoxProgressForm("管线属性", new AcadMainWindow()))
+                using (var progress = CDBoxProgressSession.Start(doc,
+                    "管线属性", "正在按默认表处理对象…",
+                    "QuantityAttributes", "quantity-attributes-progress"))
                 {
                     result = QuantityPipeAttributeService.ApplyDefaultProfilesToObjects(doc, ids, progress.Report);
+                    progress.Complete(result.Message);
                 }
                 TCPipeAutoDraw.UI.CDBoxMessageBox.Show(result.Message, "管线属性", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
@@ -1055,7 +1112,9 @@ namespace TCPipeAutoDraw.Commands
                     if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK) return;
 
                     QuantityCalculationReport report;
-                    using (var progress = new CDBoxProgressForm("工程量表格生成", new AcadMainWindow()))
+                    using (var progress = CDBoxProgressSession.Start(doc,
+                        "工程量表格生成", "正在计算工程量…",
+                        "QuantityReport", "quantity-report-progress"))
                     {
                         report = QuantityCalculationReportService.BuildReport(doc, scopeIds, progress.Report);
                         progress.ReportMarquee("正在写入工程量表格...");

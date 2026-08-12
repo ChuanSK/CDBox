@@ -29,11 +29,13 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\SectionDrawing\SectionDrawingModels.cs" Link="Source\SectionDrawingModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\FrameLayout\FrameLayoutSettings.cs" Link="Source\FrameLayoutSettings.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\FrameLayout\FrameCutRegionMath.cs" Link="Source\FrameCutRegionMath.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionSettings.cs" Link="Source\ShortCodeRecognitionSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionParser.cs" Link="Source\ShortCodeRecognitionParser.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileModels.cs" Link="Source\LongitudinalProfileModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileLayout.cs" Link="Source\LongitudinalProfileLayout.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileSettings.cs" Link="Source\LongitudinalProfileSettings.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\WastewaterResultTable\WastewaterResultTableModels.cs" Link="Source\WastewaterResultTableModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\NodeAnnotation\NodeAnnotationTextComposer.cs" Link="Source\NodeAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableModels.cs" Link="Source\ExcelToCad\ExcelTableModels.cs" />
@@ -64,5 +66,19 @@
     <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorConverter.cs" Link="Source\CDBoxColorConverter.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxStandardColorService.cs" Link="Source\CDBoxStandardColorService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorOutputResolver.cs" Link="Source\CDBoxColorOutputResolver.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterModels.cs" Link="Source\FloatingCenter\FloatingCenterModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingMessageStore.cs" Link="Source\FloatingCenter\FloatingMessageStore.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterService.cs" Link="Source\FloatingCenter\FloatingCenterService.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenter.cs" Link="Source\FloatingCenter\FloatingCenter.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterPlacement.cs" Link="Source\FloatingCenter\FloatingCenterPlacement.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingMessagePresentationQueue.cs" Link="Source\FloatingCenter\FloatingMessagePresentationQueue.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingLegacyRoutingPolicy.cs" Link="Source\FloatingCenter\FloatingLegacyRoutingPolicy.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\FloatingCenter\FloatingCenterPresentation.cs" Link="Source\FloatingCenter\FloatingCenterPresentation.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckModels.cs" Link="Source\Check\DrawingCheckModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckRuleEvaluator.cs" Link="Source\Check\DrawingCheckRuleEvaluator.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckManager.cs" Link="Source\Check\DrawingCheckManager.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckIgnoreStore.cs" Link="Source\Check\DrawingCheckIgnoreStore.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Sync\SyncModels.cs" Link="Source\Sync\SyncModels.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Sync\SyncManager.cs" Link="Source\Sync\SyncManager.cs" />
   </ItemGroup>
 </Project>

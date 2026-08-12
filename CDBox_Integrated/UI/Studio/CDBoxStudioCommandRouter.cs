@@ -10,6 +10,7 @@ using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.UI;
+using TCPipeAutoDraw.UI.FloatingCenter;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
@@ -217,6 +218,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 ApplySettingsArgument(argument);
                 CDBoxStudioSettingsStore.Save(_settings);
                 PipeLengthAnnotationInteractionService.RefreshAppearance();
+                FloatingCenterController.ApplySettings();
                 CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
                 appSettings.PromptInstallOnLoad = ReadBooleanArgument(argument, "promptinstall", appSettings.PromptInstallOnLoad);
                 CDBoxAppSettingsStore.Save(appSettings);
@@ -226,6 +228,12 @@ namespace TCPipeAutoDraw.UI.Studio
                     + ", AnnotationHudHoverOpacity=" + _settings.AnnotationHudHoverOpacity.ToString("0.##", CultureInfo.InvariantCulture)
                     + ", AnnotationHudGlowEnabled=" + _settings.AnnotationHudGlowEnabled
                     + ", AnnotationHudGlowIntensity=" + _settings.AnnotationHudGlowIntensity.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", FloatingCenterEnabled=" + _settings.FloatingCenterEnabled
+                    + ", FloatingCenterShowOnStartup=" + _settings.FloatingCenterShowOnStartup
+                    + ", FloatingCenterSnapToEdges=" + _settings.FloatingCenterSnapToEdges
+                    + ", FloatingCenterAutoCloseSeconds=" + _settings.FloatingCenterAutoCloseSeconds
+                    + ", FloatingCenterAutoCheckEnabled=" + _settings.FloatingCenterAutoCheckEnabled
+                    + ", FloatingCenterSafeAutoSyncEnabled=" + _settings.FloatingCenterSafeAutoSyncEnabled
                     + ", DoubleClickOpenEnabled=" + _settings.DoubleClickOpenEnabled
                     + ", ColorOutputMode=" + _settings.ColorOutputMode
                     + ", UpdateChannel=" + _settings.UpdateChannel);
@@ -276,6 +284,27 @@ namespace TCPipeAutoDraw.UI.Studio
                         break;
                     case "doubleclickopen":
                         _settings.DoubleClickOpenEnabled = IsTrue(value);
+                        break;
+                    case "floatingcenterenabled":
+                        _settings.FloatingCenterEnabled = IsTrue(value);
+                        break;
+                    case "floatingcentershowonstartup":
+                        _settings.FloatingCenterShowOnStartup = IsTrue(value);
+                        break;
+                    case "floatingcentersnaptoedges":
+                        _settings.FloatingCenterSnapToEdges = IsTrue(value);
+                        break;
+                    case "floatingcenterautocloseseconds":
+                        int autoCloseSeconds;
+                        if (int.TryParse(value, NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out autoCloseSeconds))
+                            _settings.FloatingCenterAutoCloseSeconds = autoCloseSeconds;
+                        break;
+                    case "floatingcenterautocheckenabled":
+                        _settings.FloatingCenterAutoCheckEnabled = IsTrue(value);
+                        break;
+                    case "floatingcentersafeautosyncenabled":
+                        _settings.FloatingCenterSafeAutoSyncEnabled = IsTrue(value);
                         break;
                     case "coloroutputmode":
                         TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode outputMode;
@@ -597,7 +626,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.4.1 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 3.6.1 独立窗口失败。", ex);
             }
             return result;
         }

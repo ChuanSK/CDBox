@@ -17,6 +17,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static bool _dirty;
         private static bool _liveEnabled = true;
 
+        public static event EventHandler<QuantityDashboardDirtyEventArgs> DirtyMarked;
+
         public static void Configure(Action<string> scriptSink)
         {
             _scriptSink = scriptSink;
@@ -31,13 +33,34 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         public static void MarkDirty(string reason)
         {
+            MarkDirty(AcadApp.DocumentManager.MdiActiveDocument, reason);
+        }
+
+        public static void MarkDirty(Document document, string reason)
+        {
             _dirty = true;
+            RaiseDirtyMarked(document, reason);
             if (!_liveEnabled) return;
             EnsureTimer();
             _timer.Stop();
             _timer.Interval = 650;
             _timer.Start();
-            Push(new { type = "dirty", reason = reason ?? string.Empty, documentId = QuantityDashboardService.GetDocumentId(AcadApp.DocumentManager.MdiActiveDocument) });
+            Push(new { type = "dirty", reason = reason ?? string.Empty, documentId = QuantityDashboardService.GetDocumentId(document) });
+        }
+
+        private static void RaiseDirtyMarked(Document document, string reason)
+        {
+            EventHandler<QuantityDashboardDirtyEventArgs> handler = DirtyMarked;
+            if (handler == null) return;
+            var args = new QuantityDashboardDirtyEventArgs(document,
+                reason ?? string.Empty);
+            foreach (Delegate callback in handler.GetInvocationList())
+                try
+                {
+                    ((EventHandler<QuantityDashboardDirtyEventArgs>)callback)(
+                        null, args);
+                }
+                catch { }
         }
 
         private static void EnsureStarted()
@@ -125,5 +148,17 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
             }
         }
+    }
+
+    public sealed class QuantityDashboardDirtyEventArgs : EventArgs
+    {
+        public QuantityDashboardDirtyEventArgs(Document document, string reason)
+        {
+            Document = document;
+            Reason = reason ?? string.Empty;
+        }
+
+        public Document Document { get; private set; }
+        public string Reason { get; private set; }
     }
 }

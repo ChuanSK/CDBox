@@ -172,8 +172,17 @@ namespace Autodesk.AutoCAD.EditorInput
             DrawJig jig, string message)
         {
             using (CDBoxNotificationService.BeginCommandPrompt(
-                "操作提示", message))
+                ResolvePromptTitle(message, "操作提示"), message))
                 return editor.Drag(jig);
+        }
+
+        private static string ResolvePromptTitle(string message,
+            string fallback)
+        {
+            string value = message ?? string.Empty;
+            if (ContainsAny(value, "落图位置", "插入点"))
+                return "选择落图位置";
+            return fallback;
         }
 
         private static string Format(string message, object[] args)

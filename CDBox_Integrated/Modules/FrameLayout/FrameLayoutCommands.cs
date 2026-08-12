@@ -225,36 +225,72 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 FrameTemplateCatalogItem template = PromptTemplate(editor,
                     FrameTemplateCatalogStore.Load(), null, null);
                 if (template == null) return;
-                PromptIntegerOptions countOptions = new PromptIntegerOptions(
-                    "\n输入图框数量 <1>: ")
+                FrameLayoutSettings settings = FrameLayoutSettingsStore.Load();
+                if (template.PreviewSegments == null
+                    || template.PreviewSegments.Count == 0)
                 {
-                    AllowNegative = false,
-                    AllowZero = false,
-                    DefaultValue = 1,
-                    UseDefaultValue = true,
-                    LowerLimit = 1,
-                    UpperLimit = 10000
-                };
-                PromptIntegerResult count = editor.GetHudInteger(countOptions);
-                if (count.Status != PromptStatus.OK) return;
-                PromptPointResult point = editor.GetHudPoint(
-                    "\n选择第一个图框的左下角位置：");
-                if (point.Status != PromptStatus.OK) return;
-
-                FrameLayoutService.LayoutResult result;
-                using (DocumentLock documentLock = doc.LockDocument())
-                using (Transaction transaction =
-                    db.TransactionManager.StartTransaction())
-                {
-                    result = new FrameLayoutService().PlaceFrames(db, transaction,
-                        template, point.Value, count.Value,
-                        FrameLayoutSettingsStore.Load());
-                    transaction.Commit();
+                    List<FrameTemplatePreviewSegment> previewSegments;
+                    int previewEntityCount;
+                    if (FrameTemplatePreviewService.TryBuildFromSource(template,
+                        out previewSegments, out previewEntityCount))
+                    {
+                        template.PreviewSegments = previewSegments;
+                        template.PreviewEntityCount = previewEntityCount;
+                    }
                 }
-                editor.Regen();
-                editor.WriteHudMessage("\n[直接布框] 已生成 {0} 个 {1} 图框。",
-                    result.Count, template.PaperSize);
-                WriteLayoutWarnings(editor, result);
+                ObjectId templateBlockId;
+                ObjectId northArrowBlockId;
+                ObjectId scaleTextStyleId;
+                ResolveDirectPlacementPreviewResources(db, template,
+                    settings, out templateBlockId, out northArrowBlockId,
+                    out scaleTextStyleId);
+
+                string scaleText = FrameScaleTextResolver.Resolve(db,
+                    settings.ScaleText);
+                int placedCount = 0;
+                var warnings = new List<string>();
+                while (true)
+                {
+                    var jig = new FrameDirectPlacementJig(template, settings,
+                        templateBlockId, northArrowBlockId,
+                        scaleTextStyleId, scaleText);
+                    string prompt = placedCount == 0
+                        ? "移动鼠标预览图框，单击放置，按 Esc 结束"
+                        : "继续放置下一个图框，按 Esc 结束";
+                    PromptResult placement = editor.DragWithHud(jig, prompt);
+                    if (placement.Status != PromptStatus.OK) break;
+
+                    FrameLayoutService.LayoutResult placed;
+                    using (DocumentLock documentLock = doc.LockDocument())
+                    using (Transaction transaction =
+                        db.TransactionManager.StartTransaction())
+                    {
+                        placed = new FrameLayoutService().PlaceFrames(db,
+                            transaction, template, jig.LowerLeft, 1, settings);
+                        transaction.Commit();
+                    }
+                    placedCount += placed.Count;
+                    warnings.AddRange(placed.Warnings);
+                    editor.Regen();
+                    ResolveDirectPlacementPreviewResources(db, template,
+                        settings, out templateBlockId,
+                        out northArrowBlockId, out scaleTextStyleId);
+                }
+
+                if (placedCount > 0)
+                {
+                    editor.WriteHudMessage(
+                        "\n[直接布框] 已连续放置 {0} 个 {1} 图框。",
+                        placedCount, template.PaperSize);
+                    var summary = new FrameLayoutService.LayoutResult
+                    {
+                        Count = placedCount,
+                        Columns = placedCount,
+                        Rows = 1
+                    };
+                    summary.Warnings.AddRange(warnings);
+                    WriteLayoutWarnings(editor, summary);
+                }
             }
             catch (System.Exception ex)
             {
@@ -266,6 +302,40 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         public void OpenFrameSettings()
         {
             CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow());
+        }
+
+        private static void ResolveDirectPlacementPreviewResources(
+            Database db, FrameTemplateCatalogItem template,
+            FrameLayoutSettings settings, out ObjectId templateBlockId,
+            out ObjectId northArrowBlockId, out ObjectId scaleTextStyleId)
+        {
+            templateBlockId = ObjectId.Null;
+            northArrowBlockId = ObjectId.Null;
+            scaleTextStyleId = ObjectId.Null;
+            using (Transaction transaction =
+                db.TransactionManager.StartOpenCloseTransaction())
+            {
+                BlockTable blocks = (BlockTable)transaction.GetObject(
+                    db.BlockTableId, OpenMode.ForRead);
+                if (template != null
+                    && !string.IsNullOrWhiteSpace(template.BlockName)
+                    && blocks.Has(template.BlockName))
+                    templateBlockId = blocks[template.BlockName];
+                if (settings != null && settings.DrawNorthArrow
+                    && blocks.Has(NorthArrowService.NorthArrowBlockName))
+                    northArrowBlockId =
+                        blocks[NorthArrowService.NorthArrowBlockName];
+
+                TextStyleTable styles = (TextStyleTable)transaction.GetObject(
+                    db.TextStyleTableId, OpenMode.ForRead);
+                if (settings != null
+                    && !string.IsNullOrWhiteSpace(settings.ScaleTextStyle)
+                    && styles.Has(settings.ScaleTextStyle))
+                    scaleTextStyleId = styles[settings.ScaleTextStyle];
+                else if (!db.Textstyle.IsNull)
+                    scaleTextStyleId = db.Textstyle;
+                transaction.Commit();
+            }
         }
 
         private static void PlaceRectangles(Document doc,
@@ -320,7 +390,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     {
                         new FrameCutRegionService().FinalizeRectangle(
                             transaction, previewId, template.Id,
-                            template.PaperSize, cutRotation);
+                            template.PaperSize, rotationJig.Rotation,
+                            cutRotation);
                         transaction.Commit();
                     }
                     previewId = ObjectId.Null;

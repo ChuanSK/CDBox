@@ -45,8 +45,10 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                     out template) || template == null)
                     throw new InvalidOperationException("裁图区域缺少对应图框模板："
                         + (region.PaperSize ?? "未分类"));
-                Vector3d axisU = new Vector3d(Math.Cos(region.Rotation),
-                    Math.Sin(region.Rotation), 0).GetNormal();
+                double boundaryRotation = region.BoundaryRotation
+                    ?? region.Rotation;
+                Vector3d axisU = new Vector3d(Math.Cos(boundaryRotation),
+                    Math.Sin(boundaryRotation), 0).GetNormal();
                 Vector3d axisV = GeometryHelper.GetPerpLeft(axisU);
                 double minU;
                 double maxU;
@@ -54,8 +56,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 double maxV;
                 FrameCutRegionService.GetProjectedExtents(region.Boundary,
                     axisU, axisV, out minU, out maxU, out minV, out maxV);
-                if (maxU - minU > template.ValidWidth + 1e-6
-                    || maxV - minV > template.ValidHeight + 1e-6)
+                if (!FrameCutRegionMath.Fits(maxU - minU, maxV - minV,
+                        template.ValidWidth, template.ValidHeight))
                     throw new InvalidOperationException(string.Format(
                         "裁图区域尺寸 {0:0.###} × {1:0.###} 超过模板“{2}”的可用区域 {3:0.###} × {4:0.###}。",
                         maxU - minU, maxV - minV, template.TemplateName,
@@ -240,37 +242,48 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             ObjectId contentBlockId = table.Add(contentBlock);
             tr.AddNewlyCreatedDBObject(contentBlock, true);
             int clonedCount = 0;
+            var protectedNestedReferences = new HashSet<ObjectId>();
             foreach (ObjectId sourceId in sourceIds)
             {
+                Entity source = null;
                 try
                 {
-                    var single = new ObjectIdCollection { sourceId };
-                    db.DeepCloneObjects(single, contentBlockId,
-                        new IdMapping(), false);
-                    clonedCount++;
+                    source = tr.GetObject(sourceId, OpenMode.ForRead, false)
+                        as Entity;
                 }
                 catch
                 {
-                    // 个别代理对象不支持 DeepCloneObjects 时尝试实体自身克隆。
-                    // 目标仍在同一数据库，图层、文字样式及块定义等依赖可继续复用。
-                    try
+                }
+                if (source == null) continue;
+
+                if (source is BlockReference)
+                {
+                    ObjectId nestedBlockId = CreateCroppedSourceBlock(db, tr,
+                        table, sourceId, region.Boundary);
+                    if (!nestedBlockId.IsNull)
                     {
-                        Entity source = tr.GetObject(sourceId,
-                            OpenMode.ForRead, false) as Entity;
-                        Entity clone = source == null
-                            ? null : source.Clone() as Entity;
-                        if (clone != null)
+                        var nestedReference = new BlockReference(
+                            Point3d.Origin, nestedBlockId);
+                        try
                         {
-                            contentBlock.AppendEntity(clone);
-                            tr.AddNewlyCreatedDBObject(clone, true);
+                            ObjectId nestedReferenceId =
+                                contentBlock.AppendEntity(nestedReference);
+                            tr.AddNewlyCreatedDBObject(nestedReference, true);
+                            protectedNestedReferences.Add(nestedReferenceId);
                             clonedCount++;
                         }
+                        catch
+                        {
+                            nestedReference.Dispose();
+                        }
                     }
-                    catch
-                    {
-                        // 单个不可克隆对象不应导致整幅裁图失败。
-                    }
+                    continue;
                 }
+
+                ObjectId clonedId;
+                if (CloneEntityIntoBlock(db, tr, sourceId, contentBlock,
+                        contentBlockId, out clonedId))
+                    clonedCount++;
             }
             if (clonedCount == 0)
             {
@@ -304,8 +317,102 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 Rotation = rotation
             };
             CadDbHelper.AppendToModelSpace(db, tr, contentReference);
-            FramePhysicalCropService.Crop(tr, contentBlock, region.Boundary);
+            FramePhysicalCropService.Crop(tr, contentBlock, region.Boundary,
+                protectedNestedReferences);
             contentReference.RecordGraphicsModified(true);
+        }
+
+        private static ObjectId CreateCroppedSourceBlock(Database db,
+            Transaction tr, BlockTable table, ObjectId sourceId,
+            IList<Point3d> boundary)
+        {
+            var clippedBlock = new BlockTableRecord
+            {
+                Name = CadDbHelper.MakeUniqueBlockName(db, tr,
+                    "CDBOX_CLIPPED_SOURCE_"
+                    + Guid.NewGuid().ToString("N").Substring(0, 10)),
+                Origin = Point3d.Origin
+            };
+            ObjectId clippedBlockId = table.Add(clippedBlock);
+            tr.AddNewlyCreatedDBObject(clippedBlock, true);
+            ObjectId clonedSourceId;
+            if (!CloneEntityIntoBlock(db, tr, sourceId, clippedBlock,
+                    clippedBlockId, out clonedSourceId))
+            {
+                clippedBlock.Erase();
+                return ObjectId.Null;
+            }
+
+            // 原块必须先展开并完成实体级裁剪，再将幸存内容作为独立块嵌套。
+            // 不能直接引用原块定义，否则外层块炸开后会恢复整块框外内容。
+            FramePhysicalCropService.Crop(tr, clippedBlock, boundary, null,
+                new HashSet<ObjectId> { clonedSourceId });
+            if (!HasLiveEntity(tr, clippedBlock))
+            {
+                clippedBlock.Erase();
+                return ObjectId.Null;
+            }
+            return clippedBlockId;
+        }
+
+        private static bool CloneEntityIntoBlock(Database db, Transaction tr,
+            ObjectId sourceId, BlockTableRecord targetBlock,
+            ObjectId targetBlockId, out ObjectId clonedId)
+        {
+            clonedId = ObjectId.Null;
+            try
+            {
+                var single = new ObjectIdCollection { sourceId };
+                var mapping = new IdMapping();
+                db.DeepCloneObjects(single, targetBlockId, mapping, false);
+                foreach (IdPair pair in mapping)
+                {
+                    if (pair.Key == sourceId && pair.IsCloned)
+                    {
+                        clonedId = pair.Value;
+                        break;
+                    }
+                }
+                return !clonedId.IsNull;
+            }
+            catch
+            {
+                // 个别代理对象不支持 DeepCloneObjects 时尝试实体自身克隆。
+                try
+                {
+                    Entity source = tr.GetObject(sourceId,
+                        OpenMode.ForRead, false) as Entity;
+                    Entity clone = source == null
+                        ? null : source.Clone() as Entity;
+                    if (clone == null) return false;
+                    clonedId = targetBlock.AppendEntity(clone);
+                    tr.AddNewlyCreatedDBObject(clone, true);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        private static bool HasLiveEntity(Transaction tr,
+            BlockTableRecord block)
+        {
+            foreach (ObjectId id in block)
+            {
+                if (id.IsNull || id.IsErased) continue;
+                try
+                {
+                    Entity entity = tr.GetObject(id, OpenMode.ForRead,
+                        false) as Entity;
+                    if (entity != null && !entity.IsErased) return true;
+                }
+                catch
+                {
+                }
+            }
+            return false;
         }
 
         private static List<ObjectId> UnlockLockedLayers(Database db,

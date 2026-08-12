@@ -49,7 +49,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             var jig = new LongitudinalProfilePlacementJig(profile,
                 settings, layout, textStyleId);
             PromptResult prompt = document.Editor.DragWithHud(jig,
-                "请选择纵断面图左下角插入点");
+                "请选择纵断面图落图位置（单击确定）");
             if (prompt.Status != PromptStatus.OK)
             {
                 return new LongitudinalProfileDrawingResult

@@ -2,12 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using CDBox.Shared;
 using CDBoxUpdater;
+using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.Core.FloatingCenter;
+using TCPipeAutoDraw.Core.Check;
+using TCPipeAutoDraw.Core.Sync;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
@@ -18,6 +23,7 @@ using TCPipeAutoDraw.Modules.FrameLayout;
 using TCPipeAutoDraw.Modules.ShortCodeRecognition;
 using TCPipeAutoDraw.Modules.LongitudinalProfile;
 using TCPipeAutoDraw.UI.Studio;
+using TCPipeAutoDraw.UI.FloatingCenter;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOI.HSSF.UserModel;
@@ -56,11 +62,19 @@ namespace CDBox.CoreTests
             Run("节点标注绑定文字组合", TestNodeAnnotationTextComposition);
             Run("Excel 表格范围读取与样式保留", TestExcelTableRangeReading);
             Run("图框布置设置归一化", TestFrameLayoutSettingsNormalization);
+            Run("旋转裁图矩形尺寸与方向", TestFrameCutRegionMath);
             Run("简码识别容错解析与共享设置页", TestShortCodeRecognition);
             Run("纵断面路径、高程与坡度计算", TestLongitudinalProfileCalculation);
             Run("旧版更新源完整性校验", TestLegacyUpdateSourceValidation);
             Run("更新包路径越界防护", TestUpdaterRejectsZipTraversal);
             Run("更新器替换与备份", TestUpdaterReplacesAndBacksUpBundle);
+            Run("污水管成果表排序与格式", TestWastewaterResultTableFormatting);
+            Run("悬浮球 Phase 0 消息与文档隔离", TestFloatingCenterPhaseZero);
+            Run("悬浮球 Phase 1 位置与状态呈现", TestFloatingCenterPhaseOne);
+            Run("悬浮球 Phase 2 提示队列与进度终结", TestFloatingCenterPhaseTwo);
+            Run("悬浮球 Phase 3 图纸检查聚合与隔离", TestFloatingCenterPhaseThree);
+            Run("悬浮球 Phase 4 同步任务聚合与历史", TestFloatingCenterPhaseFour);
+            Run("悬浮球 Phase 5 兼容通知迁移策略", TestFloatingCenterPhaseFive);
 
             Console.WriteLine();
             Console.WriteLine("CDBox.CoreTests: {0} passed, {1} failed", _passed, Failures.Count);
@@ -134,6 +148,14 @@ namespace CDBox.CoreTests
             settings.Normalize();
             Equal("Single", settings.TemplateViewMode,
                 "有效单列模板视图应保留");
+        }
+
+        private static void TestFrameCutRegionMath()
+        {
+            True(FrameCutRegionMath.Fits(210.0, 148.5, 210.0, 148.5),
+                "旋转前后的矩形应按自身边长校验，不应按世界坐标包围盒误判");
+            False(FrameCutRegionMath.Fits(210.01, 148.5, 210.0, 148.5),
+                "真实边长超过图框可用范围时仍应拒绝");
         }
 
         private static void TestShortCodeRecognition()
@@ -338,6 +360,95 @@ namespace CDBox.CoreTests
             Equal("W-52", reversedSingle.Profile.Nodes[0].NodeNo,
                 "单管段也不能按原实体方向颠倒用户选择的起终点");
 
+            var connectionPipes = new List<LongitudinalProfilePipeData>
+            {
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "UP", StartNode = "X", EndNode = "A",
+                    Diameter = "DN300", OuterDiameter = 0.3,
+                    PlanLength = 10, StartDepth = 1.4,
+                    EndDepth = 1.1, HasGeometry = true,
+                    GeometryStartX = -10, GeometryStartY = 0,
+                    GeometryEndX = 0, GeometryEndY = 0
+                },
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "MAIN-1", StartNode = "A", EndNode = "B",
+                    Diameter = "DN300", PlanLength = 10,
+                    HasGeometry = true, GeometryStartX = 0,
+                    GeometryStartY = 0, GeometryEndX = 10,
+                    GeometryEndY = 0
+                },
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "MAIN-2", StartNode = "B", EndNode = "C",
+                    Diameter = "DN300", PlanLength = 10,
+                    HasGeometry = true, GeometryStartX = 10,
+                    GeometryStartY = 0, GeometryEndX = 20,
+                    GeometryEndY = 0
+                },
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "SIDE-L", StartNode = "B", EndNode = "D",
+                    Diameter = "DN200", PlanLength = 6,
+                    StartDepth = 1.25, HasGeometry = true,
+                    GeometryStartX = 10, GeometryStartY = 0,
+                    GeometryEndX = 10, GeometryEndY = 6
+                },
+                new LongitudinalProfilePipeData
+                {
+                    SourceId = "DOWN", StartNode = "C", EndNode = "Y",
+                    Diameter = "DN300", OuterDiameter = 0.3,
+                    PlanLength = 10, StartDepth = 1.2,
+                    EndDepth = 1.3, HasGeometry = true,
+                    GeometryStartX = 20, GeometryStartY = 0,
+                    GeometryEndX = 30, GeometryEndY = 0
+                }
+            };
+            var connectionWells = new List<LongitudinalProfileWellData>
+            {
+                PositionedWell("X", -10, 0, 101, 1.4),
+                PositionedWell("A", 0, 0, 100, 1),
+                PositionedWell("B", 10, 0, 99, 1),
+                PositionedWell("C", 20, 0, 98, 1),
+                PositionedWell("D", 10, 6, 99, 1),
+                PositionedWell("Y", 30, 0, 97, 1.3)
+            };
+            LongitudinalProfileBuildResult withConnection =
+                LongitudinalProfileCalculator.BuildBetweenNodes(
+                    connectionPipes, connectionWells, "A", "C");
+            True(withConnection.Success, withConnection.Message);
+            Equal(1, withConnection.Profile.Connections.Count,
+                "路径外接入井的管线应生成一个侧面接入断面");
+            Equal("左侧", withConnection.Profile.Connections[0].Side,
+                "从起点向终点观察，位于路径左侧的接入管应标注为左侧");
+            Near(withConnection.Profile.Nodes[1].DesignInvertElevation,
+                withConnection.Profile.Connections[0].InvertElevation,
+                1e-9, "侧面接入口高程应使用接口所在井的设计管内底标高");
+
+            True(withConnection.Profile.StartExtension != null,
+                "起点井前的连续主管应生成外延主管示意");
+            True(withConnection.Profile.EndExtension != null,
+                "终点井后的连续主管应生成外延主管示意");
+            Equal("UP", withConnection.Profile.StartExtension.SourceId,
+                "起点外延主管应识别路径反向延伸的主管");
+            Equal("DOWN", withConnection.Profile.EndExtension.SourceId,
+                "终点外延主管应识别路径正向延伸的主管");
+            Near(withConnection.Profile.Nodes[0].DesignInvertElevation,
+                withConnection.Profile.StartExtension
+                    .BoundaryInvertElevation, 1e-9,
+                "外延主管在端井处必须与所选纵断面的设计管底衔接");
+            Near(99.7,
+                withConnection.Profile.StartExtension
+                    .OutsideInvertElevation, 1e-9,
+                "外延主管应保留井外原主管的坡度");
+            LongitudinalProfileLayout extendedLayout =
+                LongitudinalProfileLayoutCalculator.Calculate(
+                    withConnection.Profile,
+                    new LongitudinalProfileSettings());
+            Near(37.5, extendedLayout.PlotRight, 1e-9,
+                "右端井、外延主管或截断线超出网格时应向右增加一格");
+
             LongitudinalProfileBuildResult disconnected =
                 LongitudinalProfileCalculator.Build(new[]
                 {
@@ -363,9 +474,9 @@ namespace CDBox.CoreTests
             Near(45.0, settings.HeaderWidth, 1e-9,
                 "表头宽度应回退默认值");
             Near(6.0, settings.HeaderTextHeight, 1e-9,
-                "当前表头文字高度应固化为默认值");
+                "无效表头文字高度应回退默认值");
             Equal("宋体", settings.HeaderTextStyleName,
-                "当前表头文字样式应固化为默认值");
+                "空表头文字样式应回退默认值");
             Near(5.0, settings.HorizontalGridInterval, 1e-9,
                 "当前水平网格间距应固化为默认值");
             Equal("CDBox-纵断面", settings.LayerName,
@@ -376,6 +487,55 @@ namespace CDBox.CoreTests
                 "纵断面应包含管道基础栏");
             True(settings.Rows.TrueForAll(x => x.TextStyleName == "宋体"),
                 "当前数据栏文字样式应固化为默认值");
+
+            var subsetSettings = new LongitudinalProfileSettings
+            {
+                HorizontalScale = 25,
+                VerticalScale = 25,
+                HeaderTextHeight = 99,
+                HeaderTextStyleName = "HZ",
+                HeaderTextColorIndex = 3,
+                Rows = new List<LongitudinalProfileRowSettings>
+                {
+                    new LongitudinalProfileRowSettings
+                    {
+                        Key = "WellNumber", Height = 10,
+                        TextHeight = 2.5, TextStyleName = "HZ",
+                        TextColorIndex = 3
+                    },
+                    new LongitudinalProfileRowSettings
+                    {
+                        Key = "GroundElevation", Height = 15,
+                        TextHeight = 2.5, TextStyleName = "HZ",
+                        TextColorIndex = 4
+                    },
+                    new LongitudinalProfileRowSettings
+                    {
+                        Key = "WellNumber", Height = 12,
+                        TextHeight = 2.0, TextStyleName = "Standard",
+                        TextColorIndex = 5
+                    }
+                }
+            };
+            subsetSettings.Normalize();
+            Near(1000, subsetSettings.HorizontalScale, 1e-9,
+                "横向比例应固定为内置默认值");
+            Near(100, subsetSettings.VerticalScale, 1e-9,
+                "纵向比例应固定为内置默认值");
+            Near(99, subsetSettings.HeaderTextHeight, 1e-9,
+                "表头文字高度应保留用户设置");
+            Equal("HZ", subsetSettings.HeaderTextStyleName,
+                "表头文字样式应保留用户设置");
+            Equal((short)3, subsetSettings.HeaderTextColorIndex,
+                "表头文字颜色应保留用户设置");
+            Equal(3, subsetSettings.Rows.Count,
+                "删除后的栏目子集和重复栏目均应保持");
+            Equal("WellNumber", subsetSettings.Rows[0].Key,
+                "栏目拖动后的顺序应保持");
+            Equal((short)3, subsetSettings.Rows[0].TextColorIndex,
+                "栏目文本颜色应归一化并保留");
+            Equal("WellNumber", subsetSettings.Rows[2].Key,
+                "同一种栏类型应允许重复添加");
 
             LongitudinalProfileLayout layout =
                 LongitudinalProfileLayoutCalculator.Calculate(
@@ -409,6 +569,37 @@ namespace CDBox.CoreTests
                 "设置页应包含纵断面数据栏");
             Contains(standalone, "坐标网格",
                 "设置页应包含显示样式");
+            False(standalone.Contains(">横向比例<"),
+                "横向比例不应继续显示为设置项");
+            False(standalone.Contains(">纵向比例<"),
+                "纵向比例不应继续显示为设置项");
+            Contains(standalone, "openLongitudinalProfileColorPicker",
+                "所有颜色项应调用CDBox颜色选择器");
+            Contains(standalone, "id=\"headerTextHeight\"",
+                "表头文字高度应恢复为设置项");
+            Contains(standalone, "id=\"headerTextStyle\"",
+                "表头文字样式应恢复为选择控件");
+            Contains(standalone, "id=\"headerTextColor\"",
+                "表头文字颜色应恢复为CDBox颜色控件");
+            Contains(standalone, "getLongitudinalProfileTextStyles",
+                "文字样式应读取当前CAD图纸样式");
+            Contains(standalone,
+                "class=\"drag-handle\" draggable=\"true\"",
+                "纵断面栏目应仅通过拖拽柄排序");
+            False(standalone.Contains("tr.draggable=true"),
+                "纵断面栏目整行不得触发拖动");
+            Contains(standalone,
+                "<select data-key=\"TextStyleName\">",
+                "栏目文字样式应使用选择控件");
+            False(standalone.Contains("used.indexOf(item.Key)"),
+                "栏类型不应因已有同类栏目而锁定");
+            Contains(standalone, "拖动排序",
+                "纵断面栏目应支持拖动排序");
+            Contains(standalone,
+                "class=\"icon-btn danger\" data-delete-row",
+                "纵断面栏目删除应复用结构层的×图标按钮");
+            False(standalone.Contains(">删除</button>"),
+                "纵断面栏目不应保留文字删除按钮");
             Contains(embedded, "longitudinalProfileSettingsFrame",
                 "内嵌页应复用同一纵断面设置文档");
             False(standalone.Contains("预览框"),
@@ -1143,7 +1334,7 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("3.4.1", StringComparison.Ordinal) >= 0, "页面应显示 3.4.1 身份");
+            True(standalone.IndexOf("3.6.1", StringComparison.Ordinal) >= 0, "页面应显示 3.6.1 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
@@ -1173,6 +1364,8 @@ namespace CDBox.CoreTests
             True(standalone.IndexOf("e.isComposing||self.composing", StringComparison.Ordinal) >= 0, "拼音合成期间不应提交结构层名称");
             True(standalone.IndexOf("getAttribute('data-layer')==='name')return", StringComparison.Ordinal) >= 0,
                 "结构层名称输入完成前不应触发草稿重绘");
+            True(standalone.IndexOf("class=\"icon-btn danger\" data-act=\"delete-layer\"", StringComparison.Ordinal) >= 0,
+                "属性编辑器结构层删除应复用×图标按钮");
             False(standalone.IndexOf("data-sec=", StringComparison.Ordinal) >= 0, "属性编辑器不应保留左侧导航");
             False(standalone.IndexOf("图层识别信息", StringComparison.Ordinal) >= 0, "属性编辑器不应显示图层识别信息卡片");
             True(standalone.IndexOf("属性与结构层", StringComparison.Ordinal) >= 0, "基本参数与结构层应合并显示");
@@ -1299,6 +1492,10 @@ namespace CDBox.CoreTests
             True(script.IndexOf("pk==='PipeText'", StringComparison.Ordinal) >= 0, "修改管径文字时应同步外径输入框");
             True(script.IndexOf("translate(450 325) scale(${this.zoom}) translate(-450 -325)", StringComparison.Ordinal) >= 0, "预览缩放应围绕视框中心");
             True(script.IndexOf("class='sd-drag' draggable='true'", StringComparison.Ordinal) >= 0, "断面表格应使用独立拖拽柄");
+            True(script.IndexOf("class='icon-btn danger' data-act='deleteLayer'", StringComparison.Ordinal) >= 0,
+                "断面结构层删除应复用×图标按钮");
+            True(script.IndexOf("class='icon-btn danger' data-act='deletePipe'", StringComparison.Ordinal) >= 0,
+                "断面管道删除应复用×图标按钮");
             False(script.IndexOf("sd-layer-row' draggable='true'", StringComparison.Ordinal) >= 0, "断面结构层整行不得触发拖拽");
             False(script.IndexOf("sd-pipe-row' draggable='true'", StringComparison.Ordinal) >= 0, "断面管道整行不得触发拖拽");
             False(script.IndexOf("data-layer-field='HatchAngle'", StringComparison.Ordinal) >= 0, "结构层表格不应保留填充角度选项");
@@ -1573,6 +1770,17 @@ namespace CDBox.CoreTests
                 string target = Path.Combine(root, "CDBox.bundle");
                 Directory.CreateDirectory(Path.Combine(target, "Contents"));
                 File.WriteAllText(Path.Combine(target, "Contents", "old-version.txt"), "old", Encoding.UTF8);
+                string staleBackup = Path.Combine(root,
+                    "CDBox.bundle.backup.20200101_000000.stale");
+                string staleStaging = Path.Combine(root,
+                    "CDBox.bundle.new.stale");
+                string legacyBackup = Path.Combine(root,
+                    "CDBox.bundle.update-backup");
+                string unrelated = Path.Combine(root, "customer.backup.files");
+                Directory.CreateDirectory(staleBackup);
+                Directory.CreateDirectory(staleStaging);
+                Directory.CreateDirectory(legacyBackup);
+                Directory.CreateDirectory(unrelated);
 
                 string packagePath = Path.Combine(root, "release.zip");
                 using (FileStream stream = File.Create(packagePath))
@@ -1600,11 +1808,535 @@ namespace CDBox.CoreTests
                 True(Directory.Exists(outcome.BackupBundlePath), "旧 bundle 应保留备份");
                 True(File.Exists(Path.Combine(outcome.BackupBundlePath, "Contents", "old-version.txt")), "备份应包含旧文件");
                 Equal("new-version", File.ReadAllText(Path.Combine(target, "Contents", "CDBox.dll"), Encoding.UTF8), "目标应包含新版文件");
+                False(Directory.Exists(staleBackup), "更新成功后应清理旧 bundle 备份");
+                False(Directory.Exists(staleStaging), "更新成功后应清理遗留的临时 bundle");
+                False(Directory.Exists(legacyBackup), "更新成功后应清理旧更新器遗留备份");
+                True(Directory.Exists(unrelated), "不得清理不属于更新器的目录");
             }
             finally
             {
                 DeleteDirectory(root);
             }
+        }
+
+        private static void TestWastewaterResultTableFormatting()
+        {
+            Equal("污水管成果表",
+                WastewaterResultTableDefaults.EntityLayerName,
+                "成果表的表格线和文字应统一放到专用图层");
+            IList<WastewaterResultTableRow> rows =
+                WastewaterResultTableFormatter.SortRows(new[]
+                {
+                    new WastewaterResultTableRow { NodeNo = "W10" },
+                    new WastewaterResultTableRow { NodeNo = "w2" },
+                    new WastewaterResultTableRow { NodeNo = "W1" },
+                    new WastewaterResultTableRow { NodeNo = "W02" },
+                    new WastewaterResultTableRow { NodeNo = "" }
+                });
+            Equal("W1", rows[0].NodeNo, "混合编号应按数字自然排序");
+            Equal("w2", rows[1].NodeNo, "大小写字母应参与同一自然排序");
+            Equal("W02", rows[2].NodeNo, "数值相同的前导零编号应排在其后");
+            Equal("W10", rows[3].NodeNo, "两位数字不得排到 W2 之前");
+            Equal(string.Empty, rows[4].NodeNo, "空井号应排在末尾");
+
+            var row = new WastewaterResultTableRow
+            {
+                GroundElevation = 100.125,
+                WellDepth = 1.375
+            };
+            Near(98.75, row.BottomElevation, 1e-9,
+                "检查井和沉泥井的井底标高均应为自然标高减井深");
+            Equal("98.750", WastewaterResultTableFormatter.Elevation(
+                row.BottomElevation), "井底标高应保留三位小数");
+            Equal("%%c700", WastewaterResultTableFormatter.Diameter(
+                "700铸铁井盖"), "井规格应按模板输出直径符号");
+        }
+
+        private static void TestFloatingCenterPhaseZero()
+        {
+            string currentDocument = "doc-a";
+            var center = new FloatingCenterService(
+                () => currentDocument);
+            int changedCount = 0;
+            center.Changed += delegate { changedCount++; };
+
+            center.Publish(new FloatingMessage
+            {
+                Kind = FloatingMessageKind.Information,
+                Title = "图层检查",
+                Summary = "发现一项变化",
+                MergeKey = "layer-change"
+            });
+            center.Publish(new FloatingMessage
+            {
+                Kind = FloatingMessageKind.Information,
+                Title = "图层检查",
+                Summary = "发现一项变化",
+                MergeKey = "layer-change"
+            });
+            IList<FloatingMessage> historyA = center.GetHistory("doc-a");
+            Equal(1, historyA.Count, "相同 MergeKey 的短时消息应合并");
+            Equal(2, historyA[0].RepeatCount, "合并消息应记录重复次数");
+
+            center.Publish(new FloatingMessage
+            {
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Information,
+                Title = "提示卡合并",
+                Summary = "第一次",
+                MergeKey = "presentation-merge",
+                PresentAsCard = true
+            });
+            center.Publish(new FloatingMessage
+            {
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Information,
+                Title = "提示卡合并",
+                Summary = "第二次",
+                MergeKey = "presentation-merge",
+                PresentAsCard = true
+            });
+            True(center.GetHistory("doc-a")[0].PresentAsCard,
+                "合并后的最新消息必须保留提示卡呈现标记");
+
+            currentDocument = "doc-b";
+            center.Publish(new FloatingMessage
+            {
+                Kind = FloatingMessageKind.Warning,
+                Title = "图纸 B",
+                Summary = "警告",
+                MergeKey = "layer-change"
+            });
+            Equal(2, center.GetHistory("doc-a").Count,
+                "其他图纸消息不得进入图纸 A");
+            Equal(1, center.GetHistory("doc-b").Count,
+                "图纸 B 应有独立历史");
+
+            using (IPromptSession prompt = center.BeginPrompt(
+                new FloatingPrompt
+                {
+                    DocumentId = "doc-a",
+                    Title = "选择对象",
+                    Message = "请选择主管"
+                }))
+            {
+                Equal(FloatingActivityState.WaitingForCadInput,
+                    center.GetStatus("doc-a").Activity,
+                    "活动 Prompt 应进入 CAD 输入等待状态");
+                Equal(1, center.GetActiveMessages("doc-a").Count,
+                    "Prompt 应作为活动消息存在");
+                prompt.Update("请继续选择主管");
+                Equal("请继续选择主管",
+                    center.GetActiveMessages("doc-a")[0].Summary,
+                    "Prompt 更新应刷新活动消息");
+            }
+            Equal(FloatingActivityState.Idle,
+                center.GetStatus("doc-a").Activity,
+                "Prompt 释放后应回到空闲状态");
+
+            using (IProgressHandle progress = center.BeginProgress(
+                new FloatingProgressSpec
+                {
+                    DocumentId = "doc-a",
+                    Title = "图纸检查",
+                    Message = "正在检查"
+                }))
+            {
+                progress.Report(135, "接近完成");
+                FloatingMessage active =
+                    center.GetActiveMessages("doc-a")[0];
+                Near(100.0, active.Progress.Value, 1e-9,
+                    "进度必须限制在 0 至 100");
+                Equal(FloatingActivityState.Working,
+                    center.GetStatus("doc-a").Activity,
+                    "活动进度应进入工作状态");
+                progress.Complete("检查完成");
+                True(progress.IsCompleted, "完成后进度句柄应终结");
+            }
+            Equal(0, center.GetStatus("doc-a").ActiveProgressCount,
+                "完成后不得残留永久进度");
+            Equal(FloatingMessageKind.Success,
+                center.GetHistory("doc-a")[0].Kind,
+                "进度完成应生成成功历史");
+
+            FloatingMessage warning = center.Publish(new FloatingMessage
+            {
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Warning,
+                Title = "待处理警告",
+                Summary = "主管缺少终点井",
+                IsPersistent = true
+            });
+            center.Publish(new FloatingMessage
+            {
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Error,
+                Title = "严重错误",
+                Summary = "数据结构不可识别",
+                IsPersistent = true
+            });
+            FloatingStatusSnapshot status = center.GetStatus("doc-a");
+            Equal(FloatingHealthState.Critical, status.Health,
+                "严重错误应覆盖警告成为最高健康状态");
+            Equal(2, status.TaskGroupCount,
+                "角标应统计活动任务组而非实体数量");
+            Equal(FloatingMessageKind.Error,
+                center.GetActiveMessages("doc-a")[0].Kind,
+                "活动消息应按严重程度排序");
+            center.Dismiss("doc-a", warning.Id);
+            Equal(1, center.GetStatus("doc-a").TaskGroupCount,
+                "关闭一个任务后角标应同步减少");
+            True(changedCount >= 8,
+                "消息、Prompt、进度和关闭均应发布状态变化");
+
+            center.ClearDocument("doc-a");
+            Equal(0, center.GetHistory("doc-a").Count,
+                "清理文档状态后不得保留旧图纸历史");
+            Equal(1, center.GetHistory("doc-b").Count,
+                "清理图纸 A 不得影响图纸 B");
+        }
+
+        private static void TestFloatingCenterPhaseOne()
+        {
+            var primary = new FloatingWorkArea
+            {
+                DeviceName = "DISPLAY-A",
+                IsPrimary = true,
+                Left = 0,
+                Top = 0,
+                Width = 1920,
+                Height = 1040
+            };
+            var secondary = new FloatingWorkArea
+            {
+                DeviceName = "DISPLAY-B",
+                Left = 1920,
+                Top = 0,
+                Width = 1280,
+                Height = 1024
+            };
+            FloatingResolvedPosition snapped =
+                FloatingCenterPlacement.ConstrainAndSnap(3138, 420,
+                    secondary, 72, 72, true);
+            Equal(FloatingSnapEdge.Right, snapped.State.SnapEdge,
+                "靠近右边缘应吸附并记录边缘");
+            Near(3128, snapped.State.Left, 1e-9,
+                "吸附位置应保留在第二显示器工作区内");
+            Near(420, snapped.State.EdgeOffset, 1e-9,
+                "左右吸附应记录纵向边缘偏移");
+
+            FloatingResolvedPosition restored = FloatingCenterPlacement.Restore(
+                snapped.State, new[] { primary, secondary }, 72, 72);
+            Equal("DISPLAY-B", restored.State.MonitorDeviceName,
+                "显示器仍存在时应恢复到原显示器");
+            Equal(FloatingSnapEdge.Right, restored.State.SnapEdge,
+                "恢复后必须保留吸附边语义");
+            Near(3128, restored.State.Left, 1e-9,
+                "右侧吸附恢复后应贴紧原显示器右边缘");
+
+            var removedMonitorPosition = new FloatingPositionState
+            {
+                MonitorDeviceName = "DISPLAY-MISSING",
+                SnapEdge = FloatingSnapEdge.None,
+                Left = 9000,
+                Top = -9000
+            };
+            FloatingResolvedPosition recovered = FloatingCenterPlacement.Restore(
+                removedMonitorPosition, new[] { primary }, 72, 72);
+            True(recovered.State.Left >= primary.Left &&
+                recovered.State.Left <= primary.Right - 72,
+                "显示器移除后横向位置必须收回主屏");
+            True(recovered.State.Top >= primary.Top &&
+                recovered.State.Top <= primary.Bottom - 72,
+                "显示器移除后纵向位置必须收回主屏");
+
+            Equal(string.Empty, FloatingCenterPresentation.Badge(0),
+                "无任务时不显示角标");
+            Equal("9+", FloatingCenterPresentation.Badge(15),
+                "任务组超过九个应显示 9+");
+            Equal("存在严重问题", FloatingCenterPresentation.HealthText(
+                FloatingHealthState.Critical), "严重状态文字");
+
+            double? progress = FloatingCenterPresentation.OverallProgress(
+                new[]
+                {
+                    new FloatingMessage
+                    {
+                        Kind = FloatingMessageKind.Progress,
+                        Progress = 20,
+                        IsIndeterminate = false
+                    },
+                    new FloatingMessage
+                    {
+                        Kind = FloatingMessageKind.Progress,
+                        Progress = 80,
+                        IsIndeterminate = false
+                    }
+                });
+            Near(50.0, progress.Value, 1e-9,
+                "多个确定进度应取平均值");
+            True(!FloatingCenterPresentation.OverallProgress(new[]
+                {
+                    new FloatingMessage
+                    {
+                        Kind = FloatingMessageKind.Progress,
+                        IsIndeterminate = true
+                    }
+                }).HasValue, "不确定进度应驱动旋转环而非错误百分比");
+        }
+
+        private static void TestFloatingCenterPhaseTwo()
+        {
+            var queue = new FloatingMessagePresentationQueue(3);
+            queue.Enqueue(new FloatingMessage
+            {
+                Id = "info",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Information,
+                Title = "普通通知",
+                CreatedAt = DateTime.UtcNow.AddSeconds(-3)
+            });
+            queue.Enqueue(new FloatingMessage
+            {
+                Id = "warning",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Warning,
+                Title = "警告",
+                CreatedAt = DateTime.UtcNow.AddSeconds(-2)
+            });
+            queue.Enqueue(new FloatingMessage
+            {
+                Id = "prompt",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Prompt,
+                Title = "选择对象",
+                CreatedAt = DateTime.UtcNow.AddSeconds(-1)
+            });
+            queue.Enqueue(new FloatingMessage
+            {
+                Id = "other-doc",
+                DocumentId = "doc-b",
+                Kind = FloatingMessageKind.Error,
+                Title = "图纸 B 错误"
+            });
+            Equal(3, queue.Count, "超过上限时队列必须保持固定容量");
+            Equal("prompt", queue.Dequeue("doc-a").Id,
+                "CAD Prompt 应优先于普通警告和通知");
+            Equal("other-doc", queue.Dequeue("doc-b").Id,
+                "不同图纸提示必须隔离取出");
+
+            var mergeQueue = new FloatingMessagePresentationQueue(4);
+            mergeQueue.Enqueue(new FloatingMessage
+            {
+                Id = "first",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Information,
+                MergeKey = "same",
+                Summary = "第一次"
+            });
+            mergeQueue.Enqueue(new FloatingMessage
+            {
+                Id = "second",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Information,
+                MergeKey = "same",
+                Summary = "第二次",
+                RepeatCount = 2
+            });
+            Equal(1, mergeQueue.Count, "相同 MergeKey 不应重复排队");
+            Equal("第二次", mergeQueue.Dequeue("doc-a").Summary,
+                "合并队列应保留最新呈现内容");
+
+            var lifecycleQueue = new FloatingMessagePresentationQueue(6);
+            var pendingProgress = new FloatingMessage
+            {
+                Id = "pending-progress",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Progress,
+                IsPersistent = true,
+                UpdatedAt = DateTime.UtcNow.AddSeconds(-2)
+            };
+            lifecycleQueue.Enqueue(pendingProgress);
+            lifecycleQueue.Enqueue(new FloatingMessage
+            {
+                Id = "placement-prompt",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Prompt,
+                IsPersistent = true,
+                UpdatedAt = DateTime.UtcNow
+            });
+            lifecycleQueue.RemoveSupersededBy(new FloatingMessage
+            {
+                Id = "placement-prompt",
+                DocumentId = "doc-a",
+                Kind = FloatingMessageKind.Prompt,
+                UpdatedAt = DateTime.UtcNow
+            });
+            True(!lifecycleQueue.Contains("doc-a", "pending-progress"),
+                "CAD 输入提示出现时不应保留已被取代的旧进度卡");
+            lifecycleQueue.RemoveInactivePersistent("doc-a",
+                new[] { "placement-prompt" });
+            Equal(1, lifecycleQueue.Count,
+                "仍处于活动状态的 CAD 输入提示必须保留");
+            lifecycleQueue.RemoveInactivePersistent("doc-a",
+                new string[0]);
+            Equal(0, lifecycleQueue.Count,
+                "进度或提示结束后必须清除排队中的持久卡片");
+
+            var center = new FloatingCenterService(() => "doc-progress");
+            IProgressHandle progress = center.BeginProgress(
+                new FloatingProgressSpec
+                {
+                    Title = "兼容进度",
+                    Message = "处理中"
+                });
+            progress.Report(25, "已完成四分之一");
+            progress.Dispose();
+            Equal(0, center.GetActiveMessages("doc-progress").Count,
+                "仅释放兼容进度句柄时应静默清除活动项");
+            Equal(0, center.GetHistory("doc-progress").Count,
+                "仅释放句柄不应产生虚假的取消历史");
+        }
+
+        private static void TestFloatingCenterPhaseThree()
+        {
+            var layers = new List<DrawingCheckLayerSnapshot>
+            {
+                new DrawingCheckLayerSnapshot
+                {
+                    LayerName = "污水主管-DN300",
+                    ObjectHandles = new List<string> { "10" }
+                }
+            };
+            var objects = new List<DrawingCheckObjectSnapshot>
+            {
+                new DrawingCheckObjectSnapshot
+                {
+                    Handle = "10",
+                    LayerName = "污水主管-DN300",
+                    LayerParentGroup = "主管",
+                    ObjectKind = "主管",
+                    HasSavedAttributes = true,
+                    Diameter = "DN300",
+                    Material = "HDPE",
+                    StartNode = "W1",
+                    EndNode = "W1",
+                    AverageDepth = 0.20,
+                    PipeOuterDiameter = 0.30,
+                    BackfillStructure = "管线层 0.20 管线层",
+                    PipeLayerBelowDiameter = true
+                },
+                new DrawingCheckObjectSnapshot
+                {
+                    Handle = "20",
+                    LayerParentGroup = "井",
+                    ObjectKind = "节点/检查井",
+                    HasSavedAttributes = true,
+                    IsSpecialObject = true,
+                    WellDepth = 0
+                }
+            };
+            var annotations = new List<DrawingCheckAnnotationSnapshot>
+            {
+                new DrawingCheckAnnotationSnapshot
+                {
+                    AnnotationId = "annotation-a",
+                    AnnotationHandle = "30",
+                    SourceHandle = "99",
+                    BindingState = "Invalid",
+                    SourceExists = false
+                }
+            };
+
+            List<DrawingCheckIssue> issues = DrawingCheckRuleEvaluator.Evaluate(
+                "doc-check-a", layers, objects, annotations);
+            True(issues.Any(x => x.RuleId ==
+                    DrawingCheckRuleEvaluator.LayerParentMissingRule),
+                "识别候选图层缺少父属性时应形成检查问题");
+            True(issues.Any(x => x.RuleId ==
+                    DrawingCheckRuleEvaluator.PipeRelationRule),
+                "主管起终点相同应形成管线关系问题");
+            True(issues.Any(x => x.RuleId ==
+                    DrawingCheckRuleEvaluator.DataValidityRule),
+                "深度或管线层小于外径应形成数据合法性问题");
+            True(issues.Any(x => x.RuleId ==
+                    DrawingCheckRuleEvaluator.AnnotationBindingRule),
+                "失效标注绑定应形成检查问题");
+            True(!issues.Any(x => x.ObjectHandles.Contains("20")),
+                "特殊对象必须跳过数据质量检查");
+
+            List<DrawingCheckGroup> groups = DrawingCheckRuleEvaluator.Group(
+                "doc-check-a", issues);
+            Equal(groups.Select(x => x.Id).Distinct().Count(), groups.Count,
+                "规则组标识必须稳定且唯一");
+            True(groups.Count < issues.Count,
+                "同类对象问题应聚合为规则组而不是逐对象占用角标");
+
+            var manager = new DrawingCheckManager();
+            manager.Begin("doc-check-a", "扫描");
+            True(manager.GetSnapshot("doc-check-a").IsRunning,
+                "开始检查后应记录运行状态");
+            manager.Complete("doc-check-a", issues);
+            True(!manager.GetSnapshot("doc-check-a").IsRunning,
+                "检查完成后应清除运行状态");
+            DrawingCheckSnapshot beforeIgnore = manager.GetSnapshot(
+                "doc-check-a");
+            DrawingCheckGroup ignoredGroup = beforeIgnore.Groups[0];
+            int activeGroupCount = beforeIgnore.Groups.Count;
+            List<DrawingCheckIssue> ignored = manager.IgnoreGroup(
+                "doc-check-a", ignoredGroup.Id);
+            True(ignored.Count > 0, "问题组应可转入已忽略清单");
+            DrawingCheckSnapshot afterIgnore = manager.GetSnapshot(
+                "doc-check-a");
+            Equal(activeGroupCount - 1, afterIgnore.Groups.Count,
+                "已忽略问题不应继续留在活动任务中");
+            Equal(1, afterIgnore.IgnoredGroups.Count,
+                "已忽略问题应保留在独立清单中");
+            List<DrawingCheckIssue> restored = manager.RestoreGroup(
+                "doc-check-a", afterIgnore.IgnoredGroups[0].Id);
+            True(restored.Count > 0, "已忽略问题应可恢复");
+            DrawingCheckSnapshot afterRestore = manager.GetSnapshot(
+                "doc-check-a");
+            Equal(activeGroupCount, afterRestore.Groups.Count,
+                "恢复后问题应重新进入活动任务");
+            Equal(0, afterRestore.IgnoredGroups.Count,
+                "恢复后已忽略清单应移除对应问题");
+            string persistedDocument = "test:" + Guid.NewGuid().ToString("N");
+            DrawingCheckIgnoreStore.Add(persistedDocument, ignored);
+            HashSet<string> persistedKeys = DrawingCheckIgnoreStore.LoadKeys(
+                persistedDocument);
+            True(ignored.All(x => persistedKeys.Contains(x.IgnoreKey)),
+                "忽略记录应跨检查持久保存");
+            List<DrawingCheckIssue> persistedIssues =
+                DrawingCheckIgnoreStore.LoadIssues(persistedDocument,
+                    "doc-check-a");
+            Equal(ignored.Count, persistedIssues.Count,
+                "已忽略清单应可从持久记录恢复完整问题");
+            DrawingCheckIgnoreStore.RemoveKeys(persistedDocument,
+                ignored.Select(x => x.IgnoreKey));
+            Equal(0, DrawingCheckIgnoreStore.LoadKeys(
+                persistedDocument).Count,
+                "恢复问题后应删除对应持久忽略记录");
+            Equal(0, manager.GetSnapshot("doc-check-b").Groups.Count,
+                "不同图纸的检查结果必须隔离");
+            manager.ClearDocument("doc-check-a");
+            Equal(0, manager.GetSnapshot("doc-check-a").Groups.Count,
+                "图纸关闭后应清理该图纸检查结果");
+        }
+
+        private static LongitudinalProfileWellData PositionedWell(
+            string nodeNo, double x, double y,
+            double groundElevation, double wellDepth)
+        {
+            return new LongitudinalProfileWellData
+            {
+                NodeNo = nodeNo,
+                GroundElevation = groundElevation,
+                WellDepth = wellDepth,
+                HasPosition = true,
+                PositionX = x,
+                PositionY = y
+            };
         }
 
         private static PendingUpdateManifest NewPending(string packagePath, string target, string work)
@@ -1617,6 +2349,75 @@ namespace CDBox.CoreTests
                 TargetBundlePath = target,
                 WorkDirectory = work
             };
+        }
+
+        private static void TestFloatingCenterPhaseFive()
+        {
+            False(FloatingLegacyRoutingPolicy
+                    .RequiresSynchronousDecision("OK"),
+                "单按钮通知不应继续创建独立同步窗口");
+            True(FloatingLegacyRoutingPolicy
+                    .RequiresSynchronousDecision("YesNo"),
+                "需要返回选择结果的确认必须保留同步决策交互");
+            True(FloatingLegacyRoutingPolicy
+                    .RequiresSynchronousDecision("OKCancel"),
+                "可取消操作必须等待用户选择");
+            False(FloatingLegacyRoutingPolicy
+                    .AllowsIndependentProgressWindow,
+                "Phase 5 后不应再创建独立进度窗口");
+        }
+
+        private static void TestFloatingCenterPhaseFour()
+        {
+            var manager = new SyncManager();
+            SyncTask first = manager.MarkDirty(new SyncTask
+            {
+                DocumentId = "doc-sync-a",
+                MergeKey = "annotation",
+                Type = SyncTaskType.Annotation,
+                Title = "标注需要同步",
+                ObjectHandles = new List<string> { "A1", "A2" },
+                ChangedProperties = new List<string> { "长度" }
+            });
+            SyncTask merged = manager.MarkDirty(new SyncTask
+            {
+                DocumentId = "doc-sync-a",
+                MergeKey = "annotation",
+                Type = SyncTaskType.Annotation,
+                ObjectHandles = new List<string> { "a2", "A3" },
+                ChangedProperties = new List<string> { "管径" },
+                Risk = SyncRiskLevel.ConfirmationRequired
+            });
+
+            Equal(first.Id, merged.Id, "同类同步应按图纸和合并键聚合");
+            Equal(3, merged.AffectedObjectCount, "同步影响对象应去重合并");
+            Equal(2, merged.ChangedProperties.Count,
+                "同步属性应保留不同变更来源");
+            Equal(SyncRiskLevel.ConfirmationRequired, merged.Risk,
+                "聚合后应保留较高风险级别");
+
+            SyncTask running = manager.Begin("doc-sync-a", merged.Id);
+            Equal(SyncTaskState.Running, running.State,
+                "执行同步时任务应进入运行态");
+            SyncTask completed = manager.Complete("doc-sync-a", merged.Id,
+                "已同步");
+            Equal(SyncTaskState.Completed, completed.State,
+                "完成同步应记录完成态");
+            Equal(0, manager.GetSnapshot("doc-sync-a").Tasks.Count,
+                "已完成任务不应继续留在待处理区");
+            Equal(1, manager.GetSnapshot("doc-sync-a").History.Count,
+                "已完成任务应进入同步历史");
+
+            manager.MarkDirty(new SyncTask
+            {
+                DocumentId = "doc-sync-b",
+                MergeKey = "calculation",
+                Type = SyncTaskType.Calculation
+            });
+            Equal(0, manager.GetSnapshot("doc-sync-a").Tasks.Count,
+                "不同图纸的同步任务必须隔离");
+            Equal(1, manager.GetSnapshot("doc-sync-b").Tasks.Count,
+                "目标图纸应保留自己的同步任务");
         }
 
         private static string NewTemporaryDirectory(string name)
