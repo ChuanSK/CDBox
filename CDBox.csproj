@@ -102,10 +102,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="CDBox.Shared\**\*.cs" />
+    <Compile Remove="CDBox.RealEstate\**\*.cs" />
     <Compile Remove="CDBoxUpdater\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
+    <ProjectReference Include="CDBox.Shared\CDBox.Shared.csproj" />
+    <ProjectReference Include="CDBox.RealEstate\CDBox.RealEstate.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="CDBoxUpdater\CDBoxUpdater.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyRealEstateModuleOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_CDBoxRealEstateFiles Include="$(MSBuildProjectDirectory)\CDBox.RealEstate\bin\$(Configuration)\net48\CDBox.RealEstate.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CDBoxRealEstateFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(_CDBoxRealEstateFiles)' != ''" />
+  </Target>
 
   <Target Name="CopyCDBoxUpdaterOutput" AfterTargets="Build">
     <ItemGroup>

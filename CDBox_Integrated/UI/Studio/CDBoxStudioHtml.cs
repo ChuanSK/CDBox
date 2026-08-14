@@ -503,6 +503,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
         {
             string id = action == null ? string.Empty : action.Id ?? string.Empty;
             string category = action == null ? string.Empty : action.Category ?? string.Empty;
+            if (category.IndexOf("不动产", StringComparison.OrdinalIgnoreCase) >= 0) return "不动产";
             if (id.IndexOf("layer-manager", StringComparison.OrdinalIgnoreCase) >= 0) return "图层管理";
             if (category.IndexOf("标注", StringComparison.OrdinalIgnoreCase) >= 0) return "标注";
             if (category.IndexOf("断面", StringComparison.OrdinalIgnoreCase) >= 0) return "断面";
@@ -514,6 +515,7 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
 
         private static int OverviewCategoryIndex(string category)
         {
+            if (Same(category, "不动产")) return 0;
             if (Same(category, "图层管理")) return 0;
             if (Same(category, "属性与工程量")) return 1;
             if (Same(category, "标注")) return 2;

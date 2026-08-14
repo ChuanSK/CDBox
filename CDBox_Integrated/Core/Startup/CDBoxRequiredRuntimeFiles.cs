@@ -4,6 +4,8 @@ namespace CDBox.Shared
     {
         public static readonly string[] ManagedDependencies =
         {
+            "CDBox.Shared.dll",
+            "CDBox.RealEstate.dll",
             "Microsoft.Web.WebView2.Core.dll",
             "Microsoft.Web.WebView2.WinForms.dll",
             "NPOI.Core.dll",

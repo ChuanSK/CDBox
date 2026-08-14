@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using CDBox.Shared;
+using CDBox.Shared.Modules;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
@@ -1322,6 +1323,35 @@ namespace CDBox.CoreTests
                         .GetRequired<ICDBoxPageService>();
                 }) is InvalidOperationException,
                 "缺失的公共服务必须明确失败");
+
+            CDBoxModuleLoadResult loaded =
+                CDBoxKnownModuleLoader.LoadAndInitialize(
+                    typeof(RealEstateModule).Assembly.Location,
+                    typeof(RealEstateModule).FullName,
+                    services);
+            True(loaded.Success, "固定路径加载器应能初始化 RealEstate");
+            loaded.Module.Shutdown();
+
+            CDBoxModuleLoadResult initializationFailure =
+                CDBoxKnownModuleLoader.LoadAndInitialize(
+                    typeof(FailingWorkspaceModule).Assembly.Location,
+                    typeof(FailingWorkspaceModule).FullName,
+                    services);
+            False(initializationFailure.Success,
+                "模块初始化异常必须被限制在加载边界内");
+            True(initializationFailure.Error is InvalidOperationException,
+                "模块初始化异常应保留原始错误原因");
+
+            CDBoxModuleLoadResult missing =
+                CDBoxKnownModuleLoader.LoadAndInitialize(
+                    Path.Combine(Path.GetTempPath(),
+                        Guid.NewGuid().ToString("N"),
+                        "CDBox.RealEstate.dll"),
+                    typeof(RealEstateModule).FullName,
+                    services);
+            False(missing.Success, "RealEstate DLL 缺失时加载器必须安全失败");
+            True(missing.Error is FileNotFoundException,
+                "RealEstate DLL 缺失时应保留明确错误原因");
         }
 
         private static void TestQuantityDashboardSharedPage()

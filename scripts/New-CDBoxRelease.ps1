@@ -90,6 +90,8 @@ try {
     $requiredFiles = @(
         'PackageContents.xml',
         'Contents\CDBox.dll',
+        'Contents\CDBox.Shared.dll',
+        'Contents\CDBox.RealEstate.dll',
         'Contents\Microsoft.Web.WebView2.Core.dll',
         'Contents\Microsoft.Web.WebView2.WinForms.dll',
         'Contents\runtimes\win-x64\native\WebView2Loader.dll',

@@ -1,13 +1,17 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
-    [string]$AutoCADDirectory = 'C:\Program Files\Autodesk\AutoCAD 2023'
+    [string]$AutoCADDirectory = 'C:\Program Files\Autodesk\AutoCAD 2023',
+    [string]$SampleDrawing = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $consolePath = Join-Path $AutoCADDirectory 'accoreconsole.exe'
-$sampleDrawing = Join-Path $AutoCADDirectory 'Express\brkline.dwg'
+if ([string]::IsNullOrWhiteSpace($SampleDrawing)) {
+    $SampleDrawing = Join-Path $AutoCADDirectory 'Express\brkline.dwg'
+}
+$sampleDrawing = [IO.Path]::GetFullPath($SampleDrawing)
 $pluginPath = Join-Path $repoRoot "bin\$Configuration\net48\CDBox.dll"
 $outputRoot = Join-Path $repoRoot 'artifacts\host-selftest'
 

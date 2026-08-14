@@ -65,11 +65,23 @@ namespace TCPipeAutoDraw.Commands
             CadDrawingCheckCoordinator.Initialize();
             CadSyncCoordinator.Initialize();
             PipeLengthAnnotationInteractionService.Initialize();
+            try { RealEstateModuleHost.Initialize(); }
+            catch (System.Exception ex)
+            {
+                CDBoxStudioLogger.Error(
+                    "RealEstate 初始化边界发生未处理异常，已隔离。", ex);
+            }
             QueueStartupWorkflow();
         }
 
         public void Terminate()
         {
+            try { RealEstateModuleHost.Shutdown(); }
+            catch (System.Exception ex)
+            {
+                CDBoxStudioLogger.Error(
+                    "RealEstate 关闭边界发生未处理异常，已隔离。", ex);
+            }
             PipeLengthAnnotationInteractionService.Terminate();
             CadSyncCoordinator.Terminate();
             CadDrawingCheckCoordinator.Terminate();
@@ -97,6 +109,8 @@ namespace TCPipeAutoDraw.Commands
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
+            check(File.Exists(Path.Combine(baseDirectory, "CDBox.Shared.dll")), "Shared 程序集", Path.Combine(baseDirectory, "CDBox.Shared.dll"));
+            check(File.Exists(Path.Combine(baseDirectory, "CDBox.RealEstate.dll")), "RealEstate 程序集", Path.Combine(baseDirectory, "CDBox.RealEstate.dll"));
             check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.6.2", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
             check(CDBoxStudioUpdateService.CurrentVersionCode == 30602, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
@@ -243,6 +257,18 @@ namespace TCPipeAutoDraw.Commands
         public void OpenStudioAlias()
         {
             ShowStudio();
+        }
+
+        [CommandMethod("CDRE", CommandFlags.Modal)]
+        public void OpenRealEstate()
+        {
+            RealEstateModuleHost.OpenWorkspace();
+        }
+
+        [CommandMethod("CDBOXRE", CommandFlags.Modal)]
+        public void OpenRealEstateAlias()
+        {
+            RealEstateModuleHost.OpenWorkspace();
         }
 
         [CommandMethod("CDSET", CommandFlags.Modal)]
@@ -503,7 +529,18 @@ namespace TCPipeAutoDraw.Commands
 
         private IList<ITCModule> CreateDefaultModules()
         {
-            return TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, ShowNodeAnnotationSettings, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport, ShowExcelToCad);
+            IList<ITCModule> modules = TCModuleRegistry.CreateDefaultModules(DrawPipeFromPrompt, ShowLayerManager, ShowAnnotationSettingsForm, ShowSurfaceAreaAnnotationForm, ShowPipeLengthAnnotationForm, ShowNodeAnnotationSettings, ShowSectionDrawing, RunFrameTemplateAdd, RunFrameCutLayout, ShowQuantityPipeAttributeEditor, RunQuantityCalculationReport, ShowExcelToCad);
+            if (RealEstateModuleHost.IsAvailable)
+            {
+                modules.Add(new TCModuleDescriptor(
+                    "realestate",
+                    "CDBox 不动产",
+                    "打开独立的不动产业务工作区。",
+                    "CDRE",
+                    true,
+                    RealEstateModuleHost.OpenWorkspace));
+            }
+            return modules;
         }
 
         [CommandMethod("TCP_LAYERS", CommandFlags.Modal)]

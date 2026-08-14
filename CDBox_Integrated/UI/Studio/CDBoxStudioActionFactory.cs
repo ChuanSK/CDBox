@@ -116,6 +116,8 @@ namespace TCPipeAutoDraw.UI.Studio
 
             switch (moduleId.ToLowerInvariant())
             {
+                case "realestate":
+                    return "不动产";
                 case "layer-manager":
                     return "图层管理器";
                 case "annotation-settings":
