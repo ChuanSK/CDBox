@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBoxUpdater", "CDBoxUpdate
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBox.CoreTests", "tests\CDBox.CoreTests\CDBox.CoreTests.csproj", "{7C41D47E-4498-44FC-A121-15A563745F11}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CDBox.Shared", "CDBox.Shared\CDBox.Shared.csproj", "{6E2265B8-8A2C-4B40-908D-9F64E7EBC825}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,6 +30,10 @@ Global
 		{7C41D47E-4498-44FC-A121-15A563745F11}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7C41D47E-4498-44FC-A121-15A563745F11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7C41D47E-4498-44FC-A121-15A563745F11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E2265B8-8A2C-4B40-908D-9F64E7EBC825}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E2265B8-8A2C-4B40-908D-9F64E7EBC825}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E2265B8-8A2C-4B40-908D-9F64E7EBC825}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E2265B8-8A2C-4B40-908D-9F64E7EBC825}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
