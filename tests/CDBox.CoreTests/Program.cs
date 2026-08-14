@@ -6,6 +6,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using CDBox.Shared;
+using CDBox.Shared.Services;
+using CDBox.Shared.UI;
+using CDBox.RealEstate.Module;
 using CDBoxUpdater;
 using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Startup;
@@ -50,6 +53,7 @@ namespace CDBox.CoreTests
             Run("Studio 路由消息", TestStudioRouteRequest);
             Run("内置更新源优先级", TestBuiltInUpdateSourcePriority);
             Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
+            Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("工程量计算过程导出", TestQuantityCalculationProcessExport);
@@ -1279,6 +1283,45 @@ namespace CDBox.CoreTests
             settings.LastInstallPromptIdentity = "release:30101";
             False(settings.ShouldPromptForInstall(false, "release:30101"), "当前版本选择不再提示后应保持静默");
             True(settings.ShouldPromptForInstall(false, "release:30102"), "升级后的首次加载应重新提供一次安装修复提示");
+        }
+
+        private static void TestRealEstateModuleBoundary()
+        {
+            var logger = new CapturingLogger();
+            var pages = new CapturingPageService();
+            var services = new CDBoxServiceRegistry()
+                .Register<ICDBoxLogger>(logger)
+                .Register<ICDBoxPageService>(pages);
+            var module = new RealEstateModule();
+
+            module.Initialize(services);
+            Equal("realestate", module.Id, "不动产模块 Id");
+            Equal("CDBox 不动产", module.Name, "不动产模块名称");
+            module.OpenWorkspace();
+
+            True(pages.LastPage != null, "不动产必须通过统一页面服务打开工作区");
+            Equal("realestate-home", pages.LastPage.Id, "不动产起始页 Id");
+            string html = pages.LastPage.HtmlFactory();
+            Contains(html, "CDBox 不动产", "不动产起始页标题");
+            Contains(html, "studio|ready|realestate", "不动产页面应使用兼容 Studio 路由");
+            True(pages.LastPage.RouteHandler(
+                new CDBoxPageRouteRequest("ready", "realestate")).Handled,
+                "不动产页面应处理 ready 路由");
+            False(pages.LastPage.RouteHandler(
+                new CDBoxPageRouteRequest("unknown", string.Empty)).Handled,
+                "不动产页面不得吞掉未知路由");
+            True(logger.InfoCount >= 2, "不动产初始化与打开工作区应写入统一日志");
+
+            module.Shutdown();
+            Exception afterShutdown = Capture(module.OpenWorkspace);
+            True(afterShutdown is InvalidOperationException,
+                "关闭后的不动产模块不得继续打开工作区");
+            True(Capture(delegate
+                {
+                    new CDBoxServiceRegistry()
+                        .GetRequired<ICDBoxPageService>();
+                }) is InvalidOperationException,
+                "缺失的公共服务必须明确失败");
         }
 
         private static void TestQuantityDashboardSharedPage()
@@ -2530,6 +2573,34 @@ namespace CDBox.CoreTests
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
             Directory.Delete(path, true);
+        }
+
+        private sealed class CapturingLogger : ICDBoxLogger
+        {
+            public int InfoCount { get; private set; }
+
+            public void Info(string message)
+            {
+                InfoCount++;
+            }
+
+            public void Warn(string message)
+            {
+            }
+
+            public void Error(string message, Exception exception)
+            {
+            }
+        }
+
+        private sealed class CapturingPageService : ICDBoxPageService
+        {
+            public CDBoxPageDefinition LastPage { get; private set; }
+
+            public void Show(CDBoxPageDefinition page)
+            {
+                LastPage = page;
+            }
         }
 
         private static void True(bool value, string message)

@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <PackageReference Include="NPOI" Version="2.8.0" />
+    <ProjectReference Include="..\..\CDBox.Shared\CDBox.Shared.csproj" />
+    <ProjectReference Include="..\..\CDBox.RealEstate\CDBox.RealEstate.csproj" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Web.Extensions" />
