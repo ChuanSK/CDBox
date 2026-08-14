@@ -16,6 +16,8 @@ namespace TCPipeAutoDraw.UI
         private readonly string _title;
         private readonly bool _writeFallback;
         private int _lastFallbackBucket = -1;
+        private int _lastPublishedTick;
+        private double _lastPublishedPercent = -1.0;
         private bool _finished;
 
         private CDBoxProgressSession(IProgressHandle handle,
@@ -51,6 +53,7 @@ namespace TCPipeAutoDraw.UI
             var session = new CDBoxProgressSession(handle, document,
                 resolvedTitle, fallback);
             if (fallback) session.WriteFallback(message);
+            CDBoxUiResponsiveness.YieldToRender(document, true);
             return session;
         }
 
@@ -59,7 +62,19 @@ namespace TCPipeAutoDraw.UI
             if (_finished || _handle == null) return;
             if (total <= 0) total = 1;
             current = Math.Max(0, Math.Min(current, total));
-            _handle.Report(current * 100.0 / total, message);
+            double percent = current * 100.0 / total;
+            int now = Environment.TickCount;
+            bool publish = current == 0 || current == total
+                || _lastPublishedPercent < 0.0
+                || percent - _lastPublishedPercent >= 1.0
+                || (uint)(now - _lastPublishedTick) >= 80U;
+            if (publish)
+            {
+                _lastPublishedTick = now;
+                _lastPublishedPercent = percent;
+                _handle.Report(percent, message);
+                CDBoxUiResponsiveness.YieldToRender(_document);
+            }
             if (_writeFallback)
             {
                 int bucket = (int)Math.Floor(current * 10.0 / total);
@@ -75,6 +90,9 @@ namespace TCPipeAutoDraw.UI
         {
             if (_finished || _handle == null) return;
             _handle.Report(null, message);
+            _lastPublishedTick = Environment.TickCount;
+            _lastPublishedPercent = -1.0;
+            CDBoxUiResponsiveness.YieldToRender(_document, true);
             if (_writeFallback) WriteFallback(message);
         }
 
@@ -83,6 +101,7 @@ namespace TCPipeAutoDraw.UI
             if (_finished || _handle == null) return;
             _finished = true;
             _handle.Complete(message);
+            CDBoxUiResponsiveness.YieldToRender(_document, true);
             if (_writeFallback) WriteFallback(message);
         }
 
@@ -91,6 +110,7 @@ namespace TCPipeAutoDraw.UI
             if (_finished || _handle == null) return;
             _finished = true;
             _handle.Fail(message);
+            CDBoxUiResponsiveness.YieldToRender(_document, true);
             if (_writeFallback) WriteFallback(message);
         }
 
@@ -99,6 +119,7 @@ namespace TCPipeAutoDraw.UI
             if (_finished || _handle == null) return;
             _finished = true;
             _handle.Cancel(message);
+            CDBoxUiResponsiveness.YieldToRender(_document, true);
             if (_writeFallback) WriteFallback(message);
         }
 

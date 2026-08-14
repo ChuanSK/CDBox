@@ -191,16 +191,33 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 if (point.Status != PromptStatus.OK) return;
 
                 FrameLayoutService.LayoutResult result;
-                using (DocumentLock documentLock = doc.LockDocument())
-                using (Transaction transaction =
-                    db.TransactionManager.StartTransaction())
+                using (var progress = CDBoxProgressSession.Start(doc,
+                    "裁图区域布框", "正在准备图框模板与裁图内容…",
+                    "FrameLayout", "frame-layout", false))
                 {
-                    result = new FrameLayoutService().LayoutSelectedRegions(
-                        editor, db, transaction, regions, choices, point.Value,
-                        FrameLayoutSettingsStore.Load());
-                    transaction.Commit();
+                    try
+                    {
+                        using (DocumentLock documentLock = doc.LockDocument())
+                        using (Transaction transaction =
+                            db.TransactionManager.StartTransaction())
+                        {
+                            result = new FrameLayoutService()
+                                .LayoutSelectedRegions(editor, db, transaction,
+                                    regions, choices, point.Value,
+                                    FrameLayoutSettingsStore.Load(),
+                                    progress.Report);
+                            transaction.Commit();
+                        }
+                        editor.Regen();
+                        progress.Complete("裁图区域布框完成，共生成 "
+                            + result.Count + " 个图框。");
+                    }
+                    catch (System.Exception ex)
+                    {
+                        progress.Fail("裁图区域布框失败：" + ex.Message);
+                        throw;
+                    }
                 }
-                editor.Regen();
                 editor.WriteHudMessage(
                     "\n[图框布置] 已生成 {0} 个图框，共 {1} 行，每行最多 {2} 个。",
                     result.Count, result.Rows,
@@ -453,7 +470,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             using (Transaction transaction =
                 db.TransactionManager.StartTransaction())
             {
-                CadDbHelper.EnsureLayer(db, transaction,
+                CadDbHelper.EnsureGeneratedLayer(db, transaction,
                     FrameCutRegionService.RegionLayerName);
                 FrameCutRegionService service = new FrameCutRegionService();
                 foreach (SelectedObject selected in selection.Value)

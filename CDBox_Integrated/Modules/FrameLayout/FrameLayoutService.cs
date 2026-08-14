@@ -26,7 +26,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         public LayoutResult LayoutSelectedRegions(Editor editor, Database db,
             Transaction tr, IList<FrameCutRegionInfo> regions,
             IDictionary<string, FrameTemplateCatalogItem> templates,
-            Point3d firstFrameLowerLeft, FrameLayoutSettings settings)
+            Point3d firstFrameLowerLeft, FrameLayoutSettings settings,
+            Action<int, int, string> progress = null)
         {
             if (editor == null) throw new ArgumentNullException("editor");
             if (regions == null || regions.Count == 0)
@@ -35,6 +36,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 throw new InvalidOperationException("没有匹配的图框模板。");
             settings = settings ?? new FrameLayoutSettings();
             settings.Normalize();
+            ReportProgress(progress, 0, regions.Count,
+                "正在准备图框模板与裁图内容…");
 
             List<FrameTemplateCatalogItem> orderedTemplates =
                 new List<FrameTemplateCatalogItem>();
@@ -109,6 +112,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                         + " 个图框附加标注失败：" + ex.Message);
                 }
                 count++;
+                ReportProgress(progress, count, regions.Count,
+                    "正在布置裁图区域：" + count + "/" + regions.Count);
             }
 
             LayoutResult layoutResult = new LayoutResult
@@ -119,6 +124,13 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             };
             layoutResult.Warnings.AddRange(resultWarnings);
             return layoutResult;
+        }
+
+        private static void ReportProgress(Action<int, int, string> progress,
+            int current, int total, string message)
+        {
+            if (progress == null) return;
+            progress(current, Math.Max(1, total), message);
         }
 
         public LayoutResult PlaceFrames(Database db, Transaction tr,
@@ -656,7 +668,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             int cols = Math.Max(1, (int)Math.Ceiling(Math.Max(0, lenU - validW) / stepU) + 1);
             int rows = Math.Max(1, (int)Math.Ceiling(lenV / stepV));
 
-            CadDbHelper.EnsureLayer(db, tr, "TC_裁图范围");
+            CadDbHelper.EnsureGeneratedLayer(db, tr, "TC_裁图范围");
 
             NorthArrowService north = new NorthArrowService();
 

@@ -17,6 +17,31 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             request = NormalizeRequest(request);
             Document document = ResolveDocument(request.documentId);
             if (string.IsNullOrWhiteSpace(request.documentId) && document != null) request.documentId = GetDocumentId(document);
+            if (document != null && string.Equals(request.scopeType, "region",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                QuantityDashboardRegionService.SaveScope(document,
+                    request.scopeType, request.regionId);
+                QuantityDashboardRequest verified =
+                    QuantityDashboardRegionService.GetSavedScope(document);
+                if (!string.Equals(verified.scopeType, "region",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    request.scopeType = "whole";
+                    request.regionId = string.Empty;
+                }
+            }
+            else if (document != null)
+            {
+                QuantityDashboardRequest saved =
+                    QuantityDashboardRegionService.GetSavedScope(document);
+                if (string.Equals(saved.scopeType, "region",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    request.scopeType = "region";
+                    request.regionId = saved.regionId;
+                }
+            }
             var context = new QuantityDashboardContext { request = request };
             context.documents = GetOpenedDocuments();
             if (document == null) context.regions = new List<QuantityDashboardRegionInfo>();
@@ -39,6 +64,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             Document doc = ResolveDocument(request.documentId);
             if (doc == null) throw new InvalidOperationException("未找到需要统计的已打开图纸。");
             request.documentId = GetDocumentId(doc);
+
+            // 界面每次刷新都会携带当前选项，因此这里同时保存“区域/整图”选择。
+            // BuildContext 仅负责恢复，不会把默认的 whole 覆盖到图纸内的记忆值。
+            QuantityDashboardRegionService.SaveScope(doc, request.scopeType,
+                request.regionId);
 
             using (doc.LockDocument())
             {

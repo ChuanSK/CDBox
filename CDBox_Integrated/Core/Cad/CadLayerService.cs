@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
+using TCPipeAutoDraw.Modules.LayerManager;
 
 namespace TCPipeAutoDraw.Core.Cad
 {
@@ -10,6 +11,8 @@ namespace TCPipeAutoDraw.Core.Cad
     /// </summary>
     public static class CadLayerService
     {
+        public const string GeneratedLayerParentGroup = "CDBox图层";
+
         public static ObjectId EnsureLayer(Database db, Transaction tr, string layerName, short colorIndex)
         {
             if (db == null) throw new ArgumentNullException("db");
@@ -25,6 +28,22 @@ namespace TCPipeAutoDraw.Core.Cad
             layer.Color = Color.FromColorIndex(ColorMethod.ByAci, colorIndex <= 0 ? (short)7 : colorIndex);
             ObjectId id = lt.Add(layer);
             tr.AddNewlyCreatedDBObject(layer, true);
+            return id;
+        }
+
+        public static ObjectId EnsureGeneratedLayer(Database db,
+            Transaction tr, string layerName, short colorIndex)
+        {
+            ObjectId id = EnsureLayer(db, tr, layerName, colorIndex);
+            LayerMetadata metadata = LayerManagerService.GetLayerMetadata(
+                db, tr, layerName) ?? new LayerMetadata();
+            if (!string.Equals(metadata.ParentGroup,
+                GeneratedLayerParentGroup, StringComparison.Ordinal))
+            {
+                metadata.ParentGroup = GeneratedLayerParentGroup;
+                LayerManagerService.SetLayerMetadata(db, tr, layerName,
+                    metadata);
+            }
             return id;
         }
 

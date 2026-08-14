@@ -189,10 +189,33 @@ namespace TCPipeAutoDraw.Core.Check
                     BlockTableRecord space = tr.GetObject(
                         document.Database.CurrentSpaceId, OpenMode.ForRead, false)
                         as BlockTableRecord;
+                    ObjectId savedRegionId = QuantityDashboardRegionService
+                        .GetSavedRegionObjectId(document.Database, tr);
+                    Polyline savedRegion = savedRegionId.IsNull ? null :
+                        tr.GetObject(savedRegionId, OpenMode.ForRead, false)
+                        as Polyline;
+                    session.ConnectionNodeIds.AddRange(
+                        QuantityPipeAttributeService
+                            .CollectSupportedNodeObjectIds(
+                                document.Database, tr,
+                                document.Database.CurrentSpaceId));
                     if (space != null)
                         foreach (ObjectId id in space)
                             if (!id.IsNull && id.IsValid && !id.IsErased)
+                            {
+                                if (savedRegion != null)
+                                {
+                                    Entity entity;
+                                    try { entity = tr.GetObject(id,
+                                        OpenMode.ForRead, false) as Entity; }
+                                    catch { continue; }
+                                    if (entity == null ||
+                                        !QuantityDashboardRegionService
+                                            .IsEntityIncluded(entity,
+                                                savedRegion)) continue;
+                                }
                                 session.ObjectIds.Add(id);
+                            }
                     tr.Commit();
                 }
 
@@ -454,13 +477,10 @@ namespace TCPipeAutoDraw.Core.Check
             bool hasSaved = QuantityPipeAttributeService.TryReadSavedAttributes(
                 session.Document.Database, tr, id, out saved);
             string expected = NormalizeKind(layer.Metadata.ParentGroup);
-            string suggested = NormalizeKind(layer.SuggestedParent);
             string actual = hasSaved && saved != null
                 ? NormalizeKind(saved.ObjectKind)
                 : InferActualKind(expected, entity);
-            bool relevant = hasSaved ||
-                !string.IsNullOrWhiteSpace(layer.Metadata.ParentGroup) ||
-                suggested.Length > 0;
+            bool relevant = hasSaved || expected.Length > 0;
             if (relevant)
             {
                 layer.Snapshot.ObjectHandles.Add(handle);
@@ -477,6 +497,26 @@ namespace TCPipeAutoDraw.Core.Check
                 };
                 if (saved != null) ApplyAttributes(item, saved);
                 ApplyGeometry(item, entity);
+                Curve pipeCurve = entity as Curve;
+                if (saved != null && pipeCurve != null &&
+                    QuantityPipeAttributes.IsMainPipeKind(saved.ObjectKind))
+                {
+                    QuantityPipeEndpointConnectionResult connections =
+                        QuantityPipeAttributeService
+                            .EvaluateAssignedNodeConnections(
+                                session.Document.Database, tr, entity,
+                                pipeCurve, saved,
+                                session.ConnectionNodeIds);
+                    item.StartConnectionEvaluated =
+                        connections.StartEvaluated;
+                    item.StartConnectedToAssignedNode =
+                        connections.StartConnected;
+                    item.DetectedStartNode = connections.DetectedStartNode;
+                    item.EndConnectionEvaluated = connections.EndEvaluated;
+                    item.EndConnectedToAssignedNode =
+                        connections.EndConnected;
+                    item.DetectedEndNode = connections.DetectedEndNode;
+                }
                 session.Objects.Add(item);
             }
             ReadAnnotation(session, tr, entity, handle);
@@ -524,6 +564,8 @@ namespace TCPipeAutoDraw.Core.Check
             target.Diameter = source.Diameter;
             target.StartNode = source.StartNode;
             target.EndNode = source.EndNode;
+            target.StartInvertElevation = source.StartInvertElevation;
+            target.EndInvertElevation = source.EndInvertElevation;
             target.AverageDepth = source.AverageDepth;
             target.BackfillStructure = source.BackfillStructure;
             target.PipeOuterDiameter = source.PipeOuterDiameter;
@@ -716,16 +758,7 @@ namespace TCPipeAutoDraw.Core.Check
 
         private static string NormalizeKind(string value)
         {
-            string text = (value ?? string.Empty).Replace(" ", string.Empty)
-                .Replace("　", string.Empty).Replace("/", string.Empty)
-                .Replace("、", string.Empty);
-            if (text.IndexOf("支", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "支管";
-            if (text.IndexOf("井", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "井";
-            if (text.IndexOf("主管", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "主管";
-            return string.Empty;
+            return DrawingCheckClassification.NormalizeKind(value);
         }
 
         private static void PublishGroups(ScanSession session,
@@ -758,21 +791,24 @@ namespace TCPipeAutoDraw.Core.Check
             {
                 bool severe = group.Severity == DrawingCheckSeverity.Error ||
                     group.Severity == DrawingCheckSeverity.Critical;
+                bool weak = group.Severity == DrawingCheckSeverity.Info;
                 FloatingMessage stored = FloatingHub.Current.Publish(
                     new FloatingMessage
                     {
                         DocumentId = documentId,
                         Source = SourceName,
                         Kind = severe ? FloatingMessageKind.Error :
-                            FloatingMessageKind.Warning,
+                            (weak ? FloatingMessageKind.Information :
+                                FloatingMessageKind.Warning),
                         Priority = severe ? FloatingMessagePriority.Critical :
-                            FloatingMessagePriority.High,
+                            (weak ? FloatingMessagePriority.Low :
+                                FloatingMessagePriority.High),
                         Title = group.Title,
                         Summary = group.Summary,
                         Detail = group.Category,
-                        IsPersistent = true,
-                        PresentAsCard = severe,
-                        RecordInHistory = false,
+                        IsPersistent = !weak,
+                        PresentAsCard = severe || weak,
+                        RecordInHistory = weak,
                         MergeKey = "drawing-check-group:" + group.Id,
                         Actions = new List<FloatingAction>
                         {
@@ -894,10 +930,21 @@ namespace TCPipeAutoDraw.Core.Check
         private static void DismissPreviousGroups(string documentId)
         {
             List<string> ids;
-            if (!GroupMessageIds.TryGetValue(documentId, out ids)) return;
-            foreach (string id in ids)
-                try { FloatingHub.Current.Dismiss(documentId, id); }
+            if (GroupMessageIds.TryGetValue(documentId, out ids))
+                foreach (string id in ids)
+                    try { FloatingHub.Current.Dismiss(documentId, id); }
+                    catch { }
+            foreach (FloatingMessage message in FloatingHub.Current
+                .GetActiveMessages(documentId))
+            {
+                if (message == null || !string.Equals(message.Source,
+                    SourceName, StringComparison.OrdinalIgnoreCase) ||
+                    !(message.MergeKey ?? string.Empty).StartsWith(
+                        "drawing-check-group:",
+                        StringComparison.OrdinalIgnoreCase)) continue;
+                try { FloatingHub.Current.Dismiss(documentId, message.Id); }
                 catch { }
+            }
             GroupMessageIds.Remove(documentId);
         }
 
@@ -1059,6 +1106,8 @@ namespace TCPipeAutoDraw.Core.Check
             public bool CancelRequested;
             public IProgressHandle Progress;
             public readonly List<ObjectId> ObjectIds = new List<ObjectId>();
+            public readonly List<ObjectId> ConnectionNodeIds =
+                new List<ObjectId>();
             public readonly List<DrawingCheckObjectSnapshot> Objects =
                 new List<DrawingCheckObjectSnapshot>();
             public readonly Dictionary<string, DrawingCheckLayerSnapshot> Layers =

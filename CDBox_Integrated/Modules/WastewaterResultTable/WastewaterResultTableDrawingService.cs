@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
+using TCPipeAutoDraw.Core.Cad;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 
 namespace TCPipeAutoDraw.Modules.WastewaterResultTable
@@ -321,19 +322,8 @@ namespace TCPipeAutoDraw.Modules.WastewaterResultTable
         private static ObjectId EnsureLayer(Database database,
             Transaction transaction)
         {
-            LayerTable table = transaction.GetObject(database.LayerTableId,
-                OpenMode.ForRead, false) as LayerTable;
-            if (table.Has(WastewaterResultTableDefaults.EntityLayerName))
-                return table[WastewaterResultTableDefaults.EntityLayerName];
-            table.UpgradeOpen();
-            var record = new LayerTableRecord
-            {
-                Name = WastewaterResultTableDefaults.EntityLayerName,
-                Color = Color.FromColorIndex(ColorMethod.ByAci, 7)
-            };
-            ObjectId id = table.Add(record);
-            transaction.AddNewlyCreatedDBObject(record, true);
-            return id;
+            return CadLayerService.EnsureGeneratedLayer(database, transaction,
+                WastewaterResultTableDefaults.EntityLayerName, 7);
         }
 
         private static ObjectId ResolveTextStyle(Database database,

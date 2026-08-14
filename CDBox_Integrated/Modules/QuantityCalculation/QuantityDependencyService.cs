@@ -102,6 +102,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (startWell != null) attrs.StartDepth = CalculateEndpointDepth(startWell, cushion, attrs.StartDepth);
                 if (endWell != null) attrs.EndDepth = CalculateEndpointDepth(endWell, cushion, attrs.EndDepth);
             }
+            if (startWell != null)
+                attrs.StartInvertElevation =
+                    QuantityPipeAttributes.CalculateDesignInvertElevationByWell(
+                        startWell, attrs.StartInvertElevation);
+            if (endWell != null)
+                attrs.EndInvertElevation =
+                    QuantityPipeAttributes.CalculateDesignInvertElevationByWell(
+                        endWell, attrs.EndInvertElevation);
 
             RecalculateAverageDepth(attrs);
             DistributeLayers(layers, attrs.AverageDepth, false);

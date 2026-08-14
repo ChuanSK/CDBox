@@ -20,6 +20,7 @@
       <TargetPath>SkiaSharp.dll</TargetPath>
     </Content>
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityNodeRecognitionPolicy.cs" Link="Source\QuantityNodeRecognitionPolicy.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerModels.cs" Link="Source\LayerModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerRecognitionEngine.cs" Link="Source\LayerRecognitionEngine.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityCalculationReportModels.cs" Link="Source\QuantityCalculationReportModels.cs" />
@@ -76,6 +77,7 @@
     <Compile Include="..\..\CDBox_Integrated\UI\FloatingCenter\FloatingCenterPresentation.cs" Link="Source\FloatingCenter\FloatingCenterPresentation.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckModels.cs" Link="Source\Check\DrawingCheckModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckRuleEvaluator.cs" Link="Source\Check\DrawingCheckRuleEvaluator.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckClassification.cs" Link="Source\Check\DrawingCheckClassification.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckManager.cs" Link="Source\Check\DrawingCheckManager.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckIgnoreStore.cs" Link="Source\Check\DrawingCheckIgnoreStore.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Sync\SyncModels.cs" Link="Source\Sync\SyncModels.cs" />

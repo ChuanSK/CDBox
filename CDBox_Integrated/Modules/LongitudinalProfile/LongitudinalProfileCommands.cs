@@ -63,8 +63,23 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                         "正在检索图纸中的主管和井对象...");
                     List<ObjectId> sourceIds =
                         QuantityPipeAttributeService
-                            .FindObjectsWithSavedAttributes(document)
+                            .FindObjectsWithSavedAttributes(document,
+                                delegate(int current, int total,
+                                    string message)
+                                {
+                                    progress.ReportMarquee(message + "（"
+                                        + current + " / " + total + "）");
+                                })
                             .ToList();
+                    List<ObjectId> knownNodeObjectIds =
+                        QuantityPipeAttributeService
+                            .FindSupportedNodeObjectIds(document,
+                                delegate(int current, int total,
+                                    string message)
+                                {
+                                    progress.ReportMarquee(message + "（"
+                                        + current + " / " + total + "）");
+                                });
                     int total = Math.Max(1, sourceIds.Count + 1);
                     int reportStep = Math.Max(1,
                         sourceIds.Count / 100);
@@ -76,7 +91,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                         ObjectId id = sourceIds[sourceIndex];
                         QuantityPipeSelectionInfo info =
                             QuantityPipeAttributeService.ReadPipe(
-                                document, id);
+                                document, id, knownNodeObjectIds);
                         if (info != null && info.Attributes != null)
                         {
                             QuantityPipeAttributes attrs =
@@ -86,12 +101,33 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                                 && info.HasSavedAttributes
                                 && info.CadLength > 0)
                             {
+                                QuantityPipeEndpointConnectionResult connection =
+                                    attrs.IsSpecialObject
+                                        ? QuantityPipeAttributeService
+                                            .ResolvePhysicalNodeConnections(
+                                                document, id, attrs,
+                                                knownNodeObjectIds)
+                                        : null;
+                                string physicalStart = connection == null
+                                    ? attrs.StartNode
+                                    : connection.DetectedStartNode;
+                                string physicalEnd = connection == null
+                                    ? attrs.EndNode
+                                    : connection.DetectedEndNode;
+                                string pipeStart = !string.IsNullOrWhiteSpace(
+                                    physicalStart) ? physicalStart :
+                                    (attrs.IsSpecialObject
+                                        ? attrs.StartNode : string.Empty);
+                                string pipeEnd = !string.IsNullOrWhiteSpace(
+                                    physicalEnd) ? physicalEnd :
+                                    (attrs.IsSpecialObject
+                                        ? attrs.EndNode : string.Empty);
                                 var pipe =
                                     new LongitudinalProfilePipeData
                                 {
                                     SourceId = info.HandleText,
-                                    StartNode = attrs.StartNode,
-                                    EndNode = attrs.EndNode,
+                                    StartNode = pipeStart,
+                                    EndNode = pipeEnd,
                                     Diameter = attrs.Diameter,
                                     Foundation = ResolveFoundation(attrs),
                                     OuterDiameter =
@@ -99,7 +135,11 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                                     PlanLength = info.CadLength,
                                     SelectionOrder = order++,
                                     StartDepth = attrs.StartDepth,
-                                    EndDepth = attrs.EndDepth
+                                    EndDepth = attrs.EndDepth,
+                                    StartInvertElevation =
+                                        attrs.StartInvertElevation,
+                                    EndInvertElevation =
+                                        attrs.EndInvertElevation
                                 };
                                 Point3d geometryStart;
                                 Point3d geometryEnd;

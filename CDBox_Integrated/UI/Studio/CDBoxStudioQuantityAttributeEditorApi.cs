@@ -67,10 +67,13 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 string node = attrs.StartNode;
                 double depth = attrs.StartDepth;
+                double invert = attrs.StartInvertElevation;
                 attrs.StartNode = attrs.EndNode;
                 attrs.StartDepth = attrs.EndDepth;
+                attrs.StartInvertElevation = attrs.EndInvertElevation;
                 attrs.EndNode = node;
                 attrs.EndDepth = depth;
+                attrs.EndInvertElevation = invert;
             }
 
             QuantityDependencyResult normalized = QuantityPipeAttributeService.CalculateDraft(

@@ -50,8 +50,8 @@ namespace TCPipeAutoDraw.Modules.PipeDraw
                 Database db = doc.Database;
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
-                    CadLayerService.EnsureLayer(db, tr, NoteLayer, 1);
-                    CadLayerService.EnsureLayer(db, tr, NodeLayer, 1);
+                    CadLayerService.EnsureGeneratedLayer(db, tr, NoteLayer, 1);
+                    CadLayerService.EnsureGeneratedLayer(db, tr, NodeLayer, 1);
 
                     foreach (PointRow row in rows)
                     {

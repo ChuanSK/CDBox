@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -16,6 +18,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static bool _started;
         private static bool _dirty;
         private static bool _liveEnabled = true;
+        private static readonly HashSet<string> DirtyHandles =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static event EventHandler<QuantityDashboardDirtyEventArgs> DirtyMarked;
 
@@ -38,8 +42,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         public static void MarkDirty(Document document, string reason)
         {
+            List<string> handles = DirtyHandles.ToList();
+            DirtyHandles.Clear();
             _dirty = true;
-            RaiseDirtyMarked(document, reason);
+            RaiseDirtyMarked(document, reason, handles);
             if (!_liveEnabled) return;
             EnsureTimer();
             _timer.Stop();
@@ -48,12 +54,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             Push(new { type = "dirty", reason = reason ?? string.Empty, documentId = QuantityDashboardService.GetDocumentId(document) });
         }
 
-        private static void RaiseDirtyMarked(Document document, string reason)
+        private static void RaiseDirtyMarked(Document document, string reason,
+            IEnumerable<string> handles)
         {
             EventHandler<QuantityDashboardDirtyEventArgs> handler = DirtyMarked;
             if (handler == null) return;
             var args = new QuantityDashboardDirtyEventArgs(document,
-                reason ?? string.Empty);
+                reason ?? string.Empty, handles);
             foreach (Delegate callback in handler.GetInvocationList())
                 try
                 {
@@ -101,6 +108,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             if (_attachedDocument == doc) return;
             Detach();
+            DirtyHandles.Clear();
             _attachedDocument = doc;
             if (doc == null) return;
             try { doc.CommandEnded += OnCommandEnded; } catch { }
@@ -122,17 +130,63 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void OnObjectChanged(object sender, ObjectEventArgs e)
         {
-            _dirty = true;
+            if (RememberHandle(e == null ? null : e.DBObject)) _dirty = true;
         }
 
         private static void OnObjectErased(object sender, ObjectErasedEventArgs e)
         {
-            _dirty = true;
+            if (RememberHandle(e == null ? null : e.DBObject)) _dirty = true;
+        }
+
+        private static bool RememberHandle(DBObject value)
+        {
+            // QSAVE/SAVE updates dictionaries, symbol tables and other database
+            // records even when drawing entities did not change. Quantity and
+            // sync state only depends on graphical entities, so those records
+            // must not mark the drawing dirty.
+            if (!(value is Entity)) return false;
+            try
+            {
+                string handle = value.Handle.ToString();
+                if (!string.IsNullOrWhiteSpace(handle))
+                {
+                    DirtyHandles.Add(handle.Trim());
+                    return true;
+                }
+            }
+            catch { }
+            return false;
         }
 
         private static void OnCommandEnded(object sender, CommandEventArgs e)
         {
-            if (_dirty) MarkDirty(e == null ? "commandEnded" : e.GlobalCommandName);
+            if (!_dirty) return;
+            string commandName = e == null ? string.Empty :
+                (e.GlobalCommandName ?? string.Empty).Trim();
+            if (IsSaveCommand(commandName))
+            {
+                // A save can report entities as modified because their filing
+                // state changed. The actual edit command, if any, has already
+                // emitted its own dirty event before QSAVE begins.
+                _dirty = false;
+                DirtyHandles.Clear();
+                return;
+            }
+            if (DirtyHandles.Count == 0)
+            {
+                _dirty = false;
+                return;
+            }
+            MarkDirty(string.IsNullOrWhiteSpace(commandName)
+                ? "commandEnded" : commandName);
+        }
+
+        private static bool IsSaveCommand(string commandName)
+        {
+            string value = (commandName ?? string.Empty).Trim()
+                .TrimStart('_', '.').ToUpperInvariant();
+            return value == "SAVE" || value == "QSAVE" ||
+                value == "SAVEAS" || value == "SAVEALL";
         }
 
         private static void Push(object data)
@@ -152,13 +206,19 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
     public sealed class QuantityDashboardDirtyEventArgs : EventArgs
     {
-        public QuantityDashboardDirtyEventArgs(Document document, string reason)
+        public QuantityDashboardDirtyEventArgs(Document document,
+            string reason, IEnumerable<string> objectHandles)
         {
             Document = document;
             Reason = reason ?? string.Empty;
+            ObjectHandles = (objectHandles ?? Enumerable.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim()).Distinct(
+                    StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         public Document Document { get; private set; }
         public string Reason { get; private set; }
+        public List<string> ObjectHandles { get; private set; }
     }
 }

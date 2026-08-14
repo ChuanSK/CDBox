@@ -17,10 +17,12 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public bool Success { get; set; }
         public string Message { get; set; }
         public int EntityCount { get; set; }
+        internal List<ObjectId> EntityIds { get; private set; }
 
         public LongitudinalProfileDrawingResult()
         {
             Message = string.Empty;
+            EntityIds = new List<ObjectId>();
         }
     }
 
@@ -84,7 +86,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             using (Transaction transaction =
                 database.TransactionManager.StartTransaction())
             {
-                CadLayerService.EnsureLayer(database, transaction,
+                CadLayerService.EnsureGeneratedLayer(database, transaction,
                     settings.LayerName, 7);
                 ObjectId headerTextStyle = ResolveTextStyle(database,
                     settings.HeaderTextStyleName, transaction);

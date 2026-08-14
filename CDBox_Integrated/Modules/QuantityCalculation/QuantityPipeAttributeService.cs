@@ -35,6 +35,22 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         public bool AnnotationsRefreshed { get; private set; }
     }
 
+    internal sealed class QuantityPipeEndpointConnectionResult
+    {
+        public bool StartEvaluated { get; set; }
+        public bool StartConnected { get; set; }
+        public bool EndEvaluated { get; set; }
+        public bool EndConnected { get; set; }
+        public string DetectedStartNode { get; set; }
+        public string DetectedEndNode { get; set; }
+
+        public QuantityPipeEndpointConnectionResult()
+        {
+            DetectedStartNode = string.Empty;
+            DetectedEndNode = string.Empty;
+        }
+    }
+
     /// <summary>
     /// 属性读写服务。
     /// 统一支持主管、支管、节点/检查井；使用对象 ExtensionDictionary + Xrecord 保存。
@@ -155,7 +171,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             return result;
         }
 
-        public static QuantityPipeSelectionInfo ReadPipe(Document doc, ObjectId objectId)
+        public static QuantityPipeSelectionInfo ReadPipe(Document doc,
+            ObjectId objectId,
+            IEnumerable<ObjectId> knownNodeObjectIds = null)
         {
             if (doc == null) throw new ArgumentNullException("doc");
             if (objectId.IsNull) return null;
@@ -173,10 +191,31 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 bool hasSaved = HasPipeAttributes(entity, tr);
                 bool hasSavedDrawLengthWidthHeightFlag = hasSaved && HasPipeAttributeKey(entity, tr, "DrawLengthWidthHeightAnnotation");
                 QuantityPipeAttributes savedAttributes = hasSaved ? ReadPipeAttributes(entity, tr) : null;
-                string inferredKind = savedAttributes != null
-                    && (savedAttributes.IsSpecialObject || IsSupportedAttributeKind(savedAttributes.ObjectKind))
-                    ? savedAttributes.ObjectKind
-                    : InferSupportedObjectKind(db, tr, entity);
+                string currentLayerKind = InferSupportedObjectKind(db, tr,
+                    entity);
+                string inferredKind;
+                if (savedAttributes != null && savedAttributes.IsSpecialObject)
+                {
+                    inferredKind = savedAttributes.ObjectKind;
+                }
+                else if (savedAttributes != null
+                    && QuantityPipeAttributes.IsNodeKind(
+                        savedAttributes.ObjectKind))
+                {
+                    // 节点即使曾保存过属性，也必须重新通过当前图层的
+                    // “父属性=井、分类=检查、沉泥井”校验，避免旧属性绕过规则。
+                    inferredKind = QuantityPipeAttributes.IsNodeKind(
+                        currentLayerKind) ? currentLayerKind : string.Empty;
+                }
+                else if (savedAttributes != null
+                    && IsSupportedAttributeKind(savedAttributes.ObjectKind))
+                {
+                    inferredKind = savedAttributes.ObjectKind;
+                }
+                else
+                {
+                    inferredKind = currentLayerKind;
+                }
                 if (string.IsNullOrWhiteSpace(inferredKind))
                 {
                     tr.Commit();
@@ -196,7 +235,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 if (curve != null && QuantityPipeAttributes.IsMainPipeKind(attrs.ObjectKind) && !attrs.IsSpecialObject)
                 {
-                    TryFillConnectedNodeInfo(db, tr, entity, curve, attrs);
+                    TryFillConnectedNodeInfo(db, tr, entity, curve, attrs,
+                        true, knownNodeObjectIds);
                 }
 
                 var info = new QuantityPipeSelectionInfo
@@ -216,7 +256,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         }
 
 
-        public static List<ObjectId> FindObjectsWithSavedAttributes(Document doc)
+        public static List<ObjectId> FindObjectsWithSavedAttributes(
+            Document doc, Action<int, int, string> progress = null)
         {
             if (doc == null) throw new ArgumentNullException("doc");
 
@@ -227,8 +268,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
                 if (space != null)
                 {
-                    foreach (ObjectId id in space)
+                    List<ObjectId> spaceIds = space.Cast<ObjectId>().ToList();
+                    int reportStep = Math.Max(1, spaceIds.Count / 100);
+                    for (int index = 0; index < spaceIds.Count; index++)
                     {
+                        ObjectId id = spaceIds[index];
                         try
                         {
                             Entity entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
@@ -238,11 +282,51 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                         catch
                         {
                         }
+                        if (progress != null && ((index + 1) % reportStep == 0
+                            || index + 1 == spaceIds.Count))
+                            progress(index + 1, spaceIds.Count,
+                                "正在检索带属性的图纸对象…");
                     }
                 }
                 tr.Commit();
             }
             return ids;
+        }
+
+        internal static List<ObjectId> FindSupportedNodeObjectIds(
+            Document doc, Action<int, int, string> progress = null)
+        {
+            if (doc == null) throw new ArgumentNullException("doc");
+            Database db = doc.Database;
+            using (Transaction tr = db.TransactionManager
+                .StartOpenCloseTransaction())
+            {
+                var result = new List<ObjectId>();
+                BlockTableRecord space = tr.GetObject(db.CurrentSpaceId,
+                    OpenMode.ForRead, false) as BlockTableRecord;
+                if (space != null)
+                {
+                    List<ObjectId> spaceIds = space.Cast<ObjectId>().ToList();
+                    int reportStep = Math.Max(1, spaceIds.Count / 100);
+                    for (int index = 0; index < spaceIds.Count; index++)
+                    {
+                        try
+                        {
+                            Entity entity = tr.GetObject(spaceIds[index],
+                                OpenMode.ForRead, false) as Entity;
+                            if (entity != null && IsWellParentLayer(db, tr,
+                                entity)) result.Add(spaceIds[index]);
+                        }
+                        catch { }
+                        if (progress != null && ((index + 1) % reportStep == 0
+                            || index + 1 == spaceIds.Count))
+                            progress(index + 1, spaceIds.Count,
+                                "正在建立井节点索引…");
+                    }
+                }
+                tr.Commit();
+                return result;
+            }
         }
 
         internal static bool TryReadSavedAttributes(Database db, Transaction tr,
@@ -255,6 +339,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Entity entity = tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
                 if (entity == null || !HasPipeAttributes(entity, tr)) return false;
                 attributes = ReadPipeAttributes(entity, tr);
+                if (attributes != null && !attributes.IsSpecialObject
+                    && QuantityPipeAttributes.IsNodeKind(
+                        attributes.ObjectKind)
+                    && !IsWellParentLayer(db, tr, entity))
+                {
+                    attributes = null;
+                    return false;
+                }
                 return attributes != null;
             }
             catch { return false; }
@@ -377,7 +469,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             IEnumerable<string> sourceHandles)
         {
             if (doc == null || sourceHandles == null) return;
-            try { SimpleAnnotationObjectService.RefreshNodeAnnotationsForSourceHandles(doc, sourceHandles); }
+            try
+            {
+                List<string> scoped = QuantityDashboardRegionService
+                    .FilterHandlesToSavedScope(doc, sourceHandles);
+                if (scoped.Count > 0)
+                    SimpleAnnotationObjectService
+                        .RefreshNodeAnnotationsForSourceHandles(doc, scoped);
+            }
             catch { }
         }
 
@@ -392,8 +491,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (doc == null || sourceHandles == null) return;
             try
             {
+                List<string> scoped = QuantityDashboardRegionService
+                    .FilterHandlesToSavedScope(doc, sourceHandles);
+                if (scoped.Count == 0) return;
                 PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
-                    doc, sourceHandles, string.Empty);
+                    doc, scoped, string.Empty);
             }
             catch
             {
@@ -427,6 +529,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string nodeNo = nodeAttrs.NodeNo.Trim();
             BlockTableRecord space = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead, false) as BlockTableRecord;
             if (space == null) return changedHandles;
+            ObjectId scopeRegionId = QuantityDashboardRegionService
+                .GetSavedRegionObjectId(db, tr);
+            Autodesk.AutoCAD.DatabaseServices.Polyline scopeRegion =
+                scopeRegionId.IsNull ? null :
+                tr.GetObject(scopeRegionId, OpenMode.ForRead, false)
+                as Autodesk.AutoCAD.DatabaseServices.Polyline;
 
             foreach (ObjectId id in space)
             {
@@ -436,23 +544,49 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 {
                     Entity entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
                     if (entity == null) continue;
+                    if (scopeRegion != null && !QuantityDashboardRegionService
+                        .IsEntityIncluded(entity, scopeRegion)) continue;
                     if (!HasPipeAttributes(entity, tr)) continue;
 
                     QuantityPipeAttributes pipeAttrs = ReadPipeAttributes(entity, tr);
-                    if (pipeAttrs == null || !QuantityPipeAttributes.IsMainPipeKind(pipeAttrs.ObjectKind)) continue;
+                    if (pipeAttrs == null || pipeAttrs.IsSpecialObject ||
+                        !QuantityPipeAttributes.IsMainPipeKind(
+                            pipeAttrs.ObjectKind)) continue;
+
+                    Curve pipeCurve = entity as Curve;
+                    if (pipeCurve == null) continue;
+                    QuantityPipeAttributes connected = pipeAttrs.Clone();
+                    connected.StartNode = string.Empty;
+                    connected.EndNode = string.Empty;
+                    connected.StartDepth = 0.0;
+                    connected.EndDepth = 0.0;
+                    connected.StartInvertElevation = 0.0;
+                    connected.EndInvertElevation = 0.0;
+                    TryFillConnectedNodeInfo(db, tr, entity, pipeCurve,
+                        connected, true);
 
                     bool changed = false;
-                    if (!string.IsNullOrWhiteSpace(pipeAttrs.StartNode)
-                        && string.Equals(pipeAttrs.StartNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(connected.StartNode)
+                        && string.Equals(connected.StartNode.Trim(), nodeNo,
+                            StringComparison.CurrentCultureIgnoreCase))
                     {
+                        pipeAttrs.StartNode = connected.StartNode;
                         pipeAttrs.StartDepth = CalculatePipeEndpointDepthFromNode(pipeAttrs, nodeAttrs);
+                        pipeAttrs.StartInvertElevation = QuantityPipeAttributes
+                            .CalculateDesignInvertElevationByWell(nodeAttrs,
+                                pipeAttrs.StartInvertElevation);
                         changed = true;
                     }
 
-                    if (!string.IsNullOrWhiteSpace(pipeAttrs.EndNode)
-                        && string.Equals(pipeAttrs.EndNode.Trim(), nodeNo, StringComparison.CurrentCultureIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(connected.EndNode)
+                        && string.Equals(connected.EndNode.Trim(), nodeNo,
+                            StringComparison.CurrentCultureIgnoreCase))
                     {
+                        pipeAttrs.EndNode = connected.EndNode;
                         pipeAttrs.EndDepth = CalculatePipeEndpointDepthFromNode(pipeAttrs, nodeAttrs);
+                        pipeAttrs.EndInvertElevation = QuantityPipeAttributes
+                            .CalculateDesignInvertElevationByWell(nodeAttrs,
+                                pipeAttrs.EndInvertElevation);
                         changed = true;
                     }
 
@@ -561,6 +695,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             attrs.ManualLength = old.ManualLength;
                             attrs.StartDepth = old.StartDepth;
                             attrs.EndDepth = old.EndDepth;
+                            attrs.StartInvertElevation = old.StartInvertElevation;
+                            attrs.EndInvertElevation = old.EndInvertElevation;
                             attrs.AverageDepth = old.AverageDepth;
                             attrs.GroundElevation = old.GroundElevation;
                             attrs.WellDepth = old.WellDepth;
@@ -987,6 +1123,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 {
                     ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
                     List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
+                    Curve curve = entity as Curve;
+                    if (curve != null)
+                        TryFillConnectedNodeInfo(db, tr, entity, curve,
+                            attributes, true);
                     startWell = FindNodeAttributesByNo(candidates, attributes.StartNode);
                     endWell = FindNodeAttributesByNo(candidates, attributes.EndNode);
                 }
@@ -1037,6 +1177,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 ObjectId spaceId = entity == null || entity.OwnerId.IsNull ? db.CurrentSpaceId : entity.OwnerId;
                 List<NodeCandidate> candidates = CollectNodeCandidates(db, tr, spaceId);
+                Curve curve = entity as Curve;
+                if (curve != null)
+                    TryFillConnectedNodeInfo(db, tr, entity, curve,
+                        attributes, true);
                 startWell = FindNodeAttributesByNo(candidates, attributes.StartNode);
                 endWell = FindNodeAttributesByNo(candidates, attributes.EndNode);
             }
@@ -1236,6 +1380,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 // 起终点井已由用户填写时不覆盖；仅在字段缺失或井名为空时，使用自动识别结果补齐深度。
                 if (!HasKey(keys, "StartDepth") || (startWasEmpty && target.StartDepth <= 0 && defaults.StartDepth > 0)) target.StartDepth = defaults.StartDepth;
                 if (!HasKey(keys, "EndDepth") || (endWasEmpty && target.EndDepth <= 0 && defaults.EndDepth > 0)) target.EndDepth = defaults.EndDepth;
+                target.StartInvertElevation = FillDoubleIfMissing(keys,
+                    "StartInvertElevation", target.StartInvertElevation,
+                    defaults.StartInvertElevation);
+                target.EndInvertElevation = FillDoubleIfMissing(keys,
+                    "EndInvertElevation", target.EndInvertElevation,
+                    defaults.EndInvertElevation);
                 if (!HasKey(keys, "AverageDepth") || (target.AverageDepth <= 0 && defaults.AverageDepth > 0)) target.AverageDepth = defaults.AverageDepth;
             }
             else if (QuantityPipeAttributes.IsBranchKind(target.ObjectKind))
@@ -1457,7 +1607,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 a.Enabled.ToString(), a.ObjectKind ?? string.Empty, a.IsSpecialObject.ToString(), a.LayerParentGroup ?? string.Empty, a.LayerParentClass ?? string.Empty, a.LayerTags ?? string.Empty,
                 a.Material ?? string.Empty, a.Diameter ?? string.Empty, a.UseManualLength.ToString(), Format(a.ManualLength), a.DrawLengthWidthHeightAnnotation.ToString(),
-                a.StartNode ?? string.Empty, a.EndNode ?? string.Empty, Format(a.StartDepth), Format(a.EndDepth), Format(a.AverageDepth),
+                a.StartNode ?? string.Empty, a.EndNode ?? string.Empty, Format(a.StartDepth), Format(a.EndDepth), Format(a.StartInvertElevation), Format(a.EndInvertElevation), Format(a.AverageDepth),
                 Format(a.TrenchWidth), Format(a.RoadThickness), a.ExcavationType ?? string.Empty, a.BackfillType ?? string.Empty, QuantityPipeAttributes.NormalizeStructureLayerText(a.BackfillStructure),
                 a.BranchType ?? string.Empty, a.BranchIncludeInCalculation.ToString(), Format(a.BranchDepth),
                 a.NodeNo ?? string.Empty, a.WellSpec ?? string.Empty, a.WellCoverMaterial ?? string.Empty, a.WellMaterialType ?? string.Empty, a.WellType ?? string.Empty,
@@ -1645,11 +1795,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string cls = NormalizeLayerMetadataText(meta.ParentClass);
 
             bool isCurve = entity is Curve;
-            bool isNodeEntity = entity is Circle || entity is DBPoint || entity is BlockReference;
+            bool isNodeEntity = IsSupportedNodeGeometry(entity);
 
             if (TextEquals(parent, "主管") && isCurve) return QuantityPipeAttributes.KindMainPipe;
             if (TextEquals(parent, "支管") && isCurve) return QuantityPipeAttributes.KindBranchPipe;
-            if (TextEquals(parent, "井") && isNodeEntity && IsSupportedWellClass(cls)) return QuantityPipeAttributes.KindNodeWell;
+            if (isNodeEntity && QuantityNodeRecognitionPolicy.IsSupportedLayer(
+                    parent, cls))
+                return QuantityPipeAttributes.KindNodeWell;
 
             return string.Empty;
         }
@@ -1665,13 +1817,6 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         {
             // 从 v14 开始，不再根据图层名、标签或对象类型兜底推断主管/支管/井，防止无关对象被写入属性。
             return string.Empty;
-        }
-
-        private static bool IsSupportedWellClass(string layerClass)
-        {
-            // 井对象统一使用图层分类“检查、沉泥井”；具体井类型在对象属性表的“井类型”中区分。
-            string cls = NormalizeLayerMetadataText(layerClass);
-            return TextEquals(cls, "检查沉泥井");
         }
 
         private static string NormalizeLayerMetadataText(string text)
@@ -1864,6 +2009,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 Pair("EndNode", attrs.EndNode),
                 Pair("StartDepth", attrs.StartDepth),
                 Pair("EndDepth", attrs.EndDepth),
+                Pair("StartInvertElevation", attrs.StartInvertElevation),
+                Pair("EndInvertElevation", attrs.EndInvertElevation),
                 Pair("AverageDepth", attrs.AverageDepth),
                 Pair("TrenchWidth", attrs.TrenchWidth),
                 Pair("RoadThickness", attrs.RoadThickness),
@@ -2003,6 +2150,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             else if (string.Equals(key, "EndNode", StringComparison.OrdinalIgnoreCase)) attrs.EndNode = val;
             else if (string.Equals(key, "StartDepth", StringComparison.OrdinalIgnoreCase)) attrs.StartDepth = QuantityPipeAttributes.ParseDouble(val, attrs.StartDepth);
             else if (string.Equals(key, "EndDepth", StringComparison.OrdinalIgnoreCase)) attrs.EndDepth = QuantityPipeAttributes.ParseDouble(val, attrs.EndDepth);
+            else if (string.Equals(key, "StartInvertElevation", StringComparison.OrdinalIgnoreCase)) attrs.StartInvertElevation = QuantityPipeAttributes.ParseDouble(val, attrs.StartInvertElevation);
+            else if (string.Equals(key, "EndInvertElevation", StringComparison.OrdinalIgnoreCase)) attrs.EndInvertElevation = QuantityPipeAttributes.ParseDouble(val, attrs.EndInvertElevation);
             else if (string.Equals(key, "AverageDepth", StringComparison.OrdinalIgnoreCase)) attrs.AverageDepth = QuantityPipeAttributes.ParseDouble(val, attrs.AverageDepth);
             else if (string.Equals(key, "TrenchWidth", StringComparison.OrdinalIgnoreCase)) attrs.TrenchWidth = QuantityPipeAttributes.ParseDouble(val, attrs.TrenchWidth);
             else if (string.Equals(key, "RoadThickness", StringComparison.OrdinalIgnoreCase)) attrs.RoadThickness = QuantityPipeAttributes.ParseDouble(val, attrs.RoadThickness);
@@ -2059,7 +2208,75 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             TryFillConnectedNodeInfo(db, tr, pipeEntity, pipeCurve, attrs, false);
         }
 
+        internal static QuantityPipeEndpointConnectionResult
+            EvaluateAssignedNodeConnections(Database db, Transaction tr,
+                Entity pipeEntity, Curve pipeCurve,
+                QuantityPipeAttributes attributes,
+                IEnumerable<ObjectId> nodeObjectIds)
+        {
+            var result = new QuantityPipeEndpointConnectionResult();
+            if (attributes == null || pipeCurve == null) return result;
+            string assignedStart = (attributes.StartNode ?? string.Empty).Trim();
+            string assignedEnd = (attributes.EndNode ?? string.Empty).Trim();
+            result.StartEvaluated = assignedStart.Length > 0;
+            result.EndEvaluated = assignedEnd.Length > 0;
+
+            QuantityPipeAttributes detected = attributes.Clone();
+            detected.StartNode = string.Empty;
+            detected.EndNode = string.Empty;
+            detected.StartDepth = 0.0;
+            detected.EndDepth = 0.0;
+            TryFillConnectedNodeInfo(db, tr, pipeEntity, pipeCurve, detected,
+                true, nodeObjectIds);
+            result.StartConnected = result.StartEvaluated && string.Equals(
+                assignedStart, (detected.StartNode ?? string.Empty).Trim(),
+                StringComparison.CurrentCultureIgnoreCase);
+            result.EndConnected = result.EndEvaluated && string.Equals(
+                assignedEnd, (detected.EndNode ?? string.Empty).Trim(),
+                StringComparison.CurrentCultureIgnoreCase);
+            result.DetectedStartNode =
+                (detected.StartNode ?? string.Empty).Trim();
+            result.DetectedEndNode =
+                (detected.EndNode ?? string.Empty).Trim();
+            return result;
+        }
+
+        internal static QuantityPipeEndpointConnectionResult
+            ResolvePhysicalNodeConnections(Document document,
+                ObjectId pipeObjectId, QuantityPipeAttributes attributes,
+                IEnumerable<ObjectId> knownNodeObjectIds = null)
+        {
+            var result = new QuantityPipeEndpointConnectionResult();
+            if (document == null || pipeObjectId.IsNull) return result;
+            Database db = document.Database;
+            using (Transaction tr = db.TransactionManager
+                .StartOpenCloseTransaction())
+            {
+                Entity entity = tr.GetObject(pipeObjectId,
+                    OpenMode.ForRead, false) as Entity;
+                Curve curve = entity as Curve;
+                if (curve == null) return result;
+                ObjectId spaceId = entity.OwnerId.IsNull
+                    ? db.CurrentSpaceId : entity.OwnerId;
+                result = EvaluateAssignedNodeConnections(db, tr, entity,
+                    curve, attributes ?? QuantityPipeAttributes.DefaultMainPipe,
+                    knownNodeObjectIds ?? CollectSupportedNodeObjectIds(
+                        db, tr, spaceId));
+                tr.Commit();
+            }
+            return result;
+        }
+
         private static void TryFillConnectedNodeInfo(Database db, Transaction tr, Entity pipeEntity, Curve pipeCurve, QuantityPipeAttributes attrs, bool overwriteExisting)
+        {
+            TryFillConnectedNodeInfo(db, tr, pipeEntity, pipeCurve, attrs,
+                overwriteExisting, null);
+        }
+
+        private static void TryFillConnectedNodeInfo(Database db,
+            Transaction tr, Entity pipeEntity, Curve pipeCurve,
+            QuantityPipeAttributes attrs, bool overwriteExisting,
+            IEnumerable<ObjectId> nodeObjectIds)
         {
             if (db == null || tr == null || pipeEntity == null || pipeCurve == null || attrs == null) return;
             try
@@ -2073,7 +2290,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
                 NodeCandidate startNode = null;
                 NodeCandidate endNode = null;
-                foreach (ObjectId id in space)
+                IEnumerable<ObjectId> candidates = nodeObjectIds ??
+                    space.Cast<ObjectId>();
+                foreach (ObjectId id in candidates)
                 {
                     if (id == pipeEntity.ObjectId) continue;
                     Entity entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
@@ -2138,6 +2357,29 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
         }
 
+        internal static List<ObjectId> CollectSupportedNodeObjectIds(
+            Database db, Transaction tr, ObjectId spaceId)
+        {
+            var result = new List<ObjectId>();
+            if (db == null || tr == null) return result;
+            BlockTableRecord space = tr.GetObject(spaceId.IsNull
+                ? db.CurrentSpaceId : spaceId, OpenMode.ForRead, false)
+                as BlockTableRecord;
+            if (space == null) return result;
+            foreach (ObjectId id in space)
+            {
+                try
+                {
+                    Entity entity = tr.GetObject(id, OpenMode.ForRead,
+                        false) as Entity;
+                    if (entity != null && IsWellParentLayer(db, tr, entity))
+                        result.Add(id);
+                }
+                catch { }
+            }
+            return result;
+        }
+
         private static bool IsWellParentLayer(Database db, Transaction tr, Entity entity)
         {
             if (entity == null) return false;
@@ -2148,7 +2390,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             string cls = meta == null ? string.Empty : (meta.ParentClass ?? string.Empty);
 
             // 与节点标注保持一致：只允许父属性=井，分类=检查、沉泥井。
-            return TextEquals(parent, "井") && IsSupportedWellClass(cls);
+            return QuantityNodeRecognitionPolicy.IsSupportedLayer(parent, cls);
         }
 
         private static bool IsSupportedNodeGeometry(Entity entity)
@@ -2602,6 +2844,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 attrs.StartDepth = CalculatePipeEndpointDepthFromNode(attrs, node.Attributes);
             }
+            if (overwrite || Math.Abs(attrs.StartInvertElevation) <= 1e-8)
+                attrs.StartInvertElevation = QuantityPipeAttributes
+                    .CalculateDesignInvertElevationByWell(node.Attributes,
+                        attrs.StartInvertElevation);
         }
 
         private static void ApplyNodeToPipeEnd(QuantityPipeAttributes attrs, NodeCandidate node)
@@ -2617,6 +2863,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 attrs.EndDepth = CalculatePipeEndpointDepthFromNode(attrs, node.Attributes);
             }
+            if (overwrite || Math.Abs(attrs.EndInvertElevation) <= 1e-8)
+                attrs.EndInvertElevation = QuantityPipeAttributes
+                    .CalculateDesignInvertElevationByWell(node.Attributes,
+                        attrs.EndInvertElevation);
         }
 
         private sealed class NodeCandidate

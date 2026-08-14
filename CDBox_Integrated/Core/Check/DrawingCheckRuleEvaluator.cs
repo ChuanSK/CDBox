@@ -13,6 +13,8 @@ namespace TCPipeAutoDraw.Core.Check
         public const string PipeRelationRule = "pipe.relationship.invalid";
         public const string DataValidityRule = "attribute.value.invalid";
         public const string AnnotationBindingRule = "annotation.binding.invalid";
+        public const string PipeInvertConsistencyRule =
+            "pipe.invert.consistency";
 
         public static List<DrawingCheckIssue> Evaluate(string documentId,
             IEnumerable<DrawingCheckLayerSnapshot> layers,
@@ -32,11 +34,9 @@ namespace TCPipeAutoDraw.Core.Check
                         StringComparer.CurrentCultureIgnoreCase)
                     .ToDictionary(x => x.Key, x => x.ToList(),
                         StringComparer.CurrentCultureIgnoreCase);
-            foreach (DrawingCheckLayerSnapshot layer in layers ??
-                Enumerable.Empty<DrawingCheckLayerSnapshot>())
-                EvaluateLayer(id, layer, issues);
             foreach (DrawingCheckObjectSnapshot item in objectList)
                 EvaluateObject(id, item, nodes, issues);
+            EvaluatePipeInvertConsistency(id, objectList, issues);
             foreach (DrawingCheckAnnotationSnapshot annotation in annotations ??
                 Enumerable.Empty<DrawingCheckAnnotationSnapshot>())
                 EvaluateAnnotation(id, annotation, issues);
@@ -88,25 +88,6 @@ namespace TCPipeAutoDraw.Core.Check
                 .OrderByDescending(x => x.Severity)
                 .ThenBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
-        }
-
-        private static void EvaluateLayer(string documentId,
-            DrawingCheckLayerSnapshot layer, IList<DrawingCheckIssue> issues)
-        {
-            if (layer == null || IsSystemLayer(layer.LayerName) ||
-                layer.ObjectHandles == null || layer.ObjectHandles.Count == 0)
-                return;
-            if (string.IsNullOrWhiteSpace(layer.ParentGroup))
-                issues.Add(NewIssue(documentId, LayerParentMissingRule, "图层",
-                    DrawingCheckSeverity.Warning, "图层父属性缺失",
-                    "图层“" + layer.LayerName + "”尚未设置父属性。",
-                    layer.ObjectHandles));
-            else if (NormalizeKind(layer.ParentGroup).Length == 0)
-                issues.Add(NewIssue(documentId, LayerParentInvalidRule, "图层",
-                    DrawingCheckSeverity.Error, "图层父属性无效",
-                    "图层“" + layer.LayerName + "”的父属性“"
-                    + layer.ParentGroup + "”不属于主管、支管或井。",
-                    layer.ObjectHandles));
         }
 
         private static void EvaluateObject(string documentId,
@@ -246,11 +227,77 @@ namespace TCPipeAutoDraw.Core.Check
                 One(annotation.AnnotationHandle)));
         }
 
+        private static void EvaluatePipeInvertConsistency(string documentId,
+            IEnumerable<DrawingCheckObjectSnapshot> objects,
+            IList<DrawingCheckIssue> issues)
+        {
+            var endpoints = new Dictionary<string,
+                List<Tuple<string, double>>>(
+                    StringComparer.CurrentCultureIgnoreCase);
+            foreach (DrawingCheckObjectSnapshot pipe in objects ??
+                Enumerable.Empty<DrawingCheckObjectSnapshot>())
+            {
+                if (pipe == null || NormalizeKind(pipe.ObjectKind) != "主管")
+                    continue;
+                AddInvertEndpoint(endpoints, pipe.DetectedStartNode,
+                    pipe.Handle, pipe.StartInvertElevation);
+                AddInvertEndpoint(endpoints, pipe.DetectedEndNode,
+                    pipe.Handle, pipe.EndInvertElevation);
+            }
+            foreach (KeyValuePair<string, List<Tuple<string, double>>> group
+                in endpoints)
+            {
+                List<Tuple<string, double>> values = group.Value;
+                if (values.Count < 2) continue;
+                double min = values.Min(x => x.Item2);
+                double max = values.Max(x => x.Item2);
+                if (max - min <= 0.005) continue;
+                issues.Add(NewIssue(documentId, PipeInvertConsistencyRule,
+                    "管线关系", DrawingCheckSeverity.Info,
+                    "同一节点管线内底标高不一致",
+                    "节点“" + group.Key + "”接入管线的内底标高范围为 "
+                    + min.ToString("0.00") + "～" + max.ToString("0.00")
+                    + " m，仅作核对提示，纵断面将按各管线属性如实绘制。",
+                    values.Select(x => x.Item1)));
+            }
+        }
+
+        private static void AddInvertEndpoint(
+            IDictionary<string, List<Tuple<string, double>>> endpoints,
+            string nodeNo, string handle, double elevation)
+        {
+            string node = (nodeNo ?? string.Empty).Trim();
+            if (node.Length == 0 || double.IsNaN(elevation) ||
+                double.IsInfinity(elevation) || Math.Abs(elevation) <= 1e-8)
+                return;
+            List<Tuple<string, double>> values;
+            if (!endpoints.TryGetValue(node, out values))
+            {
+                values = new List<Tuple<string, double>>();
+                endpoints[node] = values;
+            }
+            values.Add(Tuple.Create(handle ?? string.Empty, elevation));
+        }
+
         private static void EvaluateEndpoint(string documentId,
             DrawingCheckObjectSnapshot pipe, string nodeNo, bool start,
             IDictionary<string, List<DrawingCheckObjectSnapshot>> nodes,
             IList<DrawingCheckIssue> issues)
         {
+            bool evaluated = start ? pipe.StartConnectionEvaluated :
+                pipe.EndConnectionEvaluated;
+            if (evaluated)
+            {
+                bool resolved = start ? pipe.StartConnectedToAssignedNode :
+                    pipe.EndConnectedToAssignedNode;
+                if (!resolved)
+                    issues.Add(NewIssue(documentId, PipeRelationRule,
+                        "管线关系", DrawingCheckSeverity.Warning,
+                        "管线端点与关联井未连接", (start ? "起点" : "终点")
+                        + "与井“" + nodeNo + "”未按属性编辑器的连接规则识别为相连。",
+                        One(pipe.Handle)));
+                return;
+            }
             List<DrawingCheckObjectSnapshot> candidates;
             if (nodes == null || !nodes.TryGetValue((nodeNo ?? string.Empty)
                 .Trim(), out candidates) || candidates.Count == 0)
@@ -317,16 +364,7 @@ namespace TCPipeAutoDraw.Core.Check
 
         private static string NormalizeKind(string value)
         {
-            string text = (value ?? string.Empty).Replace(" ", string.Empty)
-                .Replace("　", string.Empty).Replace("/", string.Empty)
-                .Replace("、", string.Empty);
-            if (text.IndexOf("支", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "支管";
-            if (text.IndexOf("井", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "井";
-            if (text.IndexOf("主管", StringComparison.CurrentCultureIgnoreCase) >= 0)
-                return "主管";
-            return string.Empty;
+            return DrawingCheckClassification.NormalizeKind(value);
         }
 
         private static bool IsSystemLayer(string value)

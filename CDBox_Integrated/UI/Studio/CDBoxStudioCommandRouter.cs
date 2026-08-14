@@ -378,7 +378,21 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK)
                     return new CDBoxStudioRouteResult { Handled = true };
 
-                CDBoxInstallResult update = CDBoxInstaller.ScheduleUpdateFromDll(dialog.FileName);
+                CDBoxInstallResult update;
+                Autodesk.AutoCAD.ApplicationServices.Document document =
+                    Autodesk.AutoCAD.ApplicationServices.Application
+                        .DocumentManager.MdiActiveDocument;
+                using (var progress = CDBoxProgressSession.Start(document,
+                    "本地更新准备", "正在检查并收集本地更新文件…",
+                    "LocalUpdate", "local-update-progress", false))
+                {
+                    update = CDBoxInstaller.ScheduleUpdateFromDll(
+                        dialog.FileName, progress.Report);
+                    if (update.Success)
+                        progress.Complete("本地更新已准备，请关闭 AutoCAD 完成安装。");
+                    else
+                        progress.Fail("本地更新准备失败。");
+                }
                 CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
                 if (update.Success) app.InstalledPath = update.InstallRoot;
                 CDBoxAppSettingsStore.Save(app);
@@ -626,7 +640,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.6.1 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 3.6.2 独立窗口失败。", ex);
             }
             return result;
         }

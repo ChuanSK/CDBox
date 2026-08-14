@@ -19,8 +19,6 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         private static IFloatingCenter _center;
         private static FloatingCenterWindow _window;
         private static FloatingMessageCardWindow _messageCard;
-        private static readonly FloatingMessagePresentationQueue CardQueue =
-            new FloatingMessagePresentationQueue(8);
         private static readonly Dictionary<string, DateTime> PresentedCards =
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         private static Dispatcher _dispatcher;
@@ -29,7 +27,6 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         private static bool _temporaryHidden;
         private static bool _lastCadMinimized;
         private static string _activeDocumentId = string.Empty;
-        private static bool _suppressCardAdvance;
 
         public static bool CanPresent
         {
@@ -49,6 +46,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 if (_initialized) return;
                 _center = center;
                 _dispatcher = Dispatcher.CurrentDispatcher;
+                CDBoxUiResponsiveness.Initialize(_dispatcher);
                 CDBoxStudioSettings initialSettings =
                     CDBoxStudioSettingsStore.Load();
                 _temporaryHidden = !initialSettings.FloatingCenterShowOnStartup;
@@ -87,7 +85,6 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 _window = null;
                 card = _messageCard;
                 _messageCard = null;
-                CardQueue.Clear();
                 PresentedCards.Clear();
                 _center = null;
                 _dispatcher = null;
@@ -283,10 +280,10 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 _window.ExpandedChanged += delegate
                 {
                     if (_window.IsExpanded) HideMessageCard(false);
-                    else if (!_suppressCardAdvance)
+                    else
                     {
+                        RemovePresentedActiveMessages(_activeDocumentId);
                         QueuePresentationForActiveDocument(_activeDocumentId);
-                        TryShowNextCard();
                     }
                 };
                 _window.AnchorChanged += delegate
@@ -413,7 +410,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Ignored = CadDrawingCheckCoordinator.GetIgnoredMessages(document)
             });
             _window.ShowShell(initial);
-            if (!_window.IsExpanded) TryShowNextCard();
+            if (!_window.IsExpanded) QueuePresentationForActiveDocument(id);
         }
 
         private static string ResolveDocumentName(Document document)
@@ -458,7 +455,6 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 CadFloatingDocumentIdentity.GetDocumentId(e.Document);
             BeginOnUi(delegate
             {
-                if (!string.IsNullOrWhiteSpace(id)) CardQueue.ClearDocument(id);
                 RemovePresentedDocument(id);
                 HideMessageCard(false);
                 Refresh(false);
@@ -522,13 +518,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             foreach (FloatingMessage message in active)
                 if (message != null && !string.IsNullOrWhiteSpace(message.Id))
                     activeIds.Add(message.Id);
-            CardQueue.RemoveInactivePersistent(documentId, activeIds);
-            if (_messageCard != null && _messageCard.IsVisible &&
-                string.Equals(_messageCard.DocumentId, documentId,
-                    StringComparison.OrdinalIgnoreCase) &&
-                _messageCard.MessageIsPersistent &&
-                !activeIds.Contains(_messageCard.MessageId))
-                CloseCurrentCardImmediately();
+            if (_messageCard != null)
+                _messageCard.RemoveInactivePersistent(documentId, activeIds);
             foreach (FloatingMessage message in active)
             {
                 if (message != null && message.PresentAsCard)
@@ -551,80 +542,20 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             if (PresentedCards.TryGetValue(presentationKey, out shownVersion)
                 && version <= shownVersion)
             {
-                if (message.IsPersistent &&
-                    (_messageCard == null || !_messageCard.IsVisible ||
-                     !string.Equals(_messageCard.MessageId, message.Id,
-                         StringComparison.OrdinalIgnoreCase)) &&
-                    !CardQueue.Contains(message.DocumentId, message.Id))
-                    CardQueue.Enqueue(message);
                 return;
             }
-            PresentedCards[presentationKey] = version;
             EnsureMessageCard();
             if (_messageCard == null) return;
             CDBoxStudioSettings settings = CDBoxStudioSettingsStore.Load();
             if (message.Kind == FloatingMessageKind.Prompt)
             {
-                CardQueue.RemoveSupersededBy(message);
                 if (_window != null && _window.IsExpanded)
-                {
-                    _suppressCardAdvance = true;
-                    try { _window.ClosePanelImmediately(); }
-                    finally { _suppressCardAdvance = false; }
-                }
+                    _window.ClosePanelImmediately();
             }
-            if (_messageCard.IsVisible && string.Equals(_messageCard.MessageId,
-                message.Id, StringComparison.OrdinalIgnoreCase))
-            {
-                _messageCard.UpdateMessage(message,
-                    _window.GetCollapsedAnchor(), settings);
-                return;
-            }
-            if (_messageCard.IsVisible)
-            {
-                int incomingRank = FloatingMessagePresentationQueue
-                    .PresentationRank(message);
-                FloatingMessage currentMessage = CurrentCardMessage();
-                int currentRank = FloatingMessagePresentationQueue
-                    .PresentationRank(currentMessage);
-                if (_messageCard.MessageKind == FloatingMessageKind.Prompt &&
-                    incomingRank < currentRank && currentMessage != null &&
-                    MessageVersion(message) <= MessageVersion(currentMessage))
-                    return;
-                if (incomingRank > currentRank &&
-                    _messageCard.MessageKind != FloatingMessageKind.Prompt)
-                {
-                    _messageCard.UpdateMessage(message,
-                        _window.GetCollapsedAnchor(), settings);
-                }
-                else if (message.Kind == FloatingMessageKind.Prompt &&
-                    _messageCard.MessageKind == FloatingMessageKind.Prompt)
-                {
-                    if (currentMessage != null)
-                        CardQueue.Enqueue(currentMessage);
-                    _messageCard.UpdateMessage(message,
-                        _window.GetCollapsedAnchor(), settings);
-                }
-                else CardQueue.Enqueue(message);
-                return;
-            }
-            if (_window == null || _window.IsExpanded)
-                CardQueue.Enqueue(message);
-            else ShowCard(message, settings);
-        }
-
-        private static FloatingMessage CurrentCardMessage()
-        {
-            if (_center == null || _messageCard == null) return null;
-            string id = _messageCard.DocumentId;
-            string messageId = _messageCard.MessageId;
-            foreach (FloatingMessage message in _center.GetActiveMessages(id))
-                if (message != null && string.Equals(message.Id, messageId,
-                    StringComparison.OrdinalIgnoreCase)) return message;
-            foreach (FloatingMessage message in _center.GetHistory(id))
-                if (message != null && string.Equals(message.Id, messageId,
-                    StringComparison.OrdinalIgnoreCase)) return message;
-            return null;
+            if (_window == null || _window.IsExpanded) return;
+            PresentedCards[presentationKey] = version;
+            _messageCard.UpsertMessage(message,
+                _window.GetCollapsedAnchor(), settings);
         }
 
         private static void EnsureMessageCard()
@@ -642,16 +573,18 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 catch { }
                 if (owner != IntPtr.Zero)
                     new WindowInteropHelper(_messageCard).Owner = owner;
-                _messageCard.CardClosed += delegate
+                _messageCard.CardDismissed += delegate(object sender,
+                    FloatingMessageCardEventArgs e)
                 {
-                    if (!_suppressCardAdvance) TryShowNextCard();
+                    // Closing a toast only dismisses its presentation. Persistent
+                    // tasks remain available in the expanded floating center.
                 };
-                _messageCard.DetailsRequested += delegate
+                _messageCard.DetailsRequested += delegate(object sender,
+                    FloatingMessageCardEventArgs e)
                 {
-                    if (_window != null && _messageCard != null &&
-                        _messageCard.MessageKind != FloatingMessageKind.Prompt)
+                    if (_window != null && e != null && e.Message != null &&
+                        e.Message.Kind != FloatingMessageKind.Prompt)
                     {
-                        _messageCard.BeginClose();
                         _window.OpenPanel();
                     }
                 };
@@ -663,56 +596,17 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             }
         }
 
-        private static void ShowCard(FloatingMessage message,
-            CDBoxStudioSettings settings)
-        {
-            if (_messageCard == null || _window == null || message == null) return;
-            _messageCard.ShowMessage(message, _window.GetCollapsedAnchor(), settings);
-        }
-
         private static void TryShowNextCard()
         {
             if (_window == null || !_window.IsVisible || _window.IsExpanded ||
                 _temporaryHidden || IsCadMinimized()) return;
-            EnsureMessageCard();
-            if (_messageCard == null || _messageCard.IsVisible) return;
-            FloatingMessage next;
-            while ((next = CardQueue.Dequeue(_activeDocumentId)) != null)
-            {
-                if (!IsStillPresentable(next)) continue;
-                ShowCard(next, CDBoxStudioSettingsStore.Load());
-                return;
-            }
-        }
-
-        private static bool IsStillPresentable(FloatingMessage message)
-        {
-            if (message == null || !message.IsPersistent) return message != null;
-            if (_center == null) return false;
-            foreach (FloatingMessage active in
-                _center.GetActiveMessages(message.DocumentId))
-                if (active != null && string.Equals(active.Id, message.Id,
-                    StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
-        }
-
-        private static void CloseCurrentCardImmediately()
-        {
-            if (_messageCard == null || !_messageCard.IsVisible) return;
-            _suppressCardAdvance = true;
-            try { _messageCard.CloseImmediately(); }
-            finally { _suppressCardAdvance = false; }
+            QueuePresentationForActiveDocument(_activeDocumentId);
         }
 
         private static void HideMessageCard(bool clearQueue)
         {
-            if (clearQueue) CardQueue.Clear();
             if (_messageCard != null && _messageCard.IsVisible)
-            {
-                _suppressCardAdvance = true;
-                try { _messageCard.CloseImmediately(); }
-                finally { _suppressCardAdvance = false; }
-            }
+                _messageCard.CloseImmediately();
         }
 
         private static string PresentationKey(FloatingMessage message)
@@ -738,6 +632,13 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     remove.Add(key);
             foreach (string key in remove) PresentedCards.Remove(key);
+        }
+
+        private static void RemovePresentedActiveMessages(string documentId)
+        {
+            if (_center == null || string.IsNullOrWhiteSpace(documentId)) return;
+            foreach (FloatingMessage message in _center.GetActiveMessages(documentId))
+                if (message != null) PresentedCards.Remove(PresentationKey(message));
         }
 
         [DllImport("user32.dll")]

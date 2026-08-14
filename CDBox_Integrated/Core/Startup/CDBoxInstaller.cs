@@ -190,11 +190,19 @@ namespace TCPipeAutoDraw.Core.Startup
 
         public static CDBoxInstallResult ScheduleUpdateFromDll(string newDllPath)
         {
+            return ScheduleUpdateFromDll(newDllPath, null);
+        }
+
+        public static CDBoxInstallResult ScheduleUpdateFromDll(
+            string newDllPath, Action<int, int, string> progress)
+        {
             string installRoot = GetInstallRoot();
             string packageSourceRoot = string.Empty;
 
             try
             {
+                ReportUpdateProgress(progress, 0, 7,
+                    "正在检查本地更新文件…");
                 if (string.IsNullOrWhiteSpace(newDllPath) || !File.Exists(newDllPath))
                 {
                     return CDBoxInstallResult.Fail("未找到选择的新版 CDBox.dll。", installRoot);
@@ -232,11 +240,19 @@ namespace TCPipeAutoDraw.Core.Startup
                 string stagingContents = Path.Combine(stagingBundle, ContentsFolderName);
                 string packagePath = Path.Combine(updateDirectory, "CDBox.Local.Update.zip");
 
+                ReportUpdateProgress(progress, 1, 7,
+                    "正在收集完整运行文件…");
                 Directory.CreateDirectory(stagingContents);
-                CopyRuntimeFiles(sourceDir, stagingContents);
+                CopyRuntimeFiles(sourceDir, stagingContents, delegate
+                {
+                    ReportUpdateProgress(progress, 1, 7,
+                        "正在收集完整运行文件…");
+                });
                 WritePackageContents(stagingBundle, Path.GetFileName(newDllPath));
                 RegisterDemandLoad(GetInstalledDllPath(Path.GetFileName(newDllPath)));
 
+                ReportUpdateProgress(progress, 2, 7,
+                    "正在校验更新包完整性…");
                 bool stagingValid;
                 string selfCheck = RunInstallSelfCheck(stagingBundle, Path.GetFileName(newDllPath), out stagingValid);
                 CDBoxInstallLogger.Info("更新暂存目录准备完成。暂存目录：" + stagingBundle + "；源目录：" + sourceDir);
@@ -247,8 +263,22 @@ namespace TCPipeAutoDraw.Core.Startup
                     return CDBoxInstallResult.Fail("更新暂存包未通过完整性检查，现有安装不会被替换。\r\n\r\n" + selfCheck, installRoot);
                 }
 
-                ZipFile.CreateFromDirectory(packageSourceRoot, packagePath, CompressionLevel.Optimal, false);
-                string packageSha256 = ComputeSha256(packagePath);
+                ReportUpdateProgress(progress, 3, 7,
+                    "正在压缩本地更新包…");
+                CreateZipFromDirectory(packageSourceRoot, packagePath,
+                    delegate
+                    {
+                        ReportUpdateProgress(progress, 3, 7,
+                            "正在压缩本地更新包…");
+                    });
+                ReportUpdateProgress(progress, 4, 7,
+                    "正在计算更新包校验值…");
+                string packageSha256 = ComputeSha256(packagePath,
+                    delegate
+                    {
+                        ReportUpdateProgress(progress, 4, 7,
+                            "正在计算更新包校验值…");
+                    });
                 Directory.Delete(packageSourceRoot, true);
                 packageSourceRoot = string.Empty;
 
@@ -273,6 +303,8 @@ namespace TCPipeAutoDraw.Core.Startup
                 };
 
                 string sourceUpdater = Path.Combine(sourceDir, "Updater", "CDBoxUpdater.exe");
+                ReportUpdateProgress(progress, 5, 7,
+                    "正在启动独立更新器…");
                 CDBoxStudioUpdaterLaunchResult launch = CDBoxStudioUpdaterLauncher.PrepareAndLaunch(download, sourceUpdater);
                 if (launch == null || !launch.Started)
                 {
@@ -283,6 +315,8 @@ namespace TCPipeAutoDraw.Core.Startup
                         installRoot);
                 }
 
+                ReportUpdateProgress(progress, 7, 7,
+                    "本地更新已准备完成。");
                 return new CDBoxInstallResult
                 {
                     Success = true,
@@ -310,15 +344,80 @@ namespace TCPipeAutoDraw.Core.Startup
             }
         }
 
+        private static void ReportUpdateProgress(
+            Action<int, int, string> progress, int current, int total,
+            string message)
+        {
+            if (progress == null) return;
+            try { progress(current, total, message); }
+            catch { }
+        }
+
+        private static void CreateZipFromDirectory(string sourceDirectory,
+            string archivePath, Action heartbeat)
+        {
+            string root = Path.GetFullPath(sourceDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            using (FileStream archiveStream = new FileStream(archivePath,
+                FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            using (var archive = new ZipArchive(archiveStream,
+                ZipArchiveMode.Create, false, Encoding.UTF8))
+            {
+                foreach (string file in Directory.GetFiles(root, "*",
+                    SearchOption.AllDirectories))
+                {
+                    string fullPath = Path.GetFullPath(file);
+                    string relativePath = fullPath.Substring(root.Length)
+                        .Replace(Path.DirectorySeparatorChar, '/');
+                    ZipArchiveEntry entry = archive.CreateEntry(relativePath,
+                        CompressionLevel.Optimal);
+                    using (FileStream input = new FileStream(fullPath,
+                        FileMode.Open, FileAccess.Read, FileShare.Read))
+                    using (Stream output = entry.Open())
+                    {
+                        CopyStreamWithHeartbeat(input, output, heartbeat);
+                    }
+                    if (heartbeat != null) heartbeat();
+                }
+            }
+        }
+
         private static string ComputeSha256(string path)
+        {
+            return ComputeSha256(path, null);
+        }
+
+        private static string ComputeSha256(string path, Action heartbeat)
         {
             using (FileStream stream = File.OpenRead(path))
             using (SHA256 sha = SHA256.Create())
             {
-                byte[] hash = sha.ComputeHash(stream);
+                byte[] buffer = new byte[1024 * 1024];
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    sha.TransformBlock(buffer, 0, read, null, 0);
+                    if (heartbeat != null) heartbeat();
+                }
+                sha.TransformFinalBlock(new byte[0], 0, 0);
+                byte[] hash = sha.Hash;
                 var text = new StringBuilder(hash.Length * 2);
                 foreach (byte value in hash) text.Append(value.ToString("x2"));
                 return text.ToString();
+            }
+        }
+
+        private static void CopyStreamWithHeartbeat(Stream input,
+            Stream output, Action heartbeat)
+        {
+            byte[] buffer = new byte[1024 * 1024];
+            int read;
+            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                output.Write(buffer, 0, read);
+                if (heartbeat != null) heartbeat();
             }
         }
 
@@ -336,7 +435,8 @@ namespace TCPipeAutoDraw.Core.Startup
             return "local-" + DateTime.Now.ToString("yyyyMMddHHmmss");
         }
 
-        private static void CopyRuntimeFiles(string sourceDir, string contentsDir)
+        private static void CopyRuntimeFiles(string sourceDir,
+            string contentsDir, Action heartbeat = null)
         {
             if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir)) throw new DirectoryNotFoundException("源目录不存在：" + sourceDir);
 
@@ -359,28 +459,30 @@ namespace TCPipeAutoDraw.Core.Startup
                 string dest = Path.Combine(contentsDir, name);
                 if (PathsEqual(file, dest)) continue;
                 File.Copy(file, dest, true);
+                if (heartbeat != null) heartbeat();
             }
 
-            CopyKnownResourceDirectories(sourceDir, contentsDir);
-            CopyTemplates(sourceDir, contentsDir);
+            CopyKnownResourceDirectories(sourceDir, contentsDir, heartbeat);
+            CopyTemplates(sourceDir, contentsDir, heartbeat);
         }
 
-        private static void CopyKnownResourceDirectories(string sourceDir, string contentsDir)
+        private static void CopyKnownResourceDirectories(string sourceDir,
+            string contentsDir, Action heartbeat = null)
         {
             foreach (string root in GetSourceSearchRoots(sourceDir))
             {
-                CopyDirectoryIfExists(Path.Combine(root, "runtimes"), Path.Combine(contentsDir, "runtimes"));
-                CopyDirectoryIfExists(Path.Combine(root, "Studio"), Path.Combine(contentsDir, "Studio"));
-                CopyDirectoryIfExists(Path.Combine(root, "Web"), Path.Combine(contentsDir, "Web"));
-                CopyDirectoryIfExists(Path.Combine(root, "wwwroot"), Path.Combine(contentsDir, "wwwroot"));
-                CopyDirectoryIfExists(Path.Combine(root, "dist"), Path.Combine(contentsDir, "dist"));
-                CopyDirectoryIfExists(Path.Combine(root, "assets"), Path.Combine(contentsDir, "assets"));
-                CopyDirectoryIfExists(Path.Combine(root, "Updater"), Path.Combine(contentsDir, "Updater"));
-                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "Web"), Path.Combine(contentsDir, "Studio", "Web"));
-                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "dist"), Path.Combine(contentsDir, "Studio", "dist"));
-                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Studio"), Path.Combine(contentsDir, "Studio"));
-                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Web"), Path.Combine(contentsDir, "Web"));
-                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "wwwroot"), Path.Combine(contentsDir, "wwwroot"));
+                CopyDirectoryIfExists(Path.Combine(root, "runtimes"), Path.Combine(contentsDir, "runtimes"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "Studio"), Path.Combine(contentsDir, "Studio"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "Web"), Path.Combine(contentsDir, "Web"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "wwwroot"), Path.Combine(contentsDir, "wwwroot"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "dist"), Path.Combine(contentsDir, "dist"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "assets"), Path.Combine(contentsDir, "assets"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "Updater"), Path.Combine(contentsDir, "Updater"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "Web"), Path.Combine(contentsDir, "Studio", "Web"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "UI", "Studio", "dist"), Path.Combine(contentsDir, "Studio", "dist"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Studio"), Path.Combine(contentsDir, "Studio"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "Web"), Path.Combine(contentsDir, "Web"), heartbeat);
+                CopyDirectoryIfExists(Path.Combine(root, "CDBox_Integrated", "wwwroot"), Path.Combine(contentsDir, "wwwroot"), heartbeat);
             }
         }
 
@@ -416,13 +518,14 @@ namespace TCPipeAutoDraw.Core.Startup
             roots.Add(path);
         }
 
-        private static void CopyDirectoryIfExists(string sourceDir, string targetDir)
+        private static void CopyDirectoryIfExists(string sourceDir,
+            string targetDir, Action heartbeat = null)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir)) return;
                 if (PathsEqual(sourceDir, targetDir)) return;
-                CopyDirectory(sourceDir, targetDir);
+                CopyDirectory(sourceDir, targetDir, heartbeat);
                 CDBoxInstallLogger.Info("复制资源目录：" + sourceDir + " -> " + targetDir);
             }
             catch (Exception ex)
@@ -431,7 +534,8 @@ namespace TCPipeAutoDraw.Core.Startup
             }
         }
 
-        private static void CopyTemplates(string sourceDir, string contentsDir)
+        private static void CopyTemplates(string sourceDir,
+            string contentsDir, Action heartbeat = null)
         {
             string targetTemplates = Path.Combine(contentsDir, "Templates");
             string[] candidates = new[]
@@ -444,12 +548,13 @@ namespace TCPipeAutoDraw.Core.Startup
             foreach (string candidate in candidates)
             {
                 if (!Directory.Exists(candidate)) continue;
-                CopyDirectory(candidate, targetTemplates);
+                CopyDirectory(candidate, targetTemplates, heartbeat);
                 return;
             }
         }
 
-        private static void CopyDirectory(string sourceDir, string targetDir)
+        private static void CopyDirectory(string sourceDir, string targetDir,
+            Action heartbeat = null)
         {
             if (PathsEqual(sourceDir, targetDir)) return;
             Directory.CreateDirectory(targetDir);
@@ -457,12 +562,13 @@ namespace TCPipeAutoDraw.Core.Startup
             {
                 string dest = Path.Combine(targetDir, Path.GetFileName(file));
                 File.Copy(file, dest, true);
+                if (heartbeat != null) heartbeat();
             }
 
             foreach (string dir in Directory.GetDirectories(sourceDir))
             {
                 string dest = Path.Combine(targetDir, Path.GetFileName(dir));
-                CopyDirectory(dir, dest);
+                CopyDirectory(dir, dest, heartbeat);
             }
         }
 
@@ -561,7 +667,7 @@ namespace TCPipeAutoDraw.Core.Startup
             string upgradeCode = "{E8BB42A0-7694-4C58-98D6-13C2D2814A1E}";
             if (string.IsNullOrWhiteSpace(assemblyFileName)) assemblyFileName = GetMainAssemblyFileName();
             string appVersion = string.IsNullOrWhiteSpace(CDBoxStudioUpdateService.CurrentVersion)
-                ? "3.6.1" : CDBoxStudioUpdateService.CurrentVersion;
+                ? "3.6.2" : CDBoxStudioUpdateService.CurrentVersion;
 
             string[] commands = new[] { "CDBOX", "CDSTUDIO", "CDS", "CDSET", "CDINSTALL", "CDUNINSTALL", "CDUPDATE", "CDABOUT", "CDBZSET", "BZSZ", "CDLAYER", "TCGL", "CDSURF", "BMJ", "MJBZ", "CDLEN", "GCBZ", "CDNODE", "JDBZ", "CDSEC", "DM", "PLDM", "ZDM", "ZDMSZ", "SX", "SXQC", "SXMRB", "GCL", "CDQBOARD", "CDEXCEL", "GU_XL", "TCFRAMEADD", "TCFRAMECUT", "TCFRAMELAYOUT", "TCFRAMEPLACE", "TCFRAMESET", "CDSHORTCODE", "CDJMSB", "CDSHORTCODESET", "CDJMSZ" };
             var xml = new StringBuilder();

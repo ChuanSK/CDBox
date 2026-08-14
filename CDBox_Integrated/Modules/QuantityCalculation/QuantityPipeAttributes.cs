@@ -12,7 +12,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     /// </summary>
     public sealed class QuantityPipeAttributes
     {
-        public const string SchemaVersion = "3";
+        public const string SchemaVersion = "4";
         public const string KindMainPipe = "主管";
         public const string KindBranchPipe = "支管";
         public const string KindNodeWell = "节点/检查井";
@@ -86,6 +86,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         [Category("02 主管属性")]
         [DisplayName("终点深度 m")]
         public double EndDepth { get; set; }
+
+        [Category("02 主管属性")]
+        [DisplayName("起点内底标高 m")]
+        [Description("由起点井自然标高、井深及沉泥井扣减自动计算；特殊管线允许手动修改。")]
+        public double StartInvertElevation { get; set; }
+
+        [Category("02 主管属性")]
+        [DisplayName("终点内底标高 m")]
+        [Description("由终点井自然标高、井深及沉泥井扣减自动计算；特殊管线允许手动修改。")]
+        public double EndInvertElevation { get; set; }
 
         [Category("02 主管属性")]
         [DisplayName("平均深度 m")]
@@ -256,6 +266,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 EndNode = EndNode ?? string.Empty,
                 StartDepth = StartDepth,
                 EndDepth = EndDepth,
+                StartInvertElevation = StartInvertElevation,
+                EndInvertElevation = EndInvertElevation,
                 AverageDepth = AverageDepth,
                 TrenchWidth = TrenchWidth,
                 RoadThickness = RoadThickness,
@@ -483,6 +495,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double depth = wellAttrs.WellDepth + cushion - GetSiltWellDeductDepth(wellAttrs);
             if (depth <= 0) return fallback;
             return depth;
+        }
+
+        public static double CalculateDesignInvertElevationByWell(
+            QuantityPipeAttributes wellAttrs, double fallback)
+        {
+            if (wellAttrs == null || wellAttrs.WellDepth <= 0 ||
+                double.IsNaN(wellAttrs.GroundElevation) ||
+                double.IsInfinity(wellAttrs.GroundElevation)) return fallback;
+            return wellAttrs.GroundElevation - wellAttrs.WellDepth +
+                GetSiltWellDeductDepth(wellAttrs);
         }
 
         public static double ParseDouble(string text, double fallback)

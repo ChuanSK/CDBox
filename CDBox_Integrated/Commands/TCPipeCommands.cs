@@ -97,8 +97,8 @@ namespace TCPipeAutoDraw.Commands
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
             string baseDirectory = Path.GetDirectoryName(assemblyPath) ?? AppDomain.CurrentDomain.BaseDirectory;
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
-            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.6.1", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 30601, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.6.2", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 30602, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
@@ -305,7 +305,19 @@ namespace TCPipeAutoDraw.Commands
 
                 if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK) return;
 
-                CDBoxInstallResult result = CDBoxInstaller.ScheduleUpdateFromDll(dialog.FileName);
+                Document document = AcadApp.DocumentManager.MdiActiveDocument;
+                CDBoxInstallResult result;
+                using (var progress = CDBoxProgressSession.Start(document,
+                    "本地更新准备", "正在检查并收集本地更新文件…",
+                    "LocalUpdate", "local-update-progress", false))
+                {
+                    result = CDBoxInstaller.ScheduleUpdateFromDll(
+                        dialog.FileName, progress.Report);
+                    if (result.Success)
+                        progress.Complete("本地更新已准备，请关闭 AutoCAD 完成安装。");
+                    else
+                        progress.Fail("本地更新准备失败。");
+                }
                 CDBoxAppSettings settings = CDBoxAppSettingsStore.Load();
                 if (result.Success) settings.InstalledPath = result.InstallRoot;
                 CDBoxAppSettingsStore.Save(settings);

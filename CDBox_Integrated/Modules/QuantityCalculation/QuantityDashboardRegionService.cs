@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
+using TCPipeAutoDraw.Core.Cad;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
@@ -13,6 +17,99 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     {
         public const string RegionLayerName = "CDBox-工程量统计区域";
         public const string RegionRegAppName = "CDBoxQuantityRegion";
+
+        public static QuantityDashboardRequest GetSavedScope(Document doc)
+        {
+            var result = new QuantityDashboardRequest();
+            if (doc == null) return result;
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                string regionId = LoadSavedRegionId(doc.Database);
+                if (regionId.Length > 0 &&
+                    !FindRegionObjectId(doc.Database, tr, regionId).IsNull)
+                {
+                    result.scopeType = "region";
+                    result.regionId = regionId;
+                }
+                tr.Commit();
+            }
+            result.documentId = QuantityDashboardService.GetDocumentId(doc);
+            return result;
+        }
+
+        public static void SaveScope(Document doc, string scopeType,
+            string regionId)
+        {
+            if (doc == null) return;
+            bool useRegion = string.Equals(scopeType, "region",
+                StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(regionId);
+            string savedRegionId = string.Empty;
+            using (Transaction tr = doc.Database.TransactionManager
+                .StartOpenCloseTransaction())
+            {
+                savedRegionId = useRegion &&
+                    !FindRegionObjectId(doc.Database, tr, regionId).IsNull
+                    ? regionId.Trim() : string.Empty;
+                tr.Commit();
+            }
+            SaveSavedRegionId(doc.Database, savedRegionId);
+        }
+
+        public static ObjectId GetSavedRegionObjectId(Database db,
+            Transaction tr)
+        {
+            string regionId = LoadSavedRegionId(db);
+            return regionId.Length > 0
+                ? FindRegionObjectId(db, tr, regionId) : ObjectId.Null;
+        }
+
+        public static List<string> FilterHandlesToSavedScope(Document doc,
+            IEnumerable<string> handles)
+        {
+            var values = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string raw in handles ?? new string[0])
+            {
+                string value = (raw ?? string.Empty).Trim();
+                if (value.Length > 0 && seen.Add(value)) values.Add(value);
+            }
+            if (doc == null || values.Count == 0) return values;
+
+            using (Transaction tr = doc.Database.TransactionManager
+                .StartOpenCloseTransaction())
+            {
+                ObjectId regionObjectId = GetSavedRegionObjectId(
+                    doc.Database, tr);
+                if (regionObjectId.IsNull)
+                {
+                    tr.Commit();
+                    return values;
+                }
+                Polyline region = tr.GetObject(regionObjectId,
+                    OpenMode.ForRead, false) as Polyline;
+                var filtered = new List<string>();
+                foreach (string value in values)
+                {
+                    long raw;
+                    if (!long.TryParse(value, NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture, out raw)) continue;
+                    try
+                    {
+                        ObjectId id = doc.Database.GetObjectId(false,
+                            new Handle(raw), 0);
+                        Entity entity = tr.GetObject(id, OpenMode.ForRead,
+                            false) as Entity;
+                        if (entity != null && !entity.IsErased &&
+                            IsEntityIncluded(entity, region))
+                            filtered.Add(value);
+                    }
+                    catch { }
+                }
+                tr.Commit();
+                return filtered;
+            }
+        }
 
         public static List<QuantityDashboardRegionInfo> GetRegions(Document doc)
         {
@@ -140,6 +237,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (doc == null) throw new ArgumentNullException("doc");
             ObjectId id = FindRegionObjectId(doc, regionId);
             if (id.IsNull) throw new InvalidOperationException("未找到统计区域。");
+            bool clearSaved = string.Equals(LoadSavedRegionId(doc.Database),
+                regionId, StringComparison.OrdinalIgnoreCase);
             using (doc.LockDocument())
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
@@ -147,6 +246,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (entity != null) entity.Erase();
                 tr.Commit();
             }
+            if (clearSaved) SaveSavedRegionId(doc.Database, string.Empty);
         }
 
         public static ObjectId FindRegionObjectId(Document doc, string regionId)
@@ -170,6 +270,27 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     }
                 }
                 tr.Commit();
+            }
+            return ObjectId.Null;
+        }
+
+        private static ObjectId FindRegionObjectId(Database db,
+            Transaction tr, string regionId)
+        {
+            if (db == null || tr == null ||
+                string.IsNullOrWhiteSpace(regionId)) return ObjectId.Null;
+            BlockTableRecord space = tr.GetObject(db.CurrentSpaceId,
+                OpenMode.ForRead, false) as BlockTableRecord;
+            if (space == null) return ObjectId.Null;
+            foreach (ObjectId id in space)
+            {
+                Polyline pl;
+                try { pl = tr.GetObject(id, OpenMode.ForRead, false) as Polyline; }
+                catch { continue; }
+                QuantityDashboardRegionInfo info = ReadRegionInfo(pl);
+                if (info != null && info.boundaryValid && string.Equals(
+                    info.regionId, regionId.Trim(),
+                    StringComparison.OrdinalIgnoreCase)) return id;
             }
             return ObjectId.Null;
         }
@@ -306,17 +427,70 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void EnsureRegionLayer(Database db, Transaction tr)
         {
-            LayerTable table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-            if (table.Has(RegionLayerName)) return;
-            table.UpgradeOpen();
-            LayerTableRecord layer = new LayerTableRecord
+            ObjectId id = CadLayerService.EnsureGeneratedLayer(db, tr,
+                RegionLayerName, 8);
+            LayerTableRecord layer = tr.GetObject(id, OpenMode.ForWrite,
+                false) as LayerTableRecord;
+            if (layer == null) return;
+            layer.IsPlottable = false;
+            layer.Color = Color.FromColorIndex(ColorMethod.ByAci, 8);
+        }
+
+        private static string LoadSavedRegionId(Database db)
+        {
+            if (db == null) return string.Empty;
+            try
             {
-                Name = RegionLayerName,
-                IsPlottable = false,
-                Color = Color.FromColorIndex(ColorMethod.ByAci, 8)
-            };
-            table.Add(layer);
-            tr.AddNewlyCreatedDBObject(layer, true);
+                string path = GetScopeFile(db);
+                return File.Exists(path)
+                    ? (File.ReadAllText(path, Encoding.UTF8) ?? string.Empty)
+                        .Trim() : string.Empty;
+            }
+            catch { return string.Empty; }
+        }
+
+        private static void SaveSavedRegionId(Database db,
+            string regionId)
+        {
+            if (db == null) return;
+            try
+            {
+                string path = GetScopeFile(db);
+                string value = (regionId ?? string.Empty).Trim();
+                if (value.Length == 0)
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                    return;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, value, new UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        private static string GetScopeFile(Database db)
+        {
+            string key = string.Empty;
+            try
+            {
+                key = Convert.ToString(db.FingerprintGuid,
+                    CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch { }
+            if (string.IsNullOrWhiteSpace(key))
+                try { key = db.Filename ?? string.Empty; } catch { }
+            if (string.IsNullOrWhiteSpace(key)) key = "unsaved-drawing";
+            string root = Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.ApplicationData), "CDBox", "Studio",
+                "QuantityDashboard", "ScopeSelections");
+            using (SHA1 sha = SHA1.Create())
+            {
+                byte[] bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(
+                    key.Trim().ToLowerInvariant()));
+                var name = new StringBuilder(bytes.Length * 2);
+                foreach (byte value in bytes) name.Append(value.ToString("x2"));
+                return Path.Combine(root, name + ".txt");
+            }
         }
 
         private static string PromptRegionName(Editor ed, string defaultName)

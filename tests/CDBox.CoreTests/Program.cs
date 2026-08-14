@@ -39,6 +39,7 @@ namespace CDBox.CoreTests
         private static int Main()
         {
             Run("对象类型识别", TestKindRecognition);
+            Run("节点图层严格识别", TestNodeLayerRecognitionPolicy);
             Run("有效长度与默认表克隆", TestEffectiveLengthAndDefaultClone);
             Run("结构层解析", TestStructureLayers);
             Run("工程量管线分类", TestQuantityPipeClassification);
@@ -103,6 +104,28 @@ namespace CDBox.CoreTests
             True(QuantityPipeAttributes.IsMainPipeKind("污水主管"), "主管应识别为主管");
             Equal(QuantityPipeAttributes.KindNodeWell, QuantityPipeAttributes.DefaultForKind("检查井").ObjectKind, "井类默认表");
             Equal(QuantityPipeAttributes.KindBranchPipe, QuantityPipeAttributes.DefaultForKind("支管").ObjectKind, "支管默认表");
+        }
+
+        private static void TestNodeLayerRecognitionPolicy()
+        {
+            True(QuantityNodeRecognitionPolicy.IsSupportedLayer(
+                    "井", "检查、沉泥井"),
+                "节点必须接受规定的井父属性与合并分类");
+            True(QuantityNodeRecognitionPolicy.IsSupportedLayer(
+                    " 井 ", "检查/沉泥井"),
+                "分类分隔符差异不应影响同一规则");
+            False(QuantityNodeRecognitionPolicy.IsSupportedLayer(
+                    "井", "检查井"),
+                "只有井父属性但分类不符合时不得识别为节点");
+            False(QuantityNodeRecognitionPolicy.IsSupportedLayer(
+                    "构筑物", "检查、沉泥井"),
+                "只有分类符合但父属性不是井时不得识别为节点");
+            Equal(string.Empty,
+                DrawingCheckClassification.NormalizeKind("315井"),
+                "自定义父属性 315井 不得被误判为内置井类型");
+            Equal(string.Empty,
+                DrawingCheckClassification.NormalizeKind("CDBox图层"),
+                "插件输出图层父属性不应参与工程对象检查");
         }
 
         private static void TestFrameLayoutSettingsNormalization()
@@ -1334,7 +1357,7 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("3.6.1", StringComparison.Ordinal) >= 0, "页面应显示 3.6.1 身份");
+            True(standalone.IndexOf("3.6.2", StringComparison.Ordinal) >= 0, "页面应显示 3.6.2 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
@@ -2206,6 +2229,12 @@ namespace CDBox.CoreTests
                 {
                     LayerName = "污水主管-DN300",
                     ObjectHandles = new List<string> { "10" }
+                },
+                new DrawingCheckLayerSnapshot
+                {
+                    LayerName = "旧项目自定义图层",
+                    ParentGroup = "未知父属性",
+                    ObjectHandles = new List<string> { "40" }
                 }
             };
             var objects = new List<DrawingCheckObjectSnapshot>
@@ -2224,7 +2253,11 @@ namespace CDBox.CoreTests
                     AverageDepth = 0.20,
                     PipeOuterDiameter = 0.30,
                     BackfillStructure = "管线层 0.20 管线层",
-                    PipeLayerBelowDiameter = true
+                    PipeLayerBelowDiameter = true,
+                    StartConnectionEvaluated = true,
+                    StartConnectedToAssignedNode = true,
+                    EndConnectionEvaluated = true,
+                    EndConnectedToAssignedNode = true
                 },
                 new DrawingCheckObjectSnapshot
                 {
@@ -2250,12 +2283,18 @@ namespace CDBox.CoreTests
 
             List<DrawingCheckIssue> issues = DrawingCheckRuleEvaluator.Evaluate(
                 "doc-check-a", layers, objects, annotations);
-            True(issues.Any(x => x.RuleId ==
+            False(issues.Any(x => x.RuleId ==
                     DrawingCheckRuleEvaluator.LayerParentMissingRule),
-                "识别候选图层缺少父属性时应形成检查问题");
+                "图纸检查不应再报告图层父属性缺失");
+            False(issues.Any(x => x.RuleId ==
+                    DrawingCheckRuleEvaluator.LayerParentInvalidRule),
+                "图纸检查不应再报告图层父属性无效");
             True(issues.Any(x => x.RuleId ==
                     DrawingCheckRuleEvaluator.PipeRelationRule),
                 "主管起终点相同应形成管线关系问题");
+            False(issues.Any(x => string.Equals(x.Title,
+                    "管线端点与关联井未连接", StringComparison.Ordinal)),
+                "属性编辑器连接识别成功时不得再按简化几何规则误报断点");
             True(issues.Any(x => x.RuleId ==
                     DrawingCheckRuleEvaluator.DataValidityRule),
                 "深度或管线层小于外径应形成数据合法性问题");
@@ -2264,6 +2303,35 @@ namespace CDBox.CoreTests
                 "失效标注绑定应形成检查问题");
             True(!issues.Any(x => x.ObjectHandles.Contains("20")),
                 "特殊对象必须跳过数据质量检查");
+
+            var invertObjects = new List<DrawingCheckObjectSnapshot>
+            {
+                new DrawingCheckObjectSnapshot
+                {
+                    Handle = "A1", ObjectKind = "主管",
+                    HasSavedAttributes = true,
+                    DetectedEndNode = "W9",
+                    EndInvertElevation = 100.00
+                },
+                new DrawingCheckObjectSnapshot
+                {
+                    Handle = "A2", ObjectKind = "主管",
+                    HasSavedAttributes = true,
+                    DetectedStartNode = "W9",
+                    StartInvertElevation = 99.92
+                }
+            };
+            List<DrawingCheckIssue> invertIssues =
+                DrawingCheckRuleEvaluator.Evaluate("doc-invert",
+                    new List<DrawingCheckLayerSnapshot>(), invertObjects,
+                    new List<DrawingCheckAnnotationSnapshot>());
+            DrawingCheckIssue invertIssue = invertIssues.FirstOrDefault(x =>
+                x.RuleId == DrawingCheckRuleEvaluator
+                    .PipeInvertConsistencyRule);
+            True(invertIssue != null,
+                "同一物理节点的管线内底标高不一致时应生成弱提示");
+            Equal(DrawingCheckSeverity.Info, invertIssue.Severity,
+                "内底标高不一致仅作弱提示，不得升级为强错误");
 
             List<DrawingCheckGroup> groups = DrawingCheckRuleEvaluator.Group(
                 "doc-check-a", issues);

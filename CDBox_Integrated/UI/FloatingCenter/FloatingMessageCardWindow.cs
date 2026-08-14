@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,63 +8,58 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using TCPipeAutoDraw.Core.FloatingCenter;
 using TCPipeAutoDraw.UI.Studio;
-using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace TCPipeAutoDraw.UI.FloatingCenter
 {
+    internal sealed class FloatingMessageCardEventArgs : EventArgs
+    {
+        public FloatingMessageCardEventArgs(FloatingMessage message)
+        {
+            Message = message == null ? null : message.Clone();
+        }
+
+        public FloatingMessage Message { get; private set; }
+    }
+
+    /// <summary>
+    /// A single no-activate host containing all current toast cards. Cards are
+    /// independently timed and ordered by importance, so one notification can
+    /// never delay another notification.
+    /// </summary>
     internal sealed class FloatingMessageCardWindow : Window
     {
-        private readonly Border _root;
-        private readonly Border _shadowSurface;
-        private readonly Border _glyphHost;
-        private readonly TextBlock _glyph;
-        private readonly TextBlock _title;
-        private readonly TextBlock _message;
-        private readonly TextBlock _repeat;
-        private readonly ProgressBar _progress;
-        private readonly Button _close;
+        private sealed class CardState
+        {
+            public FloatingMessage Message;
+            public Border Visual;
+            public double RemainingSeconds;
+            public bool AutoClose;
+            public bool Closing;
+        }
+
+        private readonly ScrollViewer _scroll;
+        private readonly StackPanel _cards;
         private readonly DispatcherTimer _countdown;
-        private FloatingMessage _current;
+        private readonly Dictionary<string, CardState> _states =
+            new Dictionary<string, CardState>(StringComparer.OrdinalIgnoreCase);
         private DateTime _lastTick;
-        private double _remainingSeconds;
-        private bool _autoClose;
         private bool _hovered;
-        private bool _closing;
         private CDBoxStudioSettings _settings;
 
-        public event EventHandler CardClosed;
-        public event EventHandler DetailsRequested;
+        public event EventHandler<FloatingMessageCardEventArgs> CardDismissed;
+        public event EventHandler<FloatingMessageCardEventArgs> DetailsRequested;
 
-        public string MessageId
-        {
-            get { return _current == null ? string.Empty : _current.Id ?? string.Empty; }
-        }
-
-        public string DocumentId
-        {
-            get { return _current == null ? string.Empty : _current.DocumentId ?? string.Empty; }
-        }
-
-        public FloatingMessageKind MessageKind
-        {
-            get { return _current == null ? FloatingMessageKind.Information : _current.Kind; }
-        }
-
-        public bool MessageIsPersistent
-        {
-            get { return _current != null && _current.IsPersistent; }
-        }
+        public int MessageCount { get { return _states.Count; } }
 
         public FloatingMessageCardWindow()
         {
             Title = "CDBox 提示";
-            Width = 330;
+            Width = 354;
             SizeToContent = SizeToContent.Height;
-            MaxHeight = 220;
+            MaxHeight = 580;
             WindowStartupLocation = WindowStartupLocation.Manual;
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
@@ -74,132 +71,20 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             FontFamily = new FontFamily("Microsoft YaHei UI");
             FontSize = 12;
 
-            _root = new Border
+            _cards = new StackPanel { Margin = new Thickness(10, 8, 10, 8) };
+            _scroll = new ScrollViewer
             {
-                Margin = new Thickness(12),
-                Padding = new Thickness(12, 11, 10, 11),
-                Background = Brush("#FBFFFFFF"),
-                BorderBrush = Brush("#CAD7E5F4"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(11),
-                UseLayoutRounding = true,
-                SnapsToDevicePixels = true,
-                Cursor = Cursors.Hand,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = new ScaleTransform(1.0, 1.0)
+                Content = _cards,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                CanContentScroll = true,
+                MaxHeight = 552,
+                Background = Brushes.Transparent
             };
-            _shadowSurface = new Border
-            {
-                Margin = new Thickness(12),
-                BorderBrush = Brush("#7A428BFF"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(11),
-                IsHitTestVisible = false,
-                Effect = new DropShadowEffect
-                {
-                    BlurRadius = 20,
-                    ShadowDepth = 0,
-                    Opacity = 0.24,
-                    Color = Color.FromRgb(60, 118, 210)
-                }
-            };
-            var visualHost = new Grid();
-            visualHost.Children.Add(_shadowSurface);
-            visualHost.Children.Add(_root);
-            Content = visualHost;
+            Content = _scroll;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
 
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _root.Child = grid;
-
-            _glyph = new TextBlock
-            {
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.Bold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            _glyphHost = new Border
-            {
-                Width = 24,
-                Height = 24,
-                CornerRadius = new CornerRadius(12),
-                Background = Brush("#3B82F6"),
-                Child = _glyph,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 1, 0, 0)
-            };
-            grid.Children.Add(_glyphHost);
-
-            var content = new StackPanel { Margin = new Thickness(4, 0, 6, 0) };
-            _title = new TextBlock
-            {
-                Foreground = Brush("#172033"),
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 12.5,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            _message = new TextBlock
-            {
-                Foreground = Brush("#53657D"),
-                FontSize = 11.5,
-                TextWrapping = TextWrapping.Wrap,
-                MaxHeight = 62,
-                Margin = new Thickness(0, 3, 0, 0)
-            };
-            _repeat = new TextBlock
-            {
-                Foreground = Brush("#8795A8"),
-                FontSize = 10,
-                Margin = new Thickness(0, 4, 0, 0),
-                Visibility = Visibility.Collapsed
-            };
-            _progress = new ProgressBar
-            {
-                Height = 4,
-                Minimum = 0,
-                Maximum = 100,
-                Margin = new Thickness(0, 8, 0, 0),
-                Visibility = Visibility.Collapsed,
-                IsHitTestVisible = false
-            };
-            content.Children.Add(_title);
-            content.Children.Add(_message);
-            content.Children.Add(_repeat);
-            content.Children.Add(_progress);
-            Grid.SetColumn(content, 1);
-            grid.Children.Add(content);
-
-            _close = new Button
-            {
-                Content = "×",
-                Width = 24,
-                Height = 24,
-                Padding = new Thickness(0),
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                Foreground = Brush("#7B8BA0"),
-                FontSize = 16,
-                Cursor = Cursors.Hand
-            };
-            _close.Click += delegate(object sender, RoutedEventArgs e)
-            {
-                e.Handled = true;
-                BeginClose();
-            };
-            Grid.SetColumn(_close, 2);
-            grid.Children.Add(_close);
-
-            _root.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e)
-            {
-                if (IsButtonSource(e.OriginalSource as DependencyObject)) return;
-                EventHandler handler = DetailsRequested;
-                if (handler != null) handler(this, EventArgs.Empty);
-            };
             MouseEnter += delegate
             {
                 _hovered = true;
@@ -219,21 +104,33 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             };
         }
 
-        public void ShowMessage(FloatingMessage message, Rect anchor,
+        public bool ContainsMessage(string messageId)
+        {
+            return !string.IsNullOrWhiteSpace(messageId) &&
+                _states.ContainsKey(messageId);
+        }
+
+        public void UpsertMessage(FloatingMessage message, Rect anchor,
             CDBoxStudioSettings settings)
         {
-            if (message == null) return;
-            CancelPendingClose();
-            _current = message.Clone();
-            _settings = settings ?? new CDBoxStudioSettings();
+            if (message == null || string.IsNullOrWhiteSpace(message.Id)) return;
+            _settings = settings ?? _settings ?? new CDBoxStudioSettings();
             _settings.Normalize();
-            RenderMessage();
-            _closing = false;
-            _autoClose = IsAutoClosing(_current);
-            _remainingSeconds = _settings.FloatingCenterAutoCloseSeconds;
-            _lastTick = DateTime.UtcNow;
-            if (_autoClose) _countdown.Start();
-            else _countdown.Stop();
+            CardState state;
+            bool added = !_states.TryGetValue(message.Id, out state);
+            if (added)
+            {
+                state = new CardState();
+                _states[message.Id] = state;
+            }
+            state.Message = message.Clone();
+            state.AutoClose = IsAutoClosing(message);
+            state.RemainingSeconds = _settings.FloatingCenterAutoCloseSeconds;
+            state.Closing = false;
+            Border oldVisual = state.Visual;
+            state.Visual = BuildCard(state);
+            if (oldVisual != null) _cards.Children.Remove(oldVisual);
+            ReorderCards();
 
             if (!IsVisible)
             {
@@ -241,40 +138,39 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Show();
             }
             FloatingWindowInterop.SetNoActivate(this);
-            FloatingWindowInterop.SetClickThrough(this,
-                _current.Kind == FloatingMessageKind.Prompt);
+            FloatingWindowInterop.SetClickThrough(this, false);
             UpdateLayout();
             PositionNear(anchor);
             ApplyOpacity(IsMouseOver);
-            AnimateOpen();
+            _lastTick = DateTime.UtcNow;
+            if (_states.Values.Any(x => x.AutoClose)) _countdown.Start();
+            if (added) AnimateCardOpen(state.Visual);
+            else Pulse(state.Visual);
         }
 
-        public void UpdateMessage(FloatingMessage message, Rect anchor,
-            CDBoxStudioSettings settings)
+        public void RemoveMessage(string messageId, bool animate)
         {
-            if (message == null) return;
-            CancelPendingClose();
-            _current = message.Clone();
-            _settings = settings ?? _settings ?? new CDBoxStudioSettings();
-            _settings.Normalize();
-            RenderMessage();
-            FloatingWindowInterop.SetClickThrough(this,
-                _current.Kind == FloatingMessageKind.Prompt);
-            if (IsAutoClosing(_current))
+            CardState state;
+            if (string.IsNullOrWhiteSpace(messageId) ||
+                !_states.TryGetValue(messageId, out state)) return;
+            if (animate && AnimationsEnabled && state.Visual != null)
+                AnimateCardClose(state);
+            else RemoveState(state, true);
+        }
+
+        public void RemoveInactivePersistent(string documentId,
+            ISet<string> activeMessageIds)
+        {
+            foreach (CardState state in _states.Values.ToList())
             {
-                _autoClose = true;
-                _remainingSeconds = _settings.FloatingCenterAutoCloseSeconds;
-                _lastTick = DateTime.UtcNow;
-                _countdown.Start();
+                FloatingMessage message = state.Message;
+                if (message != null && message.IsPersistent && string.Equals(
+                    message.DocumentId, documentId,
+                    StringComparison.OrdinalIgnoreCase) &&
+                    (activeMessageIds == null ||
+                     !activeMessageIds.Contains(message.Id ?? string.Empty)))
+                    RemoveState(state, false);
             }
-            else
-            {
-                _autoClose = false;
-                _countdown.Stop();
-            }
-            UpdateLayout();
-            PositionNear(anchor);
-            Pulse();
         }
 
         public void Reposition(Rect anchor)
@@ -285,56 +181,9 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         public void CloseImmediately()
         {
             _countdown.Stop();
-            CancelPendingClose();
+            _states.Clear();
+            _cards.Children.Clear();
             if (IsVisible) Hide();
-            RaiseClosed();
-        }
-
-        public void BeginClose()
-        {
-            if (_closing) return;
-            _closing = true;
-            _countdown.Stop();
-            if (!IsVisible || !AnimationsEnabled)
-            {
-                Hide();
-                RaiseClosed();
-                return;
-            }
-            var scale = _root.RenderTransform as ScaleTransform;
-            TimeSpan duration = TimeSpan.FromMilliseconds(140);
-            var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
-            BeginAnimation(OpacityProperty, new DoubleAnimation(0.0, duration)
-                { EasingFunction = ease });
-            if (scale != null)
-            {
-                scale.BeginAnimation(ScaleTransform.ScaleXProperty,
-                    new DoubleAnimation(0.92, duration) { EasingFunction = ease });
-                var closing = new DoubleAnimation(0.92, duration)
-                    { EasingFunction = ease };
-                closing.Completed += delegate
-                {
-                    Hide();
-                    BeginAnimation(OpacityProperty, null);
-                    scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                    scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                    scale.ScaleX = 1.0;
-                    scale.ScaleY = 1.0;
-                    RaiseClosed();
-                };
-                scale.BeginAnimation(ScaleTransform.ScaleYProperty, closing);
-            }
-            else
-            {
-                var timer = new DispatcherTimer { Interval = duration };
-                timer.Tick += delegate
-                {
-                    timer.Stop();
-                    Hide();
-                    RaiseClosed();
-                };
-                timer.Start();
-            }
         }
 
         protected override void OnClosed(EventArgs e)
@@ -343,32 +192,223 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             base.OnClosed(e);
         }
 
-        private void RenderMessage()
+        private Border BuildCard(CardState state)
         {
-            _title.Text = string.IsNullOrWhiteSpace(_current.Title)
-                ? "CDBox" : _current.Title;
-            _message.Text = string.IsNullOrWhiteSpace(_current.Summary)
-                ? _current.Detail ?? string.Empty : _current.Summary;
-            _glyph.Text = FloatingCenterPresentation.KindGlyph(_current.Kind);
-            _glyphHost.Background = Brush(MessageColor(_current.Kind));
-            _repeat.Text = _current.RepeatCount > 1
-                ? "重复 " + _current.RepeatCount + " 次" : string.Empty;
-            _repeat.Visibility = _current.RepeatCount > 1
-                ? Visibility.Visible : Visibility.Collapsed;
-            bool progress = _current.Kind == FloatingMessageKind.Progress;
-            _progress.Visibility = progress ? Visibility.Visible : Visibility.Collapsed;
-            if (progress)
+            FloatingMessage message = state.Message;
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var glyph = new TextBlock
             {
-                _progress.IsIndeterminate = _current.IsIndeterminate ||
-                    !_current.Progress.HasValue;
-                if (_current.Progress.HasValue)
-                    _progress.Value = Math.Max(0.0, Math.Min(100.0,
-                        _current.Progress.Value));
+                Text = FloatingCenterPresentation.KindGlyph(message.Kind),
+                Foreground = Brushes.White,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var glyphHost = new Border
+            {
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = Brush(MessageColor(message.Kind)),
+                Child = glyph,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 1, 0, 0)
+            };
+            grid.Children.Add(glyphHost);
+
+            var content = new StackPanel { Margin = new Thickness(4, 0, 6, 0) };
+            content.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(message.Title) ? "CDBox" : message.Title,
+                Foreground = Brush("#172033"),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12.5,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(message.Summary)
+                    ? message.Detail ?? string.Empty : message.Summary,
+                Foreground = Brush("#53657D"),
+                FontSize = 11.5,
+                TextWrapping = TextWrapping.Wrap,
+                MaxHeight = 62,
+                Margin = new Thickness(0, 3, 0, 0)
+            });
+            if (message.RepeatCount > 1)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = "重复 " + message.RepeatCount + " 次",
+                    Foreground = Brush("#8795A8"),
+                    FontSize = 10,
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
             }
-            bool closeable = _current.Kind != FloatingMessageKind.Prompt &&
-                _current.Kind != FloatingMessageKind.Progress &&
-                !_current.RequiresDecision;
-            _close.Visibility = closeable ? Visibility.Visible : Visibility.Collapsed;
+            if (message.Kind == FloatingMessageKind.Progress)
+            {
+                var progress = new ProgressBar
+                {
+                    Height = 4,
+                    Minimum = 0,
+                    Maximum = 100,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    IsHitTestVisible = false,
+                    IsIndeterminate = message.IsIndeterminate || !message.Progress.HasValue
+                };
+                if (message.Progress.HasValue)
+                    progress.Value = Math.Max(0.0, Math.Min(100.0,
+                        message.Progress.Value));
+                content.Children.Add(progress);
+            }
+            Grid.SetColumn(content, 1);
+            grid.Children.Add(content);
+
+            bool closeable = message.Kind != FloatingMessageKind.Prompt &&
+                message.Kind != FloatingMessageKind.Progress &&
+                !message.RequiresDecision;
+            if (closeable)
+            {
+                var close = new Button
+                {
+                    Content = "×",
+                    Width = 24,
+                    Height = 24,
+                    Padding = new Thickness(0),
+                    BorderThickness = new Thickness(0),
+                    Background = Brushes.Transparent,
+                    Foreground = Brush("#7B8BA0"),
+                    FontSize = 16,
+                    Cursor = Cursors.Hand
+                };
+                close.Click += delegate(object sender, RoutedEventArgs e)
+                {
+                    e.Handled = true;
+                    RemoveMessage(message.Id, true);
+                };
+                Grid.SetColumn(close, 2);
+                grid.Children.Add(close);
+            }
+
+            var card = new Border
+            {
+                Margin = new Thickness(2, 4, 8, 4),
+                Padding = new Thickness(12, 11, 10, 11),
+                Background = Brush("#FBFFFFFF"),
+                BorderBrush = Brush("#CAD7E5F4"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                UseLayoutRounding = true,
+                SnapsToDevicePixels = true,
+                Cursor = message.Kind == FloatingMessageKind.Prompt
+                    ? Cursors.Arrow : Cursors.Hand,
+                Child = grid,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new ScaleTransform(1.0, 1.0),
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 16,
+                    ShadowDepth = 0,
+                    Opacity = 0.20,
+                    Color = Color.FromRgb(60, 118, 210)
+                }
+            };
+            card.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e)
+            {
+                if (message.Kind == FloatingMessageKind.Prompt ||
+                    IsButtonSource(e.OriginalSource as DependencyObject)) return;
+                EventHandler<FloatingMessageCardEventArgs> handler = DetailsRequested;
+                if (handler != null) handler(this,
+                    new FloatingMessageCardEventArgs(message));
+            };
+            return card;
+        }
+
+        private void ReorderCards()
+        {
+            _cards.Children.Clear();
+            foreach (CardState state in _states.Values
+                .OrderByDescending(x => FloatingMessagePresentationQueue
+                    .PresentationRank(x.Message))
+                .ThenByDescending(x => MessageVersion(x.Message)))
+                _cards.Children.Add(state.Visual);
+        }
+
+        private void CountdownTick(object sender, EventArgs e)
+        {
+            DateTime now = DateTime.UtcNow;
+            double elapsed = (now - _lastTick).TotalSeconds;
+            _lastTick = now;
+            if (_hovered) return;
+            foreach (CardState state in _states.Values.ToList())
+            {
+                if (!state.AutoClose || state.Closing) continue;
+                state.RemainingSeconds -= elapsed;
+                if (state.RemainingSeconds <= 0.0) AnimateCardClose(state);
+            }
+            if (!_states.Values.Any(x => x.AutoClose && !x.Closing))
+                _countdown.Stop();
+        }
+
+        private void AnimateCardOpen(Border card)
+        {
+            if (card == null || !AnimationsEnabled) return;
+            card.Opacity = 0.0;
+            var scale = card.RenderTransform as ScaleTransform;
+            if (scale != null) { scale.ScaleX = 0.88; scale.ScaleY = 0.88; }
+            TimeSpan duration = TimeSpan.FromMilliseconds(170);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            card.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(1.0, duration) { EasingFunction = ease });
+            if (scale != null)
+            {
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                    new DoubleAnimation(1.0, duration) { EasingFunction = ease });
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                    new DoubleAnimation(1.0, duration) { EasingFunction = ease });
+            }
+        }
+
+        private void AnimateCardClose(CardState state)
+        {
+            if (state == null || state.Closing) return;
+            state.Closing = true;
+            if (!AnimationsEnabled || state.Visual == null)
+            {
+                RemoveState(state, true);
+                return;
+            }
+            var animation = new DoubleAnimation(0.0,
+                TimeSpan.FromMilliseconds(140));
+            animation.Completed += delegate { RemoveState(state, true); };
+            state.Visual.BeginAnimation(UIElement.OpacityProperty, animation);
+        }
+
+        private void RemoveState(CardState state, bool notify)
+        {
+            if (state == null || state.Message == null) return;
+            FloatingMessage message = state.Message.Clone();
+            _states.Remove(message.Id ?? string.Empty);
+            if (state.Visual != null) _cards.Children.Remove(state.Visual);
+            if (_states.Count == 0)
+            {
+                _countdown.Stop();
+                Hide();
+            }
+            else
+            {
+                UpdateLayout();
+            }
+            if (notify)
+            {
+                EventHandler<FloatingMessageCardEventArgs> handler = CardDismissed;
+                if (handler != null) handler(this,
+                    new FloatingMessageCardEventArgs(message));
+            }
         }
 
         private void PositionNear(Rect anchor)
@@ -381,10 +421,10 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             double leftSpace = anchor.Left - area.Left;
             double left = rightSpace >= width + gap || rightSpace >= leftSpace
                 ? anchor.Right + gap : anchor.Left - width - gap;
-            double top = anchor.Top + (anchor.Height - height) / 2.0;
+            double top = anchor.Top;
             FloatingResolvedPosition positioned =
                 FloatingCenterPlacement.ConstrainAndSnap(left, top, area,
-                    width, height, false);
+                    width, Math.Min(height, MaxHeight), false);
             Left = positioned.State.Left;
             Top = positioned.State.Top;
         }
@@ -402,41 +442,10 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             return FloatingCenterScreenMetrics.GetCurrentWorkArea(this);
         }
 
-        private void CountdownTick(object sender, EventArgs e)
+        private void Pulse(Border card)
         {
-            DateTime now = DateTime.UtcNow;
-            if (!_hovered) _remainingSeconds -= (now - _lastTick).TotalSeconds;
-            _lastTick = now;
-            if (_autoClose && _remainingSeconds <= 0.0) BeginClose();
-        }
-
-        private void AnimateOpen()
-        {
-            var scale = _root.RenderTransform as ScaleTransform;
-            if (!AnimationsEnabled || scale == null)
-            {
-                Opacity = IsMouseOver ? HoverOpacity : NormalOpacity;
-                return;
-            }
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-            scale.ScaleX = 0.88;
-            scale.ScaleY = 0.88;
-            TimeSpan duration = TimeSpan.FromMilliseconds(170);
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            BeginAnimation(OpacityProperty, new DoubleAnimation(
-                IsMouseOver ? HoverOpacity : NormalOpacity, duration)
-                { EasingFunction = ease });
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty,
-                new DoubleAnimation(1.0, duration) { EasingFunction = ease });
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty,
-                new DoubleAnimation(1.0, duration) { EasingFunction = ease });
-        }
-
-        private void Pulse()
-        {
-            if (!AnimationsEnabled) return;
-            var scale = _root.RenderTransform as ScaleTransform;
+            if (!AnimationsEnabled || card == null) return;
+            var scale = card.RenderTransform as ScaleTransform;
             if (scale == null) return;
             var animation = new DoubleAnimationUsingKeyFrames();
             animation.KeyFrames.Add(new EasingDoubleKeyFrame(1.0,
@@ -453,28 +462,6 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = hovered ? HoverOpacity : NormalOpacity;
-        }
-
-        private void CancelPendingClose()
-        {
-            _closing = false;
-            BeginAnimation(OpacityProperty, null);
-            var scale = _root.RenderTransform as ScaleTransform;
-            if (scale != null)
-            {
-                scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                scale.ScaleX = 1.0;
-                scale.ScaleY = 1.0;
-            }
-        }
-
-        private void RaiseClosed()
-        {
-            _closing = false;
-            _current = null;
-            EventHandler handler = CardClosed;
-            if (handler != null) handler(this, EventArgs.Empty);
         }
 
         private bool AnimationsEnabled
@@ -494,9 +481,10 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
 
         private static bool IsAutoClosing(FloatingMessage message)
         {
-            return message != null && !message.IsPersistent &&
-                (message.Kind == FloatingMessageKind.Information ||
-                 message.Kind == FloatingMessageKind.Success);
+            if (message == null || message.RequiresDecision) return false;
+            return message.Kind != FloatingMessageKind.Prompt &&
+                message.Kind != FloatingMessageKind.Progress &&
+                message.Kind != FloatingMessageKind.Decision;
         }
 
         private static string MessageColor(FloatingMessageKind kind)
@@ -507,6 +495,13 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             if (kind == FloatingMessageKind.Sync || kind == FloatingMessageKind.Check)
                 return "#7C5CFC";
             return "#3B82F6";
+        }
+
+        private static DateTime MessageVersion(FloatingMessage message)
+        {
+            if (message == null) return DateTime.MinValue;
+            return message.UpdatedAt == default(DateTime)
+                ? message.CreatedAt : message.UpdatedAt;
         }
 
         private static bool IsButtonSource(DependencyObject value)
@@ -521,7 +516,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
 
         private static SolidColorBrush Brush(string hex)
         {
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            var brush = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(hex));
             brush.Freeze();
             return brush;
         }

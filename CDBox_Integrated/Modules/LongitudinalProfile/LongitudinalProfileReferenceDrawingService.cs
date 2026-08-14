@@ -130,6 +130,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     hz, arrow, result);
                 DrawTitle(db, tr, layout, insertionPoint, fangSong,
                     result);
+                WrapProfileInBlock(db, tr, result);
                 tr.Commit();
             }
 
@@ -518,9 +519,9 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 double x1 = layout.X(first.CumulativeDistance);
                 double x2 = layout.X(second.CumulativeDistance);
                 double firstInvert = layout.Y(
-                    first.DesignInvertElevation);
+                    span.StartInvertElevation);
                 double secondInvert = layout.Y(
-                    second.DesignInvertElevation);
+                    span.EndInvertElevation);
                 double pipeHeight = Math.Max(0.01,
                     span.OuterDiameter) * layout.VerticalFactor;
 
@@ -1128,7 +1129,43 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 db.CurrentSpaceId, OpenMode.ForWrite);
             space.AppendEntity(entity);
             tr.AddNewlyCreatedDBObject(entity, true);
+            result.EntityIds.Add(entity.ObjectId);
             result.EntityCount++;
+        }
+
+        private static void WrapProfileInBlock(Database db, Transaction tr,
+            LongitudinalProfileDrawingResult result)
+        {
+            if (db == null || tr == null || result == null ||
+                result.EntityIds.Count == 0) return;
+            BlockTable table = (BlockTable)tr.GetObject(db.BlockTableId,
+                OpenMode.ForWrite);
+            string name = "CDBOX_ZDM_" + Guid.NewGuid().ToString("N");
+            var definition = new BlockTableRecord
+            {
+                Name = name,
+                Origin = Point3d.Origin
+            };
+            ObjectId definitionId = table.Add(definition);
+            tr.AddNewlyCreatedDBObject(definition, true);
+            foreach (ObjectId id in result.EntityIds.ToList())
+            {
+                Entity source = tr.GetObject(id, OpenMode.ForWrite,
+                    false) as Entity;
+                if (source == null || source.IsErased) continue;
+                Entity clone = source.Clone() as Entity;
+                if (clone == null) continue;
+                definition.AppendEntity(clone);
+                tr.AddNewlyCreatedDBObject(clone, true);
+                source.Erase();
+            }
+            BlockTableRecord space = (BlockTableRecord)tr.GetObject(
+                db.CurrentSpaceId, OpenMode.ForWrite);
+            var reference = new BlockReference(Point3d.Origin, definitionId);
+            space.AppendEntity(reference);
+            tr.AddNewlyCreatedDBObject(reference, true);
+            result.EntityIds.Clear();
+            result.EntityIds.Add(reference.ObjectId);
         }
 
         private static void EnsureReferenceLayers(
@@ -1160,7 +1197,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             Database db, Transaction tr, string name, short color,
             LineWeight? lineWeight)
         {
-            ObjectId id = CadLayerService.EnsureLayer(db, tr, name,
+            ObjectId id = CadLayerService.EnsureGeneratedLayer(db, tr, name,
                 color);
             try
             {
@@ -1704,8 +1741,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     LongitudinalProfileSpanData span = _profile.Spans[i];
                     double x1 = _layout.X(first.CumulativeDistance);
                     double x2 = _layout.X(second.CumulativeDistance);
-                    double y1 = _layout.Y(first.DesignInvertElevation);
-                    double y2 = _layout.Y(second.DesignInvertElevation);
+                    double y1 = _layout.Y(span.StartInvertElevation);
+                    double y2 = _layout.Y(span.EndInvertElevation);
                     double pipeHeight = Math.Max(0.01,
                         span.OuterDiameter) * _layout.VerticalFactor;
                     DrawLine(draw, x1, _layout.Y(first.GroundElevation),

@@ -18,6 +18,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public int SelectionOrder { get; set; }
         public double StartDepth { get; set; }
         public double EndDepth { get; set; }
+        public double StartInvertElevation { get; set; }
+        public double EndInvertElevation { get; set; }
         public bool HasGeometry { get; set; }
         public double GeometryStartX { get; set; }
         public double GeometryStartY { get; set; }
@@ -64,6 +66,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
         public string Foundation { get; set; }
         public double OuterDiameter { get; set; }
         public double PlanLength { get; set; }
+        public double StartInvertElevation { get; set; }
+        public double EndInvertElevation { get; set; }
         public double SlopePermille { get; set; }
         public double SlopePercent { get { return SlopePermille / 10.0; } }
     }
@@ -393,13 +397,16 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                         + "”缺少有效的自然地面标高或井深。");
 
                 double adjustment = ResolveSiltAdjustment(well);
+                double fallbackInvert = well.GroundElevation -
+                    well.WellDepth + adjustment;
+                double designInvert = ResolvePathNodeInvert(
+                    orderedPipes, orderedNodes, i, fallbackInvert);
                 profile.Nodes.Add(new LongitudinalProfileNodeData
                 {
                     SourceId = well.SourceId ?? string.Empty,
                     NodeNo = nodeNo,
                     GroundElevation = well.GroundElevation,
-                    DesignInvertElevation =
-                        well.GroundElevation - well.WellDepth + adjustment,
+                    DesignInvertElevation = designInvert,
                     PipeBottomDepth = Math.Max(0.0,
                         well.WellDepth - adjustment),
                     WellDepth = well.WellDepth,
@@ -418,6 +425,10 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 LongitudinalProfilePipeData pipe = orderedPipes[i];
                 LongitudinalProfileNodeData from = profile.Nodes[i];
                 LongitudinalProfileNodeData to = profile.Nodes[i + 1];
+                double startInvert = ResolvePipeEndpointInvert(pipe,
+                    from.NodeNo, from.DesignInvertElevation);
+                double endInvert = ResolvePipeEndpointInvert(pipe,
+                    to.NodeNo, to.DesignInvertElevation);
                 profile.Spans.Add(new LongitudinalProfileSpanData
                 {
                     SourceId = pipe.SourceId ?? string.Empty,
@@ -427,9 +438,10 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                     Foundation = Clean(pipe.Foundation),
                     OuterDiameter = ResolveOuterDiameter(pipe),
                     PlanLength = pipe.PlanLength,
+                    StartInvertElevation = startInvert,
+                    EndInvertElevation = endInvert,
                     SlopePermille =
-                        (from.DesignInvertElevation
-                            - to.DesignInvertElevation)
+                        (startInvert - endInvert)
                         / pipe.PlanLength * 1000.0
                 });
             }
@@ -458,6 +470,35 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             // 兼容早期图纸把 20/50 直接按厘米保存的情况。
             if (value > 5.0) value /= 100.0;
             return value;
+        }
+
+        private static double ResolvePathNodeInvert(
+            IList<LongitudinalProfilePipeData> pipes,
+            IList<string> nodes, int nodeIndex, double fallback)
+        {
+            if (pipes == null || nodes == null || nodeIndex < 0 ||
+                nodeIndex >= nodes.Count) return fallback;
+            // For an intermediate node use the outgoing pipe endpoint. The
+            // previous span retains its own endpoint elevation, allowing the
+            // profile to truthfully show an elevation mismatch at the well.
+            if (nodeIndex < pipes.Count)
+                return ResolvePipeEndpointInvert(pipes[nodeIndex],
+                    nodes[nodeIndex], fallback);
+            if (nodeIndex > 0 && nodeIndex - 1 < pipes.Count)
+                return ResolvePipeEndpointInvert(pipes[nodeIndex - 1],
+                    nodes[nodeIndex], fallback);
+            return fallback;
+        }
+
+        private static double ResolvePipeEndpointInvert(
+            LongitudinalProfilePipeData pipe, string nodeNo,
+            double fallback)
+        {
+            if (pipe == null) return fallback;
+            double value = NodeComparer.Equals(pipe.StartNode, nodeNo)
+                ? pipe.StartInvertElevation : pipe.EndInvertElevation;
+            return IsFinite(value) && Math.Abs(value) > 1e-8
+                ? value : fallback;
         }
 
         public static double ParseNominalDiameterMetres(string diameter)
@@ -546,15 +587,24 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 ? selected.StartDepth : selected.EndDepth;
             double outsideDepth = nodeAtPipeStart
                 ? selected.EndDepth : selected.StartDepth;
+            double boundaryInvert = nodeAtPipeStart
+                ? selected.StartInvertElevation
+                : selected.EndInvertElevation;
+            double outsideInvert = nodeAtPipeStart
+                ? selected.EndInvertElevation
+                : selected.StartInvertElevation;
             LongitudinalProfileWellData boundaryWell;
             LongitudinalProfileWellData outsideWell;
             wells.TryGetValue(node.NodeNo, out boundaryWell);
             wells.TryGetValue(outsideNodeNo, out outsideWell);
             double sourceBoundaryElevation = ResolveEndpointElevation(
-                boundaryWell, boundaryDepth,
-                node.DesignInvertElevation);
+                boundaryWell, boundaryDepth, node.DesignInvertElevation);
             double sourceOutsideElevation = ResolveEndpointElevation(
                 outsideWell, outsideDepth, sourceBoundaryElevation);
+            if (IsFinite(boundaryInvert) && Math.Abs(boundaryInvert) > 1e-8)
+                sourceBoundaryElevation = boundaryInvert;
+            if (IsFinite(outsideInvert) && Math.Abs(outsideInvert) > 1e-8)
+                sourceOutsideElevation = outsideInvert;
             return new LongitudinalProfileBoundaryExtensionData
             {
                 SourceId = selected.SourceId ?? string.Empty,
@@ -617,7 +667,8 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                             OuterDiameter = ResolveOuterDiameter(pipe),
                             // 侧面接入口高程以接口所在井的设计管内底为准，
                             // 不再使用侧管自身端点埋深另行推算。
-                            InvertElevation = node.DesignInvertElevation,
+                            InvertElevation = ResolvePipeEndpointInvert(pipe,
+                                node.NodeNo, node.DesignInvertElevation),
                             Side = ResolveConnectionSide(profile, nodeIndex,
                                 pipe, node)
                         });

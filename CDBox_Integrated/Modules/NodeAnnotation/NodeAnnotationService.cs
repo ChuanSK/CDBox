@@ -188,7 +188,7 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
 
             // 节点标注吸附范围固定为：图层管理父属性=“井”，分类=“检查、沉泥井”。
             // “检查、沉泥井”只是可吸附分类，不参与判断井类型；井类型必须读取对象属性中的 WellType。
-            return IsApprovedWellLayer(layerMetadata, attrs);
+            return IsApprovedWellLayer(layerMetadata);
         }
 
         private static bool IsSupportedNodeGeometry(Entity entity)
@@ -201,17 +201,12 @@ namespace TCPipeAutoDraw.Modules.NodeAnnotation
             return false;
         }
 
-        private static bool IsApprovedWellLayer(LayerMetadata layerMetadata, QuantityPipeAttributes attrs)
+        private static bool IsApprovedWellLayer(LayerMetadata layerMetadata)
         {
             string parentGroup = layerMetadata == null ? string.Empty : (layerMetadata.ParentGroup ?? string.Empty);
             string parentClass = layerMetadata == null ? string.Empty : (layerMetadata.ParentClass ?? string.Empty);
-
-            // 若当前图层元数据为空，允许使用对象已保存属性中的图层父属性/分类作为兜底，
-            // 但仍必须满足同一套固定规则，避免 315井 或其他无关块因名称相似被吸附。
-            if (string.IsNullOrWhiteSpace(parentGroup) && attrs != null) parentGroup = attrs.LayerParentGroup ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(parentClass) && attrs != null) parentClass = attrs.LayerParentClass ?? string.Empty;
-
-            return TextEquals(parentGroup, "井") && TextEquals(parentClass, "检查沉泥井");
+            return QuantityNodeRecognitionPolicy.IsSupportedLayer(parentGroup,
+                parentClass);
         }
 
         private static bool IsExcluded315Well(QuantityPipeAttributes attrs, string sourceText, LayerMetadata layerMetadata)

@@ -66,7 +66,9 @@ namespace TCPipeAutoDraw.Core.Sync
             IEnumerable<string> handles, string reason)
         {
             if (document == null) return;
-            List<string> affected = NormalizeHandles(handles);
+            List<string> original = NormalizeHandles(handles);
+            List<string> affected = FilterToDashboardScope(document, original);
+            if (original.Count > 0 && affected.Count == 0) return;
             SyncTask task = ManagerValue.MarkDirty(new SyncTask
             {
                 DocumentId = CadFloatingDocumentIdentity.GetDocumentId(document),
@@ -164,7 +166,9 @@ namespace TCPipeAutoDraw.Core.Sync
             if (e == null || e.Document == null) return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(
                 e.Document);
-            List<string> handles = NormalizeHandles(e.ObjectHandles);
+            List<string> original = NormalizeHandles(e.ObjectHandles);
+            List<string> handles = FilterToDashboardScope(e.Document, original);
+            if (original.Count > 0 && handles.Count == 0) return;
             if (e.AnnotationsRefreshed)
             {
                 SyncTask completed = ManagerValue.RecordCompleted(new SyncTask
@@ -194,13 +198,15 @@ namespace TCPipeAutoDraw.Core.Sync
                 return;
             if (string.Equals(e.Reason, "quantity-attribute-saved",
                 StringComparison.OrdinalIgnoreCase)) return;
-            MarkCalculationDirty(e.Document, null, e.Reason);
+            MarkCalculationDirty(e.Document, e.ObjectHandles, e.Reason);
         }
 
         private static void MarkCalculationDirty(Document document,
             IEnumerable<string> handles, string reason)
         {
-            List<string> affected = NormalizeHandles(handles);
+            List<string> original = NormalizeHandles(handles);
+            List<string> affected = FilterToDashboardScope(document, original);
+            if (original.Count > 0 && affected.Count == 0) return;
             SyncTask task = ManagerValue.MarkDirty(new SyncTask
             {
                 DocumentId = CadFloatingDocumentIdentity.GetDocumentId(document),
@@ -246,11 +252,13 @@ namespace TCPipeAutoDraw.Core.Sync
             {
                 if (task.Type == SyncTaskType.Annotation)
                 {
+                    List<string> scopedHandles = FilterToDashboardScope(
+                        document, task.ObjectHandles);
                     undoMarkStarted = manageUndoMark && TrySetUndoMark(true);
                     SimpleAnnotationObjectService.RefreshNodeAnnotationsForSourceHandles(
-                        document, task.ObjectHandles);
+                        document, scopedHandles);
                     PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
-                        document, task.ObjectHandles, string.Empty);
+                        document, scopedHandles, string.Empty);
                 }
                 else if (task.Type == SyncTaskType.Calculation)
                 {
@@ -416,6 +424,19 @@ namespace TCPipeAutoDraw.Core.Sync
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(x => x.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static List<string> FilterToDashboardScope(Document document,
+            IEnumerable<string> handles)
+        {
+            List<string> values = NormalizeHandles(handles);
+            if (document == null || values.Count == 0) return values;
+            try
+            {
+                return QuantityDashboardRegionService
+                    .FilterHandlesToSavedScope(document, values);
+            }
+            catch { return values; }
         }
 
         private static string MessageId(string taskId)

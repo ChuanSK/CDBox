@@ -70,7 +70,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             Vector3d axisV = GeometryHelper.GetPerpLeft(axisU);
             Polyline rectangle = GeometryHelper.CreateRectanglePolyline(center,
                 axisU, axisV, width, height);
-            CadDbHelper.EnsureLayer(db, tr, RegionLayerName);
+            CadDbHelper.EnsureGeneratedLayer(db, tr, RegionLayerName);
             rectangle.Layer = RegionLayerName;
             rectangle.ColorIndex = 1;
             return CadDbHelper.AppendToModelSpace(db, tr, rectangle);

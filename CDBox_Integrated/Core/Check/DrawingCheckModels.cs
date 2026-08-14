@@ -191,6 +191,8 @@ namespace TCPipeAutoDraw.Core.Check
             Diameter = string.Empty;
             StartNode = string.Empty;
             EndNode = string.Empty;
+            DetectedStartNode = string.Empty;
+            DetectedEndNode = string.Empty;
             BackfillStructure = string.Empty;
             BranchType = string.Empty;
             NodeNo = string.Empty;
@@ -212,6 +214,10 @@ namespace TCPipeAutoDraw.Core.Check
         public string Diameter { get; set; }
         public string StartNode { get; set; }
         public string EndNode { get; set; }
+        public string DetectedStartNode { get; set; }
+        public string DetectedEndNode { get; set; }
+        public double StartInvertElevation { get; set; }
+        public double EndInvertElevation { get; set; }
         public double AverageDepth { get; set; }
         public string BackfillStructure { get; set; }
         public double PipeOuterDiameter { get; set; }
@@ -231,6 +237,10 @@ namespace TCPipeAutoDraw.Core.Check
         public bool HasEndPoint { get; set; }
         public double EndX { get; set; }
         public double EndY { get; set; }
+        public bool StartConnectionEvaluated { get; set; }
+        public bool StartConnectedToAssignedNode { get; set; }
+        public bool EndConnectionEvaluated { get; set; }
+        public bool EndConnectedToAssignedNode { get; set; }
         public bool HasNodePosition { get; set; }
         public double NodeX { get; set; }
         public double NodeY { get; set; }

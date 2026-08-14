@@ -168,7 +168,21 @@ namespace TCPipeAutoDraw.UI
 
                 if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK) return;
 
-                CDBoxInstallResult result = CDBoxInstaller.ScheduleUpdateFromDll(dialog.FileName);
+                CDBoxInstallResult result;
+                Autodesk.AutoCAD.ApplicationServices.Document document =
+                    Autodesk.AutoCAD.ApplicationServices.Application
+                        .DocumentManager.MdiActiveDocument;
+                using (var progress = CDBoxProgressSession.Start(document,
+                    "本地更新准备", "正在检查并收集本地更新文件…",
+                    "LocalUpdate", "local-update-progress", false))
+                {
+                    result = CDBoxInstaller.ScheduleUpdateFromDll(
+                        dialog.FileName, progress.Report);
+                    if (result.Success)
+                        progress.Complete("本地更新已准备，请关闭 AutoCAD 完成安装。");
+                    else
+                        progress.Fail("本地更新准备失败。");
+                }
                 CDBoxAppSettings settings = CDBoxAppSettingsStore.Load();
                 if (result.Success) settings.InstalledPath = result.InstallRoot;
                 CDBoxAppSettingsStore.Save(settings);

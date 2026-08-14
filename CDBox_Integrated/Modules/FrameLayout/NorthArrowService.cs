@@ -98,7 +98,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 Rotation = rotation,
                 ScaleFactors = new Scale3d(scale)
             };
-            CadDbHelper.EnsureLayer(db, tr, "CDBOX_指北针");
+            CadDbHelper.EnsureGeneratedLayer(db, tr, "CDBOX_指北针");
             reference.Layer = "CDBOX_指北针";
             return CadDbHelper.AppendToModelSpace(db, tr, reference);
         }

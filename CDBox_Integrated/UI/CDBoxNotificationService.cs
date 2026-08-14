@@ -30,6 +30,7 @@ namespace TCPipeAutoDraw.UI
             {
                 if (_dispatcher == null) _dispatcher = current;
             }
+            CDBoxUiResponsiveness.Initialize(current);
         }
 
         public static IDisposable BeginWorkbenchScope(
@@ -52,8 +53,12 @@ namespace TCPipeAutoDraw.UI
                 buttons.ToString()))
             {
                 if (TryPostWorkbench(text, ResolveToastKind(icon)))
+                {
+                    CDBoxUiResponsiveness.YieldToRender(null, true);
                     return WinForms.DialogResult.OK;
+                }
                 PublishStructured(caption, text, ResolveKind(icon));
+                CDBoxUiResponsiveness.YieldToRender(null, true);
                 if (!FloatingCenterController.CanPresent)
                     WriteEditorFallback(caption, text);
                 return WinForms.DialogResult.OK;
@@ -107,8 +112,13 @@ namespace TCPipeAutoDraw.UI
             CDBoxNotificationKind kind)
         {
             if (string.IsNullOrWhiteSpace(message)) return;
-            if (TryPostWorkbench(message, ResolveToastKind(kind))) return;
+            if (TryPostWorkbench(message, ResolveToastKind(kind)))
+            {
+                CDBoxUiResponsiveness.YieldToRender(null, true);
+                return;
+            }
             PublishStructured(title, message, kind);
+            CDBoxUiResponsiveness.YieldToRender(null, true);
             if (FloatingCenterController.CanPresent) return;
             WriteEditorFallback(title, message);
         }

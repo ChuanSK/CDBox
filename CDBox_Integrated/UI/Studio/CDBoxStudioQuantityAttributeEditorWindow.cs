@@ -27,7 +27,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 return;
             }
             ReleaseStaleWindow();
-            var window = new CDBoxStudioWebPageForm("属性编辑器 · 3.6.1", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
+            var window = new CDBoxStudioWebPageForm("属性编辑器 · 3.6.2", delegate { return CDBoxStudioQuantityAttributeEditorPage.BuildStandaloneDocument(CDBoxStudioSettingsStore.Load(), CDBoxStudioLogger.LogFilePath, _documentId, _handle); }, Route, "quantity-attribute-editor");
             _current = window;
             window.Width = 1180;
             window.Height = 820;
@@ -43,7 +43,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 RestoreCadFocus();
             };
             window.Show(owner ?? new AcadMainWindow());
-            CDBoxStudioLogger.Info("已打开属性编辑器 3.6.1 独立窗口。");
+            CDBoxStudioLogger.Info("已打开属性编辑器 3.6.2 独立窗口。");
         }
 
         private static bool IsReusable(CDBoxStudioWebPageForm window)

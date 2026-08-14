@@ -38,7 +38,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         private static void InsertScaleText(Database db, Transaction tr,
             Point3d position, double rotation, FrameLayoutSettings settings)
         {
-            CadDbHelper.EnsureLayer(db, tr, "CDBOX_比例标注");
+            CadDbHelper.EnsureGeneratedLayer(db, tr, "CDBOX_比例标注");
             DBText text = new DBText();
             text.TextString = FrameScaleTextResolver.Resolve(db,
                 settings.ScaleText);

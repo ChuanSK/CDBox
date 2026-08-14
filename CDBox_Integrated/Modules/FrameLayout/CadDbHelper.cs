@@ -1,5 +1,6 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using TCPipeAutoDraw.Core.Cad;
 
 using System;
 
@@ -23,6 +24,12 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             tr.AddNewlyCreatedDBObject(ltr, true);
 
             return id;
+        }
+
+        public static ObjectId EnsureGeneratedLayer(Database db,
+            Transaction tr, string layerName)
+        {
+            return CadLayerService.EnsureGeneratedLayer(db, tr, layerName, 7);
         }
 
         public static ObjectId AppendToModelSpace(Database db, Transaction tr, Entity ent)
