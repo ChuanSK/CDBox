@@ -10,6 +10,7 @@ using CDBox.Shared.Modules;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
+using CDBox.RealEstate.Geometry;
 using CDBoxUpdater;
 using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Startup;
@@ -55,6 +56,7 @@ namespace CDBox.CoreTests
             Run("内置更新源优先级", TestBuiltInUpdateSourcePriority);
             Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
             Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
+            Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("工程量计算过程导出", TestQuantityCalculationProcessExport);
@@ -1352,6 +1354,68 @@ namespace CDBox.CoreTests
             False(missing.Success, "RealEstate DLL 缺失时加载器必须安全失败");
             True(missing.Error is FileNotFoundException,
                 "RealEstate DLL 缺失时应保留明确错误原因");
+        }
+
+        private static void TestBuildingLengthAnnotationPlanner()
+        {
+            BuildingAnnotationPlan rectangle =
+                BuildingLengthAnnotationPlanner.Create(new[]
+                {
+                    new BuildingPoint2(0, 0),
+                    new BuildingPoint2(3.65, 0),
+                    new BuildingPoint2(3.65, 2.57),
+                    new BuildingPoint2(0, 2.57)
+                }, 0.5, false);
+            True(rectangle.IsOrthogonal,
+                "旋转前矩形应识别为正交建筑");
+            Equal(4, rectangle.BoundarySegments.Count,
+                "矩形应标注四条外边");
+            Equal(0, rectangle.AuxiliarySegments.Count,
+                "矩形不应生成面积计算辅助线");
+
+            double angle = 0.43;
+            BuildingPoint2 Rotate(double x, double y)
+            {
+                return new BuildingPoint2(x * Math.Cos(angle) - y * Math.Sin(angle),
+                    x * Math.Sin(angle) + y * Math.Cos(angle));
+            }
+            BuildingAnnotationPlan lShape =
+                BuildingLengthAnnotationPlanner.Create(new[]
+                {
+                    Rotate(0, 0), Rotate(3.5, 0), Rotate(3.5, 1.94),
+                    Rotate(1.05, 1.94), Rotate(1.05, 3.84), Rotate(0, 3.84)
+                }, 0.5, true);
+            True(lShape.IsOrthogonal,
+                "旋转后的 L 形仍应识别为正交建筑");
+            Equal(6, lShape.BoundarySegments.Count,
+                "L 形应标注六条外边");
+            Equal(0, lShape.AuxiliarySegments.Count,
+                "正交 L 形可拆分为矩形，不应生成辅助线");
+            True(lShape.TextHeight < 0.5,
+                "短边存在时自适应高度应统一缩小");
+
+            BuildingAnnotationPlan irregular =
+                BuildingLengthAnnotationPlanner.Create(new[]
+                {
+                    new BuildingPoint2(0, 11.83),
+                    new BuildingPoint2(5.04, 7.0),
+                    new BuildingPoint2(0, 0),
+                    new BuildingPoint2(-5.12, 2.3)
+                }, 0.8, true);
+            False(irregular.IsOrthogonal,
+                "斜四边形不得误判为正交建筑");
+            Equal(4, irregular.BoundarySegments.Count,
+                "非正交四边形应标注四条外边");
+            Equal(3, irregular.AuxiliarySegments.Count,
+                "非正交四边形应生成一条计算轴和两条垂线");
+            Near(11.83, irregular.AuxiliarySegments[0].Length, 1e-6,
+                "应选择贯穿建筑的最长有效对角线作为计算轴");
+            True(irregular.AuxiliarySegments.All(x => x.IsAuxiliary),
+                "面积计算线必须标记为辅助线");
+            True(irregular.BoundarySegments.Concat(irregular.AuxiliarySegments)
+                .All(x => x.Text == x.Length.ToString("0.00",
+                    System.Globalization.CultureInfo.InvariantCulture)),
+                "边长和辅助线长度统一保留两位小数");
         }
 
         private static void TestQuantityDashboardSharedPage()
