@@ -1,5 +1,7 @@
 using System;
 using CDBox.Shared.Services;
+using CDBox.Shared.UI;
+using TCPipeAutoDraw.Core.Colors;
 using TCPipeAutoDraw.UI;
 using TCPipeAutoDraw.UI.Studio;
 
@@ -65,6 +67,63 @@ namespace TCPipeAutoDraw.Core.Modules
             if (level == CDBoxNotificationLevel.Error)
                 return CDBoxNotificationKind.Error;
             return CDBoxNotificationKind.Information;
+        }
+    }
+
+    internal sealed class CDBoxModulePromptAdapter : ICDBoxPromptService
+    {
+        public IDisposable Begin(string title, string message)
+        {
+            return CDBoxNotificationService.BeginCommandPrompt(
+                title, message);
+        }
+    }
+
+    internal sealed class CDBoxModuleColorPickerAdapter
+        : ICDBoxColorPickerService
+    {
+        public bool TryPick(CDBoxModuleColor initial,
+            out CDBoxModuleColor selected, bool allowByLayer,
+            bool allowByBlock)
+        {
+            CDBoxColor picked;
+            bool accepted = CDBoxStudioColorPickerWindow.TryPick(
+                ToHost(initial), out picked, allowByLayer, allowByBlock,
+                true, true, true);
+            selected = accepted ? FromHost(picked) : null;
+            return accepted;
+        }
+
+        private static CDBoxColor ToHost(CDBoxModuleColor value)
+        {
+            value = value ?? CDBoxModuleColor.FromIndex(7);
+            return new CDBoxColor
+            {
+                Type = (CDBoxColorType)(int)value.Type,
+                Index = value.Index,
+                R = value.R,
+                G = value.G,
+                B = value.B,
+                BookName = value.BookName ?? string.Empty,
+                ColorName = value.ColorName ?? string.Empty,
+                DisplayName = value.DisplayName ?? string.Empty
+            };
+        }
+
+        private static CDBoxModuleColor FromHost(CDBoxColor value)
+        {
+            value = value ?? CDBoxColor.FromIndex(7);
+            return new CDBoxModuleColor
+            {
+                Type = (CDBoxModuleColorType)(int)value.Type,
+                Index = value.Index,
+                R = value.R,
+                G = value.G,
+                B = value.B,
+                BookName = value.BookName ?? string.Empty,
+                ColorName = value.ColorName ?? string.Empty,
+                DisplayName = value.DisplayName ?? string.Empty
+            };
         }
     }
 }

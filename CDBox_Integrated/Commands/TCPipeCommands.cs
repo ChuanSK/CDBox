@@ -271,6 +271,30 @@ namespace TCPipeAutoDraw.Commands
             RealEstateModuleHost.OpenWorkspace();
         }
 
+        [CommandMethod("CDREBL", CommandFlags.Modal)]
+        public void AnnotateRealEstateBuildingLength()
+        {
+            RealEstateModuleHost.ExecuteCommand("CDREBL");
+        }
+
+        [CommandMethod("JZWBC", CommandFlags.Modal)]
+        public void AnnotateRealEstateBuildingLengthAlias()
+        {
+            RealEstateModuleHost.ExecuteCommand("CDREBL");
+        }
+
+        [CommandMethod("CDREBLSZ", CommandFlags.Modal)]
+        public void OpenRealEstateBuildingLengthSettings()
+        {
+            RealEstateModuleHost.ExecuteCommand("CDREBLSZ");
+        }
+
+        [CommandMethod("JZWBCSZ", CommandFlags.Modal)]
+        public void OpenRealEstateBuildingLengthSettingsAlias()
+        {
+            RealEstateModuleHost.ExecuteCommand("CDREBLSZ");
+        }
+
         [CommandMethod("CDSET", CommandFlags.Modal)]
         public void OpenSettings()
         {

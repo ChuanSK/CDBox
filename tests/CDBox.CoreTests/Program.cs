@@ -11,6 +11,8 @@ using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
 using CDBox.RealEstate.Geometry;
+using CDBox.RealEstate.Settings;
+using CDBox.RealEstate.UI;
 using CDBoxUpdater;
 using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Startup;
@@ -57,6 +59,7 @@ namespace CDBox.CoreTests
             Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
             Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
             Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
+            Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("工程量计算过程导出", TestQuantityCalculationProcessExport);
@@ -1294,6 +1297,11 @@ namespace CDBox.CoreTests
             var pages = new CapturingPageService();
             var services = new CDBoxServiceRegistry()
                 .Register<ICDBoxLogger>(logger)
+                .Register<ICDBoxNotificationService>(
+                    new CapturingNotificationService())
+                .Register<ICDBoxPromptService>(new CapturingPromptService())
+                .Register<ICDBoxColorPickerService>(
+                    new CapturingColorPickerService())
                 .Register<ICDBoxPageService>(pages);
             var module = new RealEstateModule();
 
@@ -1416,6 +1424,47 @@ namespace CDBox.CoreTests
                 .All(x => x.Text == x.Length.ToString("0.00",
                     System.Globalization.CultureInfo.InvariantCulture)),
                 "边长和辅助线长度统一保留两位小数");
+        }
+
+        private static void TestBuildingLengthAnnotationSettingsPage()
+        {
+            var settings = new BuildingLengthAnnotationSettings
+            {
+                TextHeight = -1,
+                TextStyleName = " ",
+                AuxiliaryLinetypeName = " ",
+                AuxiliaryLineweight = "invalid"
+            };
+            settings.Normalize();
+            Near(0.5, settings.TextHeight, 1e-9,
+                "无效文字高度应回退到默认值");
+            Equal("Standard", settings.TextStyleName,
+                "空文字样式应回退到 Standard");
+            Equal("Continuous", settings.AuxiliaryLinetypeName,
+                "空辅助线型应回退到 Continuous");
+            Equal("ByLayer", settings.AuxiliaryLineweight,
+                "无效辅助线宽应回退到随层");
+
+            var catalog = new BuildingAnnotationCadCatalog();
+            catalog.TextStyles.Add("Standard");
+            catalog.TextStyles.Add("宋体");
+            catalog.Linetypes.Add("Continuous");
+            string html = BuildingLengthAnnotationSettingsPage.BuildHtml(
+                settings, catalog);
+            Contains(html, "建筑物边长注记设置",
+                "设置页应使用独立不动产标题");
+            Contains(html, "文字高度自适应",
+                "设置页应提供文字高度自适应开关");
+            Contains(html, "同一建筑的全部文字高度始终相同",
+                "设置页应解释建筑级统一自适应规则");
+            Contains(html, "插件内颜色选择器",
+                "设置页应明确使用统一插件颜色选择器");
+            Contains(html, "辅助线线型",
+                "设置页应提供辅助线线型");
+            Contains(html, "辅助线线宽",
+                "设置页应提供辅助线线宽");
+            Contains(html, "realestate-building-length-settings",
+                "设置页路由上下文应与不动产功能隔离");
         }
 
         private static void TestQuantityDashboardSharedPage()
@@ -2695,6 +2744,38 @@ namespace CDBox.CoreTests
             {
                 LastPage = page;
             }
+        }
+
+        private sealed class CapturingNotificationService
+            : ICDBoxNotificationService
+        {
+            public void Show(string title, string message,
+                CDBoxNotificationLevel level) { }
+        }
+
+        private sealed class CapturingPromptService : ICDBoxPromptService
+        {
+            public IDisposable Begin(string title, string message)
+            {
+                return new EmptyDisposable();
+            }
+        }
+
+        private sealed class CapturingColorPickerService
+            : ICDBoxColorPickerService
+        {
+            public bool TryPick(CDBoxModuleColor initial,
+                out CDBoxModuleColor selected, bool allowByLayer,
+                bool allowByBlock)
+            {
+                selected = null;
+                return false;
+            }
+        }
+
+        private sealed class EmptyDisposable : IDisposable
+        {
+            public void Dispose() { }
         }
 
         private static void True(bool value, string message)

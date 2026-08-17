@@ -22,4 +22,12 @@ namespace CDBox.Shared.Modules
     {
         void OpenWorkspace();
     }
+
+    /// <summary>
+    /// 由主程序集中的 AutoCAD 命令桥转发到业务模块的命令契约。
+    /// </summary>
+    public interface ICDBoxCommandModule : ICDBoxModule
+    {
+        void ExecuteCommand(string commandId);
+    }
 }

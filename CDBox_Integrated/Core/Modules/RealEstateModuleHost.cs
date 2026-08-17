@@ -22,6 +22,10 @@ namespace TCPipeAutoDraw.Core.Modules
             new CDBoxModuleLoggerAdapter("RealEstate");
         private static readonly ICDBoxNotificationService Notifications =
             new CDBoxModuleNotificationAdapter();
+        private static readonly ICDBoxPromptService Prompts =
+            new CDBoxModulePromptAdapter();
+        private static readonly ICDBoxColorPickerService ColorPicker =
+            new CDBoxModuleColorPickerAdapter();
 
         private static bool _loadAttempted;
         private static ICDBoxWorkspaceModule _module;
@@ -59,6 +63,8 @@ namespace TCPipeAutoDraw.Core.Modules
             var services = new CDBoxServiceRegistry()
                 .Register<ICDBoxLogger>(Logger)
                 .Register<ICDBoxNotificationService>(Notifications)
+                .Register<ICDBoxPromptService>(Prompts)
+                .Register<ICDBoxColorPickerService>(ColorPicker)
                 .Register<ICDBoxPageService>(pageService);
             CDBoxModuleLoadResult result =
                 CDBoxKnownModuleLoader.LoadAndInitialize(
@@ -117,6 +123,37 @@ namespace TCPipeAutoDraw.Core.Modules
                 Notifications.Show(
                     "CDBox 不动产",
                     "不动产工作区打开失败，现有 CDBox 功能仍可继续使用。",
+                    CDBoxNotificationLevel.Error);
+            }
+        }
+
+        public static void ExecuteCommand(string commandId)
+        {
+            Initialize();
+
+            ICDBoxCommandModule commandModule;
+            Exception loadError;
+            lock (SyncRoot)
+            {
+                commandModule = _module as ICDBoxCommandModule;
+                loadError = _loadError;
+            }
+            if (commandModule == null)
+            {
+                Logger.Warn("无法执行 RealEstate 命令："
+                    + (loadError == null ? "模块命令入口不可用。" : loadError.Message));
+                Notifications.Show("CDBox 不动产",
+                    "不动产模块未安装、加载失败或版本过旧。",
+                    CDBoxNotificationLevel.Warning);
+                return;
+            }
+
+            try { commandModule.ExecuteCommand(commandId); }
+            catch (Exception ex)
+            {
+                Logger.Error("执行 RealEstate 命令失败：" + commandId, ex);
+                Notifications.Show("CDBox 不动产",
+                    "不动产命令执行失败：" + ex.Message,
                     CDBoxNotificationLevel.Error);
             }
         }
