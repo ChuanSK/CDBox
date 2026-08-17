@@ -8,6 +8,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using TCPipeAutoDraw.Core.FloatingCenter;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Modules.LayerManager;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.UI.Studio;
@@ -46,7 +47,8 @@ namespace TCPipeAutoDraw.Core.Check
         public static IList<FloatingMessage> GetIgnoredMessages(
             Document document)
         {
-            if (document == null) return new List<FloatingMessage>();
+            if (!CDBoxBusinessModeService.IsWastewater || document == null)
+                return new List<FloatingMessage>();
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             List<DrawingCheckGroup> groups = GetPersistedIgnoredGroups(
                 document, documentId);
@@ -124,6 +126,7 @@ namespace TCPipeAutoDraw.Core.Check
                         DocumentToBeDestroyed;
                 }
                 catch { }
+                CDBoxBusinessModeService.Changed += BusinessModeChanged;
                 _initialized = true;
             }
             QueueAutomaticCheck(AcadApp.DocumentManager.MdiActiveDocument);
@@ -141,6 +144,7 @@ namespace TCPipeAutoDraw.Core.Check
                         DocumentToBeDestroyed;
                 }
                 catch { }
+                CDBoxBusinessModeService.Changed -= BusinessModeChanged;
                 if (_scanTimer != null) _scanTimer.Stop();
                 if (_highlightTimer != null) _highlightTimer.Stop();
                 foreach (ScanSession session in Sessions.Values)
@@ -160,6 +164,23 @@ namespace TCPipeAutoDraw.Core.Check
         public static void Start(Document document, bool userInitiated)
         {
             if (document == null) return;
+            if (!CDBoxBusinessModeService.IsWastewater)
+            {
+                if (userInitiated)
+                    FloatingHub.Current.Publish(new FloatingMessage
+                    {
+                        DocumentId = CadFloatingDocumentIdentity.GetDocumentId(
+                            document),
+                        Source = SourceName,
+                        Kind = FloatingMessageKind.Information,
+                        Title = "污水图纸检查已暂停",
+                        Summary = "当前为不动产模式；切换回污水管线模式后可重新检查。",
+                        PresentAsCard = true,
+                        RecordInHistory = true,
+                        MergeKey = "drawing-check-mode-paused"
+                    });
+                return;
+            }
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             DocumentIds[document] = documentId;
             lock (Gate)
@@ -974,7 +995,8 @@ namespace TCPipeAutoDraw.Core.Check
 
         private static void QueueAutomaticCheck(Document document)
         {
-            if (document == null || !CDBoxStudioSettingsStore.Load()
+            if (!CDBoxBusinessModeService.IsWastewater || document == null
+                || !CDBoxStudioSettingsStore.Load()
                 .FloatingCenterAutoCheckEnabled) return;
             string id = CadFloatingDocumentIdentity.GetDocumentId(document);
             if (AutomaticallyChecked.Contains(id) || IsRunning(document)) return;
@@ -989,6 +1011,40 @@ namespace TCPipeAutoDraw.Core.Check
             DocumentCollectionEventArgs e)
         {
             QueueAutomaticCheck(e == null ? null : e.Document);
+        }
+
+        private static void BusinessModeChanged(object sender,
+            CDBoxBusinessModeChangedEventArgs e)
+        {
+            if (e != null && e.Mode == CDBoxBusinessMode.Wastewater)
+            {
+                QueueAutomaticCheck(AcadApp.DocumentManager.MdiActiveDocument);
+                return;
+            }
+
+            List<ScanSession> sessions;
+            List<string> documentIds;
+            lock (Gate)
+            {
+                sessions = Sessions.Values.ToList();
+                documentIds = DocumentIds.Values.Concat(
+                    GroupMessageIds.Keys).Distinct(
+                        StringComparer.OrdinalIgnoreCase).ToList();
+                foreach (ScanSession session in sessions)
+                    session.CancelRequested = true;
+                Sessions.Clear();
+                if (_scanTimer != null) _scanTimer.Stop();
+                AutomaticallyChecked.Clear();
+            }
+            foreach (ScanSession session in sessions)
+            {
+                DisposeProgress(session);
+                ManagerValue.Cancel(session.DocumentId);
+            }
+            foreach (string documentId in documentIds)
+                DismissPreviousGroups(documentId);
+            ManagerValue.ClearAll();
+            ClearHighlightCore();
         }
 
         private static void DocumentToBeDestroyed(object sender,

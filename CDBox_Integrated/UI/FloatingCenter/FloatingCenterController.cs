@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using TCPipeAutoDraw.Core.Check;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Core.Sync;
 using TCPipeAutoDraw.Core.FloatingCenter;
 using TCPipeAutoDraw.UI.Studio;
@@ -51,6 +53,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                     CDBoxStudioSettingsStore.Load();
                 _temporaryHidden = !initialSettings.FloatingCenterShowOnStartup;
                 _center.Changed += CenterChanged;
+                CDBoxBusinessModeService.Changed += BusinessModeChanged;
                 try
                 {
                     AcadApp.DocumentManager.DocumentActivated += DocumentActivated;
@@ -73,6 +76,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             {
                 if (!_initialized) return;
                 if (_center != null) _center.Changed -= CenterChanged;
+                CDBoxBusinessModeService.Changed -= BusinessModeChanged;
                 try
                 {
                     AcadApp.DocumentManager.DocumentActivated -= DocumentActivated;
@@ -258,6 +262,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             try
             {
                 _window = new FloatingCenterWindow();
+                _window.SetBusinessMode(CDBoxBusinessModeService.Current);
                 IntPtr owner = IntPtr.Zero;
                 try
                 {
@@ -276,6 +281,10 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 _window.SettingsRequested += delegate
                 {
                     CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+                };
+                _window.ModeSwitchRequested += delegate
+                {
+                    CDBoxBusinessModeService.Toggle();
                 };
                 _window.ExpandedChanged += delegate
                 {
@@ -396,9 +405,16 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             EnsureWindow();
             if (_window == null || _center == null) return;
             _window.ApplySettings(settings);
+            _window.SetBusinessMode(CDBoxBusinessModeService.Current);
             string id = CadFloatingDocumentIdentity.GetDocumentId(document);
             _activeDocumentId = id;
             IList<FloatingMessage> active = _center.GetActiveMessages(id);
+            if (!CDBoxBusinessModeService.IsWastewater)
+                active = active.Where(x => x == null ||
+                    (!string.Equals(x.Source, "DrawingCheck",
+                        StringComparison.OrdinalIgnoreCase)
+                     && !string.Equals(x.Source, "SyncCenter",
+                         StringComparison.OrdinalIgnoreCase))).ToList();
             IList<FloatingMessage> history = _center.GetHistory(id);
             _window.SetSnapshot(new FloatingCenterViewSnapshot
             {
@@ -407,10 +423,44 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Status = _center.GetStatus(id),
                 Active = active,
                 History = history,
-                Ignored = CadDrawingCheckCoordinator.GetIgnoredMessages(document)
+                Ignored = CDBoxBusinessModeService.IsWastewater
+                    ? CadDrawingCheckCoordinator.GetIgnoredMessages(document)
+                    : new List<FloatingMessage>()
             });
             _window.ShowShell(initial);
             if (!_window.IsExpanded) QueuePresentationForActiveDocument(id);
+        }
+
+        private static void BusinessModeChanged(object sender,
+            CDBoxBusinessModeChangedEventArgs e)
+        {
+            BeginOnUi(delegate
+            {
+                CDBoxBusinessMode mode = e == null
+                    ? CDBoxBusinessModeService.Current : e.Mode;
+                if (_window != null) _window.SetBusinessMode(mode);
+                Document document = null;
+                try { document = AcadApp.DocumentManager.MdiActiveDocument; }
+                catch { }
+                IFloatingCenter center = _center;
+                if (center != null && document != null)
+                    center.Publish(new FloatingMessage
+                    {
+                        DocumentId = CadFloatingDocumentIdentity.GetDocumentId(
+                            document),
+                        Source = "BusinessMode",
+                        Kind = FloatingMessageKind.Information,
+                        Title = "已切换到" +
+                            CDBoxBusinessModeService.DisplayName(mode) + "模式",
+                        Summary = mode == CDBoxBusinessMode.RealEstate
+                            ? "污水图纸检查、同步和自动联动已暂停。"
+                            : "污水图纸检查与同步已恢复，可按需重新检查。",
+                        PresentAsCard = true,
+                        RecordInHistory = true,
+                        MergeKey = "business-mode"
+                    });
+                Refresh(false);
+            });
         }
 
         private static string ResolveDocumentName(Document document)
@@ -514,6 +564,12 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         {
             if (_center == null || string.IsNullOrWhiteSpace(documentId)) return;
             IList<FloatingMessage> active = _center.GetActiveMessages(documentId);
+            if (!CDBoxBusinessModeService.IsWastewater)
+                active = active.Where(x => x == null ||
+                    (!string.Equals(x.Source, "DrawingCheck",
+                        StringComparison.OrdinalIgnoreCase)
+                     && !string.Equals(x.Source, "SyncCenter",
+                         StringComparison.OrdinalIgnoreCase))).ToList();
             var activeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (FloatingMessage message in active)
                 if (message != null && !string.IsNullOrWhiteSpace(message.Id))

@@ -18,6 +18,7 @@ using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Core.Colors;
 using TCPipeAutoDraw.Core.FloatingCenter;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Core.Check;
 using TCPipeAutoDraw.Core.Sync;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
@@ -86,6 +87,7 @@ namespace CDBox.CoreTests
             Run("悬浮球 Phase 3 图纸检查聚合与隔离", TestFloatingCenterPhaseThree);
             Run("悬浮球 Phase 4 同步任务聚合与历史", TestFloatingCenterPhaseFour);
             Run("悬浮球 Phase 5 兼容通知迁移策略", TestFloatingCenterPhaseFive);
+            Run("悬浮球业务模式名称与解析", TestBusinessModeParsing);
 
             Console.WriteLine();
             Console.WriteLine("CDBox.CoreTests: {0} passed, {1} failed", _passed, Failures.Count);
@@ -2716,6 +2718,23 @@ namespace CDBox.CoreTests
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
             Directory.Delete(path, true);
+        }
+
+        private static void TestBusinessModeParsing()
+        {
+            Equal(CDBoxBusinessMode.RealEstate,
+                CDBoxBusinessModeService.Parse("RealEstate"),
+                "英文不动产模式值应可恢复");
+            Equal(CDBoxBusinessMode.RealEstate,
+                CDBoxBusinessModeService.Parse("不动产"),
+                "中文不动产模式值应可恢复");
+            Equal(CDBoxBusinessMode.Wastewater,
+                CDBoxBusinessModeService.Parse("invalid"),
+                "无效模式应安全回退到污水管线");
+            Equal("污水管线", CDBoxBusinessModeService.DisplayName(
+                CDBoxBusinessMode.Wastewater), "污水模式显示名称");
+            Equal("不动产", CDBoxBusinessModeService.DisplayName(
+                CDBoxBusinessMode.RealEstate), "不动产模式显示名称");
         }
 
         private sealed class CapturingLogger : ICDBoxLogger

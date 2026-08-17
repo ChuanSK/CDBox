@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using TCPipeAutoDraw.Core.Check;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Core.FloatingCenter;
 using TCPipeAutoDraw.Modules.AnnotationHud;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
@@ -38,6 +39,7 @@ namespace TCPipeAutoDraw.Core.Sync
                         DocumentToBeDestroyed;
                 }
                 catch { }
+                CDBoxBusinessModeService.Changed += BusinessModeChanged;
                 _initialized = true;
             }
         }
@@ -56,6 +58,7 @@ namespace TCPipeAutoDraw.Core.Sync
                         DocumentToBeDestroyed;
                 }
                 catch { }
+                CDBoxBusinessModeService.Changed -= BusinessModeChanged;
                 ManagerValue.ClearAll();
                 _suppressQuantityDirty = false;
                 _initialized = false;
@@ -65,7 +68,8 @@ namespace TCPipeAutoDraw.Core.Sync
         public static void MarkAnnotationDirty(Document document,
             IEnumerable<string> handles, string reason)
         {
-            if (document == null) return;
+            if (!CDBoxBusinessModeService.IsWastewater || document == null)
+                return;
             List<string> original = NormalizeHandles(handles);
             List<string> affected = FilterToDashboardScope(document, original);
             if (original.Count > 0 && affected.Count == 0) return;
@@ -89,7 +93,8 @@ namespace TCPipeAutoDraw.Core.Sync
 
         public static void ViewImpact(Document document, string taskId)
         {
-            if (document == null) return;
+            if (!CDBoxBusinessModeService.IsWastewater || document == null)
+                return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             SyncTask task = ManagerValue.GetTask(documentId, taskId);
             if (task == null) return;
@@ -115,7 +120,8 @@ namespace TCPipeAutoDraw.Core.Sync
 
         public static void RunTask(Document document, string taskId)
         {
-            if (document == null || string.IsNullOrWhiteSpace(taskId)) return;
+            if (!CDBoxBusinessModeService.IsWastewater || document == null
+                || string.IsNullOrWhiteSpace(taskId)) return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             SyncTask task = ManagerValue.GetTask(documentId, taskId);
             if (task == null) return;
@@ -124,7 +130,8 @@ namespace TCPipeAutoDraw.Core.Sync
 
         public static void RunAll(Document document, bool confirmed)
         {
-            if (document == null) return;
+            if (!CDBoxBusinessModeService.IsWastewater || document == null)
+                return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             List<SyncTask> tasks = ManagerValue.GetSnapshot(documentId).Tasks
                 .Where(x => x != null && (x.State == SyncTaskState.Dirty ||
@@ -163,7 +170,8 @@ namespace TCPipeAutoDraw.Core.Sync
         private static void AttributesChanged(object sender,
             QuantityAttributesChangedEventArgs e)
         {
-            if (e == null || e.Document == null) return;
+            if (!CDBoxBusinessModeService.IsWastewater || e == null
+                || e.Document == null) return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(
                 e.Document);
             List<string> original = NormalizeHandles(e.ObjectHandles);
@@ -194,7 +202,8 @@ namespace TCPipeAutoDraw.Core.Sync
         private static void DashboardDirtyMarked(object sender,
             QuantityDashboardDirtyEventArgs e)
         {
-            if (e == null || e.Document == null || _suppressQuantityDirty)
+            if (!CDBoxBusinessModeService.IsWastewater || e == null
+                || e.Document == null || _suppressQuantityDirty)
                 return;
             if (string.Equals(e.Reason, "quantity-attribute-saved",
                 StringComparison.OrdinalIgnoreCase)) return;
@@ -204,6 +213,7 @@ namespace TCPipeAutoDraw.Core.Sync
         private static void MarkCalculationDirty(Document document,
             IEnumerable<string> handles, string reason)
         {
+            if (!CDBoxBusinessModeService.IsWastewater) return;
             List<string> original = NormalizeHandles(handles);
             List<string> affected = FilterToDashboardScope(document, original);
             if (original.Count > 0 && affected.Count == 0) return;
@@ -227,7 +237,8 @@ namespace TCPipeAutoDraw.Core.Sync
 
         private static void TryAutoSync(Document document, SyncTask task)
         {
-            if (document == null || task == null ||
+            if (!CDBoxBusinessModeService.IsWastewater || document == null
+                || task == null ||
                 task.Risk != SyncRiskLevel.Safe) return;
             CDBoxStudioSettings settings = CDBoxStudioSettingsStore.Load();
             if (settings == null || !settings.FloatingCenterSafeAutoSyncEnabled)
@@ -243,6 +254,7 @@ namespace TCPipeAutoDraw.Core.Sync
         private static void ExecuteTask(Document document, SyncTask task,
             bool manageUndoMark)
         {
+            if (!CDBoxBusinessModeService.IsWastewater) return;
             string documentId = CadFloatingDocumentIdentity.GetDocumentId(document);
             SyncTask running = ManagerValue.Begin(documentId, task.Id);
             if (running == null) return;
@@ -456,6 +468,32 @@ namespace TCPipeAutoDraw.Core.Sync
             if (document == null) return;
             ManagerValue.ClearDocument(
                 CadFloatingDocumentIdentity.GetDocumentId(document));
+        }
+
+        private static void BusinessModeChanged(object sender,
+            CDBoxBusinessModeChangedEventArgs e)
+        {
+            if (e != null && e.Mode == CDBoxBusinessMode.Wastewater) return;
+            ManagerValue.ClearAll();
+            try
+            {
+                foreach (Document document in AcadApp.DocumentManager)
+                {
+                    if (document == null) continue;
+                    string documentId = CadFloatingDocumentIdentity
+                        .GetDocumentId(document);
+                    foreach (FloatingMessage message in FloatingHub.Current
+                        .GetActiveMessages(documentId))
+                    {
+                        if (message == null || !string.Equals(message.Source,
+                            SourceName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        try { FloatingHub.Current.Dismiss(documentId, message.Id); }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
         }
     }
 }

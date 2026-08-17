@@ -10,6 +10,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using TCPipeAutoDraw.Core.FloatingCenter;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.UI.Studio;
 
 namespace TCPipeAutoDraw.UI.FloatingCenter
@@ -37,6 +38,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         private readonly TextBlock _updatedText;
         private Button _refreshButton;
         private Button _syncAllButton;
+        private Button _modeButton;
         private readonly StackPanel _items;
         private readonly Button _taskTab;
         private readonly Button _historyTab;
@@ -54,9 +56,12 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         private bool _anchorBottom;
         private bool _positionInitialized;
         private DateTime _lastSnapshotUpdate;
+        private CDBoxBusinessMode _businessMode =
+            CDBoxBusinessMode.Wastewater;
 
         public event EventHandler HideRequested;
         public event EventHandler SettingsRequested;
+        public event EventHandler ModeSwitchRequested;
         public event EventHandler ExpandedChanged;
         public event EventHandler AnchorChanged;
         public event EventHandler<FloatingCenterActionEventArgs> ActionRequested;
@@ -291,6 +296,28 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             ApplyOpacity(IsMouseOver);
         }
 
+        public void SetBusinessMode(CDBoxBusinessMode mode)
+        {
+            _businessMode = mode;
+            bool wastewater = mode == CDBoxBusinessMode.Wastewater;
+            if (_modeButton != null)
+            {
+                _modeButton.Content = CDBoxBusinessModeService.DisplayName(mode);
+                _modeButton.ToolTip = wastewater
+                    ? "当前为污水管线模式；点击切换为不动产"
+                    : "当前为不动产模式；污水检查与同步已暂停。点击切换为污水管线";
+                _modeButton.Foreground = wastewater
+                    ? Brush("#2458B8") : Brush("#6D28D9");
+                _modeButton.Background = wastewater
+                    ? Brush("#EDF4FF") : Brush("#F3EEFF");
+            }
+            if (_refreshButton != null)
+                _refreshButton.Visibility = wastewater
+                    ? Visibility.Visible : Visibility.Collapsed;
+            if (!wastewater && _syncAllButton != null)
+                _syncAllButton.Visibility = Visibility.Collapsed;
+        }
+
         public void SetSnapshot(FloatingCenterViewSnapshot snapshot)
         {
             _snapshot = snapshot;
@@ -346,7 +373,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                     x.Kind == FloatingMessageKind.Sync && string.Equals(
                         x.Source, "SyncCenter",
                         StringComparison.OrdinalIgnoreCase));
-                _syncAllButton.Visibility = syncCount > 0
+                _syncAllButton.Visibility = _businessMode ==
+                    CDBoxBusinessMode.Wastewater && syncCount > 0
                     ? Visibility.Visible : Visibility.Collapsed;
                 _syncAllButton.Content = syncCount > 1
                     ? "全部同步 " + syncCount : "同步";
@@ -505,6 +533,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var updated = new TextBlock
             {
                 Name = "UpdatedText",
@@ -513,18 +542,28 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 VerticalAlignment = VerticalAlignment.Center
             };
             footer.Children.Add(updated);
+            _modeButton = FooterButton("污水管线");
+            _modeButton.Margin = new Thickness(6, 0, 0, 0);
+            _modeButton.Click += delegate
+            {
+                EventHandler handler = ModeSwitchRequested;
+                if (handler != null) handler(this, EventArgs.Empty);
+            };
+            Grid.SetColumn(_modeButton, 1);
+            footer.Children.Add(_modeButton);
             _refreshButton = FooterButton("重新检查");
+            _refreshButton.Margin = new Thickness(6, 0, 0, 0);
             _refreshButton.Click += delegate
             {
                 RaiseAction("drawing-check.refresh");
             };
-            Grid.SetColumn(_refreshButton, 1);
+            Grid.SetColumn(_refreshButton, 2);
             footer.Children.Add(_refreshButton);
             _syncAllButton = FooterButton("同步");
             _syncAllButton.Margin = new Thickness(6, 0, 0, 0);
             _syncAllButton.Visibility = Visibility.Collapsed;
             _syncAllButton.Click += delegate { RaiseAction("sync.run-all"); };
-            Grid.SetColumn(_syncAllButton, 2);
+            Grid.SetColumn(_syncAllButton, 3);
             footer.Children.Add(_syncAllButton);
             Button settings = FooterButton("设置");
             settings.Margin = new Thickness(6, 0, 0, 0);
@@ -533,7 +572,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 EventHandler handler = SettingsRequested;
                 if (handler != null) handler(this, EventArgs.Empty);
             };
-            Grid.SetColumn(settings, 3);
+            Grid.SetColumn(settings, 4);
             footer.Children.Add(settings);
             Button hide = FooterButton("暂时隐藏");
             hide.Margin = new Thickness(6, 0, 0, 0);
@@ -542,7 +581,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 EventHandler handler = HideRequested;
                 if (handler != null) handler(this, EventArgs.Empty);
             };
-            Grid.SetColumn(hide, 4);
+            Grid.SetColumn(hide, 5);
             footer.Children.Add(hide);
             return footer;
         }

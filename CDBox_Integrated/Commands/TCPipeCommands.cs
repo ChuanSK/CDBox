@@ -10,6 +10,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Core.Modules;
+using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Core.FloatingCenter;
 using TCPipeAutoDraw.Core.Check;
 using TCPipeAutoDraw.Core.Sync;
@@ -61,6 +62,7 @@ namespace TCPipeAutoDraw.Commands
             }
 
             EnsureMenuBar();
+            CDBoxBusinessModeService.Initialize();
             FloatingCenterController.Initialize(FloatingCenter.Current);
             CadDrawingCheckCoordinator.Initialize();
             CadSyncCoordinator.Initialize();
@@ -262,36 +264,42 @@ namespace TCPipeAutoDraw.Commands
         [CommandMethod("CDRE", CommandFlags.Modal)]
         public void OpenRealEstate()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.OpenWorkspace();
         }
 
         [CommandMethod("CDBOXRE", CommandFlags.Modal)]
         public void OpenRealEstateAlias()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.OpenWorkspace();
         }
 
         [CommandMethod("CDREBL", CommandFlags.Modal)]
         public void AnnotateRealEstateBuildingLength()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.ExecuteCommand("CDREBL");
         }
 
         [CommandMethod("JZWBC", CommandFlags.Modal)]
         public void AnnotateRealEstateBuildingLengthAlias()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.ExecuteCommand("CDREBL");
         }
 
         [CommandMethod("CDREBLSZ", CommandFlags.Modal)]
         public void OpenRealEstateBuildingLengthSettings()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.ExecuteCommand("CDREBLSZ");
         }
 
         [CommandMethod("JZWBCSZ", CommandFlags.Modal)]
         public void OpenRealEstateBuildingLengthSettingsAlias()
         {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
             RealEstateModuleHost.ExecuteCommand("CDREBLSZ");
         }
 
@@ -562,7 +570,12 @@ namespace TCPipeAutoDraw.Commands
                     "打开独立的不动产业务工作区。",
                     "CDRE",
                     true,
-                    RealEstateModuleHost.OpenWorkspace));
+                    delegate
+                    {
+                        CDBoxBusinessModeService.SetMode(
+                            CDBoxBusinessMode.RealEstate);
+                        RealEstateModuleHost.OpenWorkspace();
+                    }));
             }
             return modules;
         }

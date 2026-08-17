@@ -76,6 +76,7 @@
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterPlacement.cs" Link="Source\FloatingCenter\FloatingCenterPlacement.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingMessagePresentationQueue.cs" Link="Source\FloatingCenter\FloatingMessagePresentationQueue.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingLegacyRoutingPolicy.cs" Link="Source\FloatingCenter\FloatingLegacyRoutingPolicy.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Core\Business\CDBoxBusinessModeService.cs" Link="Source\Business\CDBoxBusinessModeService.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\FloatingCenter\FloatingCenterPresentation.cs" Link="Source\FloatingCenter\FloatingCenterPresentation.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckModels.cs" Link="Source\Check\DrawingCheckModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckRuleEvaluator.cs" Link="Source\Check\DrawingCheckRuleEvaluator.cs" />

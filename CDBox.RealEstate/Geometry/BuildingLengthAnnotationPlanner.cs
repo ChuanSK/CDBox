@@ -156,7 +156,9 @@ namespace CDBox.RealEstate.Geometry
 
             double sideSignA = Cross(axis, sideA - start);
             double sideSignB = Cross(axis, sideB - start);
-            if (Math.Abs(sideSignA) <= tolerance || Math.Abs(sideSignB) <= tolerance
+            double sideTolerance = tolerance * Math.Sqrt(lengthSquared);
+            if (Math.Abs(sideSignA) <= sideTolerance
+                || Math.Abs(sideSignB) <= sideTolerance
                 || sideSignA * sideSignB >= 0) return null;
 
             return new DiagonalCandidate

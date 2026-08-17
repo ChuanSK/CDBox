@@ -19,6 +19,7 @@ namespace TCPipeAutoDraw.UI
     internal static class CDBoxMenuService
     {
         private const string TopMenuName = "超重氢工具箱";
+        private const string RealEstateMenuName = "CDBox 不动产";
         private const string EmptyText = "暂无功能";
 
         // 使用真实 Ctrl+C 控制字符，避免 CASS 将 "^C^C" 当作普通命令文本执行。
@@ -82,8 +83,33 @@ namespace TCPipeAutoDraw.UI
                     }
                 }
 
+                object realEstateMenu = FindPopupMenu(popupMenus,
+                    RealEstateMenuName);
+                if (realEstateMenu == null)
+                    realEstateMenu = Invoke(popupMenus, "Add",
+                        RealEstateMenuName);
+                if (realEstateMenu != null
+                    && !ClearPopupMenuItems(realEstateMenu)
+                    && GetCount(realEstateMenu) > 0)
+                {
+                    TryInvoke(realEstateMenu, "RemoveFromMenuBar");
+                    bool renamed = TryRenameMenu(realEstateMenu,
+                        "_CDBox_OldRealEstateMenu_"
+                        + DateTime.Now.ToString("yyyyMMddHHmmss"));
+                    realEstateMenu = renamed
+                        ? Invoke(popupMenus, "Add", RealEstateMenuName)
+                        : null;
+                    if (realEstateMenu != null)
+                        ClearPopupMenuItems(realEstateMenu);
+                }
+
                 BuildMenu(topMenu);
                 InsertMenuInMenuBar(acad, topMenu);
+                if (realEstateMenu != null)
+                {
+                    BuildRealEstateMenu(realEstateMenu);
+                    InsertMenuInMenuBar(acad, realEstateMenu);
+                }
                 TryShowMenuBar();
                 TryUpdateAcad(acad);
 
@@ -212,6 +238,12 @@ namespace TCPipeAutoDraw.UI
                 {
                     touched = TryInvoke(byName, "RemoveFromMenuBar") || TryInvoke(byName, "RemoveMenuFromMenuBar") || touched;
                 }
+                object realEstateByName = Invoke(menuBar, "Item",
+                    RealEstateMenuName);
+                if (IsTopMenu(realEstateByName))
+                    touched = TryInvoke(realEstateByName,
+                        "RemoveFromMenuBar") || TryInvoke(realEstateByName,
+                        "RemoveMenuFromMenuBar") || touched;
 
                 int count = GetCount(menuBar);
                 for (int i = count; i >= 0; i--)
@@ -263,7 +295,9 @@ namespace TCPipeAutoDraw.UI
 
         private static bool IsTopMenu(object menu)
         {
-            return IsSameMenuName(GetMenuDisplayText(menu), TopMenuName);
+            string name = GetMenuDisplayText(menu);
+            return IsSameMenuName(name, TopMenuName)
+                || IsSameMenuName(name, RealEstateMenuName);
         }
 
         private static string GetMenuDisplayText(object menuOrItem)
@@ -398,6 +432,14 @@ namespace TCPipeAutoDraw.UI
             AddCommandItem(topMenu, "⚙ CDBox设置", "CDSET");
             AddSeparator(topMenu);
             AddCommandItem(topMenu, "ⓘ 关于超重氢工具箱", "CDABOUT");
+        }
+
+        private static void BuildRealEstateMenu(object topMenu)
+        {
+            AddCommandItem(topMenu, "▱ 注记建筑物边长", "CDREBL");
+            AddCommandItem(topMenu, "⚙ 建筑物边长注记设置", "CDREBLSZ");
+            AddSeparator(topMenu);
+            AddCommandItem(topMenu, "▦ CDBox 不动产工作区", "CDRE");
         }
 
         private static object AddSubMenu(object parent, string label, string tag)
@@ -579,7 +621,8 @@ namespace TCPipeAutoDraw.UI
                 object item = Invoke(collection, "Item", i);
                 string name = GetMenuDisplayText(item);
                 if (string.IsNullOrWhiteSpace(name)) continue;
-                if (onlyCdBox && !IsSameMenuName(name, TopMenuName)) continue;
+                if (onlyCdBox && !IsSameMenuName(name, TopMenuName)
+                    && !IsSameMenuName(name, RealEstateMenuName)) continue;
 
                 sb.AppendLine(title + "[" + i + "]=" + name + ", Count=" + GetCount(item));
                 if (dumpChildren) AppendMenuItems(sb, item, "    ", 0, 2);
