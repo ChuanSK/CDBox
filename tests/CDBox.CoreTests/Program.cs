@@ -1426,6 +1426,22 @@ namespace CDBox.CoreTests
                 .All(x => x.Text == x.Length.ToString("0.00",
                     System.Globalization.CultureInfo.InvariantCulture)),
                 "边长和辅助线长度统一保留两位小数");
+
+            BuildingAnnotationPlan concave =
+                BuildingLengthAnnotationPlanner.Create(new[]
+                {
+                    new BuildingPoint2(0, 0),
+                    new BuildingPoint2(4, 0),
+                    new BuildingPoint2(2, 2),
+                    new BuildingPoint2(4, 4),
+                    new BuildingPoint2(0, 4)
+                }, 0.5, true);
+            False(concave.IsOrthogonal,
+                "非正交凹五边形不得误判为可矩形拆分");
+            Equal(2, concave.AuxiliarySegments.Count,
+                "非正交五边形应以两条内部对角线拆分为三角形");
+            Equal(string.Empty, concave.Warning,
+                "成功三角化后不应留下人工补线警告");
         }
 
         private static void TestBuildingLengthAnnotationSettingsPage()

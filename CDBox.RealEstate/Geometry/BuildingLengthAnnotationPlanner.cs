@@ -49,7 +49,8 @@ namespace CDBox.RealEstate.Geometry
             }
             else if (!plan.IsOrthogonal && points.Count > 4)
             {
-                plan.Warning = "当前版本仅自动生成非正交四边形的面积计算辅助线，请人工复核该建筑。";
+                if (!AddTriangulationAuxiliaries(points, plan, tolerance))
+                    plan.Warning = "该非正交建筑无法完整拆分为三角形，请人工复核面积计算辅助线。";
             }
 
             IEnumerable<BuildingPlannedSegment> all =
@@ -171,6 +172,87 @@ namespace CDBox.RealEstate.Geometry
                 FootB = start + axis * parameterB,
                 Length = Math.Sqrt(lengthSquared)
             };
+        }
+
+        private static bool AddTriangulationAuxiliaries(
+            IList<BuildingPoint2> points, BuildingAnnotationPlan plan,
+            double tolerance)
+        {
+            var remaining = Enumerable.Range(0, points.Count).ToList();
+            var diagonals = new HashSet<string>(
+                StringComparer.Ordinal);
+            double orientation = Math.Sign(SignedArea(points));
+            double areaTolerance = tolerance * tolerance;
+            int guard = points.Count * points.Count;
+
+            while (remaining.Count > 3 && guard-- > 0)
+            {
+                bool clipped = false;
+                for (int offset = 0; offset < remaining.Count; offset++)
+                {
+                    int previousIndex = remaining[(offset + remaining.Count - 1)
+                        % remaining.Count];
+                    int currentIndex = remaining[offset];
+                    int nextIndex = remaining[(offset + 1) % remaining.Count];
+                    BuildingPoint2 previous = points[previousIndex];
+                    BuildingPoint2 current = points[currentIndex];
+                    BuildingPoint2 next = points[nextIndex];
+                    double turn = Cross(current - previous, next - current);
+                    if (turn * orientation <= areaTolerance) continue;
+
+                    bool containsVertex = false;
+                    foreach (int candidateIndex in remaining)
+                    {
+                        if (candidateIndex == previousIndex
+                            || candidateIndex == currentIndex
+                            || candidateIndex == nextIndex) continue;
+                        if (!PointInTriangle(points[candidateIndex], previous,
+                            current, next, orientation, areaTolerance)) continue;
+                        containsVertex = true;
+                        break;
+                    }
+                    if (containsVertex) continue;
+
+                    if (!IsOriginalBoundary(previousIndex, nextIndex,
+                        points.Count))
+                    {
+                        int first = Math.Min(previousIndex, nextIndex);
+                        int second = Math.Max(previousIndex, nextIndex);
+                        string key = first + ":" + second;
+                        if (diagonals.Add(key))
+                            plan.AuxiliarySegments.Add(CreateSegment(
+                                previous, next, true));
+                    }
+                    remaining.RemoveAt(offset);
+                    clipped = true;
+                    break;
+                }
+                if (!clipped) return false;
+            }
+            return remaining.Count == 3
+                && plan.AuxiliarySegments.Count == points.Count - 3;
+        }
+
+        private static bool PointInTriangle(BuildingPoint2 point,
+            BuildingPoint2 first, BuildingPoint2 second,
+            BuildingPoint2 third, double orientation,
+            double tolerance)
+        {
+            double firstSide = Cross(second - first, point - first)
+                * orientation;
+            double secondSide = Cross(third - second, point - second)
+                * orientation;
+            double thirdSide = Cross(first - third, point - third)
+                * orientation;
+            return firstSide >= -tolerance && secondSide >= -tolerance
+                && thirdSide >= -tolerance;
+        }
+
+        private static bool IsOriginalBoundary(int first, int second,
+            int count)
+        {
+            int difference = Math.Abs(first - second);
+            return difference == 1 || difference == count - 1;
         }
 
         private static BuildingPlannedSegment CreateSegment(
