@@ -26,6 +26,7 @@ namespace CDBox.RealEstate.Geometry
         public IList<BuildingPlannedSegment> AuxiliarySegments { get; private set; }
         public double TextHeight { get; internal set; }
         public bool IsOrthogonal { get; internal set; }
+        public bool CanCalculateAreaFromBoundary { get; internal set; }
         public string Warning { get; internal set; }
     }
 }

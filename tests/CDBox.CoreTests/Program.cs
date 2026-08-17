@@ -1378,6 +1378,8 @@ namespace CDBox.CoreTests
                 }, 0.5, false);
             True(rectangle.IsOrthogonal,
                 "旋转前矩形应识别为正交建筑");
+            True(rectangle.CanCalculateAreaFromBoundary,
+                "矩形外边长度足以用于面积计算");
             Equal(4, rectangle.BoundarySegments.Count,
                 "矩形应标注四条外边");
             Equal(0, rectangle.AuxiliarySegments.Count,
@@ -1401,8 +1403,24 @@ namespace CDBox.CoreTests
                 "L 形应标注六条外边");
             Equal(0, lShape.AuxiliarySegments.Count,
                 "正交 L 形可拆分为矩形，不应生成辅助线");
-            True(lShape.TextHeight < 0.5,
-                "短边存在时自适应高度应统一缩小");
+            Near(1.05 / (4 * 0.72 + 0.8) * 2.0,
+                lShape.TextHeight, 1e-9,
+                "自适应高度应按原计算结果统一放大两倍");
+
+            BuildingAnnotationPlan skewedEqualOpposites =
+                BuildingLengthAnnotationPlanner.Create(new[]
+                {
+                    new BuildingPoint2(0, 0),
+                    new BuildingPoint2(3.65, 0),
+                    new BuildingPoint2(4.20, 2.57),
+                    new BuildingPoint2(0.55, 2.57)
+                }, 0.5, true);
+            False(skewedEqualOpposites.IsOrthogonal,
+                "斜四边形不应被误判为严格正交图形");
+            True(skewedEqualOpposites.CanCalculateAreaFromBoundary,
+                "对应边长相等时应视为外边数据已经足够");
+            Equal(0, skewedEqualOpposites.AuxiliarySegments.Count,
+                "对应边长相等的斜四边形不得绘制辅助线");
 
             BuildingAnnotationPlan irregular =
                 BuildingLengthAnnotationPlanner.Create(new[]
@@ -1414,6 +1432,8 @@ namespace CDBox.CoreTests
                 }, 0.8, true);
             False(irregular.IsOrthogonal,
                 "斜四边形不得误判为正交建筑");
+            False(irregular.CanCalculateAreaFromBoundary,
+                "对应边长不等时外边数据不足以直接计算面积");
             Equal(4, irregular.BoundarySegments.Count,
                 "非正交四边形应标注四条外边");
             Equal(3, irregular.AuxiliarySegments.Count,
@@ -1473,6 +1493,8 @@ namespace CDBox.CoreTests
                 "设置页应使用独立不动产标题");
             Contains(html, "文字高度自适应",
                 "设置页应提供文字高度自适应开关");
+            Contains(html, "2 倍高度出图",
+                "设置页应说明自适应文字高度已经放大两倍");
             Contains(html, "同一建筑的全部文字高度始终相同",
                 "设置页应解释建筑级统一自适应规则");
             Contains(html, "插件内颜色选择器",

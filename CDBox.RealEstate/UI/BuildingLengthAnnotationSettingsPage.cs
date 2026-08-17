@@ -82,7 +82,7 @@ namespace CDBox.RealEstate.UI
                 .Append("</style></head><body><main class=\"page\" data-page=\"realestate-building-length-settings\">")
                 .Append("<header class=\"head\"><div><span class=\"kicker\">CDBox REALESTATE</span><h1>建筑物边长注记设置</h1><p>该页面独立于 CDBox 工作台，沿用统一界面与插件颜色选择器。</p></div><span class=\"mode\">不动产 · 建筑注记</span></header>")
                 .Append("<section class=\"card\"><div class=\"card-head\"><strong>注记文字</strong><small>外边与面积计算辅助线的长度文字共用以下样式。</small></div><div class=\"grid\">")
-                .Append("<label class=\"field\"><span>文字高度</span><input id=\"textHeight\" class=\"control\" type=\"number\" min=\"0.01\" step=\"0.05\"><small>关闭自适应时使用此高度；开启后作为最大高度。</small></label>")
+                .Append("<label class=\"field\"><span>文字高度</span><input id=\"textHeight\" class=\"control\" type=\"number\" min=\"0.01\" step=\"0.05\"><small>关闭自适应时使用此高度；开启后按线段适配并以 2 倍高度出图。</small></label>")
                 .Append("<div class=\"switch-row\"><div><strong>文字高度自适应</strong><small>按最短注记线段统一计算一次，同一建筑的全部文字高度始终相同。</small></div><label class=\"switch\"><input id=\"adaptive\" type=\"checkbox\"><span class=\"slider\"></span></label></div>")
                 .Append("<label class=\"field\"><span>文字样式</span><select id=\"textStyle\" class=\"control\"></select><small>读取当前 CAD 图纸中可用的文字样式。</small></label>")
                 .Append("<div class=\"field\"><span>文字颜色</span><button id=\"textColor\" class=\"color\" type=\"button\"></button><small>使用 CDBox 插件内颜色选择器。</small></div>")

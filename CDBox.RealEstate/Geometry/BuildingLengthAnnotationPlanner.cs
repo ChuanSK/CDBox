@@ -41,13 +41,17 @@ namespace CDBox.RealEstate.Geometry
             }
 
             plan.IsOrthogonal = IsOrthogonal(points, tolerance);
-            if (!plan.IsOrthogonal && points.Count == 4)
+            plan.CanCalculateAreaFromBoundary = points.Count == 3
+                || (points.Count == 4
+                    ? HasEqualOppositeLengths(plan.BoundarySegments)
+                    : plan.IsOrthogonal);
+            if (!plan.CanCalculateAreaFromBoundary && points.Count == 4)
             {
                 AddQuadrilateralAuxiliaries(points, plan, tolerance);
                 if (plan.AuxiliarySegments.Count == 0)
                     plan.Warning = "该非正交四边形无法自动生成有效面积计算辅助线，请人工复核。";
             }
-            else if (!plan.IsOrthogonal && points.Count > 4)
+            else if (!plan.CanCalculateAreaFromBoundary && points.Count > 4)
             {
                 if (!AddTriangulationAuxiliaries(points, plan, tolerance))
                     plan.Warning = "该非正交建筑无法完整拆分为三角形，请人工复核面积计算辅助线。";
@@ -114,6 +118,16 @@ namespace CDBox.RealEstate.Geometry
                     return false;
             }
             return true;
+        }
+
+        private static bool HasEqualOppositeLengths(
+            IList<BuildingPlannedSegment> segments)
+        {
+            if (segments == null || segments.Count != 4) return false;
+            return string.Equals(segments[0].Text, segments[2].Text,
+                       StringComparison.Ordinal)
+                   && string.Equals(segments[1].Text, segments[3].Text,
+                       StringComparison.Ordinal);
         }
 
         private static void AddQuadrilateralAuxiliaries(
@@ -283,7 +297,7 @@ namespace CDBox.RealEstate.Geometry
                 double fit = segment.Length / (characters * 0.72 + 0.8);
                 height = Math.Min(height, fit);
             }
-            return Math.Max(configuredHeight * 0.15, height);
+            return Math.Max(configuredHeight * 0.15, height) * 2.0;
         }
 
         private static void PositionBoundaryText(

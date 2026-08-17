@@ -18,8 +18,15 @@ namespace TCPipeAutoDraw.UI
     /// </summary>
     internal static class CDBoxMenuService
     {
-        private const string TopMenuName = "超重氢工具箱";
-        private const string RealEstateMenuName = "CDBox 不动产";
+        private const string TopMenuName = "污水管线";
+        private const string RealEstateMenuName = "不动产";
+        private static readonly string[] KnownMenuNames =
+        {
+            TopMenuName,
+            RealEstateMenuName,
+            "超重氢工具箱",
+            "CDBox 不动产"
+        };
         private const string EmptyText = "暂无功能";
 
         // 使用真实 Ctrl+C 控制字符，避免 CASS 将 "^C^C" 当作普通命令文本执行。
@@ -55,11 +62,8 @@ namespace TCPipeAutoDraw.UI
                 // 先从菜单栏摘下旧入口，避免重建过程中显示旧对象。
                 RemoveTopMenusFromMenuBar(acad);
 
-                object topMenu = FindPopupMenu(popupMenus, TopMenuName);
-                if (topMenu == null)
-                {
-                    topMenu = Invoke(popupMenus, "Add", TopMenuName);
-                }
+                object topMenu = FindOrMigratePopupMenu(popupMenus,
+                    TopMenuName, "超重氢工具箱");
 
                 if (topMenu == null) return;
 
@@ -83,11 +87,8 @@ namespace TCPipeAutoDraw.UI
                     }
                 }
 
-                object realEstateMenu = FindPopupMenu(popupMenus,
-                    RealEstateMenuName);
-                if (realEstateMenu == null)
-                    realEstateMenu = Invoke(popupMenus, "Add",
-                        RealEstateMenuName);
+                object realEstateMenu = FindOrMigratePopupMenu(popupMenus,
+                    RealEstateMenuName, "CDBox 不动产");
                 if (realEstateMenu != null
                     && !ClearPopupMenuItems(realEstateMenu)
                     && GetCount(realEstateMenu) > 0)
@@ -232,18 +233,15 @@ namespace TCPipeAutoDraw.UI
                 int beforeCount = GetCount(menuBar);
                 bool touched = false;
 
-                // AutoCAD ActiveX 支持直接按名称取菜单。
-                object byName = Invoke(menuBar, "Item", TopMenuName);
-                if (IsTopMenu(byName))
+                // AutoCAD ActiveX 支持直接按名称取菜单，同时处理旧版本名称。
+                foreach (string menuName in KnownMenuNames)
                 {
-                    touched = TryInvoke(byName, "RemoveFromMenuBar") || TryInvoke(byName, "RemoveMenuFromMenuBar") || touched;
+                    object byName = Invoke(menuBar, "Item", menuName);
+                    if (!IsTopMenu(byName)) continue;
+                    touched = TryInvoke(byName, "RemoveFromMenuBar")
+                        || TryInvoke(byName, "RemoveMenuFromMenuBar")
+                        || touched;
                 }
-                object realEstateByName = Invoke(menuBar, "Item",
-                    RealEstateMenuName);
-                if (IsTopMenu(realEstateByName))
-                    touched = TryInvoke(realEstateByName,
-                        "RemoveFromMenuBar") || TryInvoke(realEstateByName,
-                        "RemoveMenuFromMenuBar") || touched;
 
                 int count = GetCount(menuBar);
                 for (int i = count; i >= 0; i--)
@@ -283,6 +281,18 @@ namespace TCPipeAutoDraw.UI
             return found.Count > 0 ? found[0] : null;
         }
 
+        private static object FindOrMigratePopupMenu(object popupMenus,
+            string targetName, string legacyName)
+        {
+            object menu = FindPopupMenu(popupMenus, targetName);
+            if (menu != null) return menu;
+
+            object legacy = FindPopupMenu(popupMenus, legacyName);
+            if (legacy != null && TryRenameMenu(legacy, targetName))
+                return legacy;
+            return Invoke(popupMenus, "Add", targetName);
+        }
+
         private static bool ContainsSameComObject(List<object> list, object value)
         {
             if (value == null) return false;
@@ -295,9 +305,14 @@ namespace TCPipeAutoDraw.UI
 
         private static bool IsTopMenu(object menu)
         {
-            string name = GetMenuDisplayText(menu);
-            return IsSameMenuName(name, TopMenuName)
-                || IsSameMenuName(name, RealEstateMenuName);
+            return IsKnownMenuName(GetMenuDisplayText(menu));
+        }
+
+        private static bool IsKnownMenuName(string name)
+        {
+            foreach (string known in KnownMenuNames)
+                if (IsSameMenuName(name, known)) return true;
+            return false;
         }
 
         private static string GetMenuDisplayText(object menuOrItem)
@@ -564,8 +579,6 @@ namespace TCPipeAutoDraw.UI
         {
             if (acad == null || menu == null) return;
 
-            RemoveTopMenusFromMenuBar(acad);
-
             object menuBar = GetProperty(acad, "MenuBar");
             int index = GetCount(menuBar);
 
@@ -621,8 +634,7 @@ namespace TCPipeAutoDraw.UI
                 object item = Invoke(collection, "Item", i);
                 string name = GetMenuDisplayText(item);
                 if (string.IsNullOrWhiteSpace(name)) continue;
-                if (onlyCdBox && !IsSameMenuName(name, TopMenuName)
-                    && !IsSameMenuName(name, RealEstateMenuName)) continue;
+                if (onlyCdBox && !IsKnownMenuName(name)) continue;
 
                 sb.AppendLine(title + "[" + i + "]=" + name + ", Count=" + GetCount(item));
                 if (dumpChildren) AppendMenuItems(sb, item, "    ", 0, 2);
