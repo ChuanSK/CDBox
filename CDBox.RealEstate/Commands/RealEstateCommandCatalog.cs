@@ -6,5 +6,6 @@ namespace CDBox.RealEstate.Commands
         public const string OpenWorkspaceAlias = "CDBOXRE";
         public const string AnnotateBuildingLength = "CDREBL";
         public const string OpenBuildingLengthSettings = "CDREBLSZ";
+        public const string OpenParcelSurveyEditor = "CDREDJ";
     }
 }

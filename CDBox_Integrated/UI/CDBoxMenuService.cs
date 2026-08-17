@@ -451,6 +451,8 @@ namespace TCPipeAutoDraw.UI
 
         private static void BuildRealEstateMenu(object topMenu)
         {
+            AddCommandItem(topMenu, "▤ 地籍信息", "CDREDJ");
+            AddSeparator(topMenu);
             AddCommandItem(topMenu, "▱ 注记建筑物边长", "CDREBL");
             AddCommandItem(topMenu, "⚙ 建筑物边长注记设置", "CDREBLSZ");
             AddSeparator(topMenu);

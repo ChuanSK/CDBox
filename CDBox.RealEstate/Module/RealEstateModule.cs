@@ -19,6 +19,7 @@ namespace CDBox.RealEstate.Module
         private RealEstateWorkspaceService _workspace;
         private BuildingLengthAnnotationCadService _buildingAnnotations;
         private BuildingLengthAnnotationSettingsService _buildingSettings;
+        private ParcelSurveyEditorService _parcelSurveyEditor;
 
         public string Id { get { return ModuleId; } }
         public string Name { get { return ModuleName; } }
@@ -45,6 +46,7 @@ namespace CDBox.RealEstate.Module
                 prompts, notifications, logger);
             _buildingSettings = new BuildingLengthAnnotationSettingsService(
                 pageService, colors, _buildingAnnotations);
+            _parcelSurveyEditor = new ParcelSurveyEditorService(pageService);
             _logger.Info("RealEstate 模块初始化完成，版本 " + Version + "。");
         }
 
@@ -59,7 +61,7 @@ namespace CDBox.RealEstate.Module
         public void ExecuteCommand(string commandId)
         {
             if (_workspace == null || _buildingAnnotations == null
-                || _buildingSettings == null)
+                || _buildingSettings == null || _parcelSurveyEditor == null)
                 throw new InvalidOperationException(
                     "RealEstate 模块尚未初始化。");
             if (string.Equals(commandId,
@@ -76,6 +78,13 @@ namespace CDBox.RealEstate.Module
                 _buildingSettings.Open();
                 return;
             }
+            if (string.Equals(commandId,
+                RealEstateCommandCatalog.OpenParcelSurveyEditor,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSurveyEditor.Open();
+                return;
+            }
             throw new ArgumentException("未知的不动产命令：" + commandId,
                 "commandId");
         }
@@ -87,6 +96,7 @@ namespace CDBox.RealEstate.Module
             _workspace = null;
             _buildingAnnotations = null;
             _buildingSettings = null;
+            _parcelSurveyEditor = null;
             _logger = null;
         }
     }

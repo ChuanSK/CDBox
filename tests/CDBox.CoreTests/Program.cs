@@ -11,6 +11,7 @@ using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
 using CDBox.RealEstate.Geometry;
+using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Settings;
 using CDBox.RealEstate.UI;
 using CDBoxUpdater;
@@ -61,6 +62,8 @@ namespace CDBox.CoreTests
             Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
             Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
+            Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
+            Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("工程量计算过程导出", TestQuantityCalculationProcessExport);
@@ -1505,6 +1508,139 @@ namespace CDBox.CoreTests
                 "设置页应提供辅助线线宽");
             Contains(html, "realestate-building-length-settings",
                 "设置页路由上下文应与不动产功能隔离");
+        }
+
+        private static void TestParcelSurveyModelAndDefaults()
+        {
+            var notApplicable = new ParcelSurveyFieldValue
+            {
+                Status = ParcelFieldStatus.NotApplicable,
+                TextValue = "尚未填写",
+                NumericValue = 10m
+            };
+            notApplicable.Normalize();
+            Equal("/", notApplicable.TextValue,
+                "不适用必须明确保存为斜杠");
+            False(notApplicable.NumericValue.HasValue,
+                "不适用不得保留数值以免与真实面积混淆");
+
+            string directory = Path.Combine(Path.GetTempPath(),
+                "cdbox-parcel-tests-" + Guid.NewGuid().ToString("N"));
+            string path = Path.Combine(directory, "parcel-survey-data.json");
+            try
+            {
+                var store = new ParcelSurveyStore(path);
+                ParcelSurveyRecord first = store.Current();
+                ParcelSurveyFieldValue organization =
+                    first.Field("project.organization");
+                organization.TextValue = "测试调查机构";
+                organization.Status = ParcelFieldStatus.Default;
+                first.Field(ParcelSurveyFieldKeys.ParcelArea).NumericValue = 101.87m;
+                store.Save(first);
+
+                ParcelSurveyRecord next = store.CreateNew();
+                Equal("测试调查机构",
+                    next.Field("project.organization").TextValue,
+                    "项目默认值应自动用于新宗地");
+                Equal(ParcelFieldStatus.Default,
+                    next.Field("project.organization").Status,
+                    "继承项目设置的字段状态应保持为默认");
+                Equal(DateTime.Today.ToString("yyyy-MM-dd"),
+                    next.Field("project.formDate").TextValue,
+                    "新宗地填表日期应使用系统日期");
+                Contains(File.ReadAllText(path), "101.87",
+                    "面积应以 JSON 数值保存而不是带单位文本");
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestParcelSurveyValidationAndPage()
+        {
+            var record = new ParcelSurveyRecord();
+            record.Normalize();
+            ParcelSurveyValidationResult blank =
+                ParcelSurveyValidator.Validate(record);
+            True(blank.RequiredMissingCount > 0,
+                "空宗地必须报告必填字段缺失");
+            False(blank.CanExport,
+                "空宗地不得启用调查表导出");
+
+            for (int i = 0; i < 27; i++)
+            {
+                string point = "J" + (i + 1);
+                string next = "J" + (i == 26 ? 1 : i + 2);
+                record.Boundary.Points.Add(new ParcelBoundaryPointRecord
+                {
+                    PointNumber = point,
+                    X = i,
+                    Y = i + 0.5m,
+                    MarkerType = "钢钉",
+                    Confirmed = true,
+                    Status = ParcelFieldStatus.Automatic
+                });
+                record.Boundary.Segments.Add(new ParcelBoundarySegmentRecord
+                {
+                    StartPointNumber = point,
+                    EndPointNumber = next,
+                    Distance = 1m,
+                    LineCategory = "界址线",
+                    LinePosition = "中",
+                    NeighborHandled = true,
+                    Confirmed = true,
+                    Status = ParcelFieldStatus.Automatic
+                });
+            }
+            for (int i = 0; i < 14; i++)
+            {
+                record.Boundary.SignatureGroups.Add(
+                    new ParcelBoundarySignatureGroupRecord
+                    {
+                        Confirmed = true,
+                        Status = ParcelFieldStatus.Automatic
+                    });
+            }
+            record.Boundary.ParcelBoundaryClosed = true;
+            ParcelBuildingRecord building = new ParcelBuildingRecord();
+            building.Normalize();
+            building.Fields["building.footprintArea"].NumericValue = 10m;
+            building.Fields["building.area"].NumericValue = 20m;
+            record.Buildings.Add(building);
+            record.Field(ParcelSurveyFieldKeys.BuildingFootprintTotal)
+                .NumericValue = 11m;
+            record.Field(ParcelSurveyFieldKeys.BuildingAreaTotal)
+                .NumericValue = 20m;
+
+            ParcelSurveyValidationResult checkedResult =
+                ParcelSurveyValidator.Validate(record);
+            Equal(2, checkedResult.BoundarySegmentPageCount,
+                "27 个界址段应自动生成两页界址标示表");
+            Equal(2, checkedResult.SignatureGroupPageCount,
+                "14 个签章组应自动生成两页界址签章表");
+            Equal(0, checkedResult.PaginationAnomalyCount,
+                "自动续表不应被误报为分页异常");
+            True(checkedResult.Issues.Any(x =>
+                x.Code == "footprint-total"),
+                "各幢占地面积与总面积不一致时必须阻止导出");
+
+            string html = ParcelSurveyEditorPage.BuildHtml(record,
+                checkedResult);
+            foreach (string tab in new[] { "项目与人员", "宗地基本信息",
+                "权利人与权属", "土地用途与面积", "界址调查", "房屋调查",
+                "调查审核与导出" })
+                Contains(html, tab, "编辑器应包含七个业务页签");
+            foreach (string status in new[] { "自动", "默认", "导入", "人工",
+                "不适用" })
+                Contains(html, status, "编辑器应提供统一字段状态");
+            Contains(html, "保存宗地", "编辑器顶部应提供保存宗地按钮");
+            Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
+            Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
+            Contains(html, "每页最多 26 段", "界址段应显示自动续页规则");
+            Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
+            Contains(html, "回读检查",
+                "页面应展示完整的预览、导出与回读流程");
         }
 
         private static void TestQuantityDashboardSharedPage()

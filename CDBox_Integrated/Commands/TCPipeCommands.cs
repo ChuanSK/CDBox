@@ -275,6 +275,20 @@ namespace TCPipeAutoDraw.Commands
             RealEstateModuleHost.OpenWorkspace();
         }
 
+        [CommandMethod("CDREDJ", CommandFlags.Modal)]
+        public void OpenParcelSurveyEditor()
+        {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
+            RealEstateModuleHost.ExecuteCommand("CDREDJ");
+        }
+
+        [CommandMethod("DJXX", CommandFlags.Modal)]
+        public void OpenParcelSurveyEditorAlias()
+        {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
+            RealEstateModuleHost.ExecuteCommand("CDREDJ");
+        }
+
         [CommandMethod("CDREBL", CommandFlags.Modal)]
         public void AnnotateRealEstateBuildingLength()
         {
