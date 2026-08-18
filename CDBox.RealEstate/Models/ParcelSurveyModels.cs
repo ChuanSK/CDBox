@@ -94,7 +94,8 @@ namespace CDBox.RealEstate.Models
         {
             Sequence = sequence;
             PointNumber = PointNumber ?? string.Empty;
-            MarkerType = MarkerType ?? string.Empty;
+            MarkerType = string.IsNullOrWhiteSpace(MarkerType)
+                ? "喷涂" : MarkerType;
             Description = Description ?? string.Empty;
             if (!Enum.IsDefined(typeof(ParcelFieldStatus), Status))
                 Status = ParcelFieldStatus.Automatic;
@@ -151,7 +152,8 @@ namespace CDBox.RealEstate.Models
         public void Normalize()
         {
             StartPointNumber = StartPointNumber ?? string.Empty;
-            MiddlePointNumbers = MiddlePointNumbers ?? string.Empty;
+            MiddlePointNumbers = ParcelBoundaryPointNumberFormatter
+                .FormatSignatureMiddle(MiddlePointNumbers);
             EndPointNumber = EndPointNumber ?? string.Empty;
             NeighborOwner = NeighborOwner ?? string.Empty;
             NeighborParcelCode = NeighborParcelCode ?? string.Empty;

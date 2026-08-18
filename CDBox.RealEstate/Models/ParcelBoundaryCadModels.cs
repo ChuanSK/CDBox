@@ -18,12 +18,17 @@ namespace CDBox.RealEstate.Models
         public bool NativeClockwise { get; set; }
         public decimal Area { get; set; }
         public int SelectedStartSourceIndex { get; set; }
+        public string StartPointPrefix { get; set; }
+        public int StartPointNumber { get; set; }
+        public bool ConfiguredClockwise { get; set; }
         public List<ParcelBoundaryCadVertex> Vertices { get; set; }
 
         public ParcelBoundaryCadSelection()
         {
             SourceObjectHandle = string.Empty;
             SourceLayerName = string.Empty;
+            StartPointPrefix = "J";
+            StartPointNumber = 1;
             Vertices = new List<ParcelBoundaryCadVertex>();
         }
     }

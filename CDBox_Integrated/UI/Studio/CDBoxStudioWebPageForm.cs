@@ -42,6 +42,8 @@ namespace TCPipeAutoDraw.UI.Studio
         private WebView2 _webView;
         private bool _webViewReady;
         private bool _windowStateRestored;
+        private FormWindowState _windowStateBeforeCadMinimize =
+            FormWindowState.Normal;
         private bool _hudMode;
         private bool _hudAnimationsEnabled;
         private bool _hudGlowEnabled;
@@ -566,7 +568,21 @@ namespace TCPipeAutoDraw.UI.Studio
 
             if (string.Equals(request.Name, "minimize", StringComparison.OrdinalIgnoreCase))
             {
+                if (WindowState != FormWindowState.Minimized)
+                    _windowStateBeforeCadMinimize = WindowState;
                 WindowState = FormWindowState.Minimized;
+                return;
+            }
+
+            if (string.Equals(request.Name, "restore", StringComparison.OrdinalIgnoreCase))
+            {
+                if (WindowState == FormWindowState.Minimized)
+                    WindowState = _windowStateBeforeCadMinimize ==
+                        FormWindowState.Minimized ? FormWindowState.Normal
+                        : _windowStateBeforeCadMinimize;
+                Show();
+                Activate();
+                BringToFront();
                 return;
             }
 

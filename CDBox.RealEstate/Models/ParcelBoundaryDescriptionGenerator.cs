@@ -34,12 +34,9 @@ namespace CDBox.RealEstate.Models
             IList<ParcelBoundaryPointRecord> points = record.Boundary.Points;
             IList<ParcelBoundarySegmentRecord> segments =
                 record.Boundary.Segments;
-            decimal centerX = points.Count == 0 ? 0m
-                : points.Where(x => x.X.HasValue).Select(x => x.X.Value)
-                    .DefaultIfEmpty().Average();
-            decimal centerY = points.Count == 0 ? 0m
-                : points.Where(x => x.Y.HasValue).Select(x => x.Y.Value)
-                    .DefaultIfEmpty().Average();
+            Tuple<decimal, decimal> center = GeometricCenter(points);
+            decimal centerX = center.Item1;
+            decimal centerY = center.Item2;
 
             var result = new ParcelBoundaryDescriptionDraft
             {
@@ -84,10 +81,9 @@ namespace CDBox.RealEstate.Models
             IList<ParcelBoundaryPointRecord> points = record.Boundary.Points;
             IList<ParcelBoundarySegmentRecord> segments =
                 record.Boundary.Segments;
-            decimal centerX = points.Where(x => x.X.HasValue)
-                .Select(x => x.X.Value).DefaultIfEmpty().Average();
-            decimal centerY = points.Where(x => x.Y.HasValue)
-                .Select(x => x.Y.Value).DefaultIfEmpty().Average();
+            Tuple<decimal, decimal> center = GeometricCenter(points);
+            decimal centerX = center.Item1;
+            decimal centerY = center.Item2;
             foreach (ParcelBoundaryPointRecord point in points)
             {
                 if (!overwriteManual && point.Status == ParcelFieldStatus.Manual
@@ -99,7 +95,6 @@ namespace CDBox.RealEstate.Models
                     + "方向" + LineLocation(segment);
                 if (point.Status != ParcelFieldStatus.Manual || overwriteManual)
                     point.Status = ParcelFieldStatus.Automatic;
-                point.Confirmed = false;
             }
             foreach (ParcelBoundarySegmentRecord segment in segments)
             {
@@ -255,11 +250,24 @@ namespace CDBox.RealEstate.Models
             IEnumerable<ParcelBoundarySegmentRecord> segments)
         {
             string number = point == null ? string.Empty : point.PointNumber;
-            return segments.FirstOrDefault(x => Same(x.StartPointNumber,
-                    number) || MiddleNumbers(x.MiddlePointNumbers).Any(y =>
+            return segments.Where(x => Same(x.StartPointNumber, number)
+                    || Same(x.EndPointNumber, number)
+                    || MiddleNumbers(x.MiddlePointNumbers).Any(y =>
                         Same(y, number)))
-                ?? segments.FirstOrDefault(x => Same(x.EndPointNumber,
-                    number));
+                .OrderByDescending(EntityPriority)
+                .FirstOrDefault();
+        }
+
+        private static int EntityPriority(ParcelBoundarySegmentRecord segment)
+        {
+            string category = segment == null
+                ? string.Empty : (segment.LineCategory ?? string.Empty).Trim();
+            if (category == "围墙" || category == "墙壁"
+                || category == "门墩") return 50;
+            if (category == "道路" || category == "田埂"
+                || category == "沟渠" || category == "铁丝网") return 40;
+            if (category == "界址线") return 10;
+            return string.IsNullOrWhiteSpace(category) ? 0 : 30;
         }
 
         private static List<ParcelBoundaryPointRecord> SegmentPoints(
@@ -300,13 +308,45 @@ namespace CDBox.RealEstate.Models
 
         private static string Compass(double dx, double dy)
         {
-            if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9) return "中心";
-            double angle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
-            if (angle < 0) angle += 360;
-            string[] names = { "东", "东北", "北", "西北",
-                "西", "西南", "南", "东南" };
-            return names[(int)Math.Round(angle / 45.0,
-                MidpointRounding.AwayFromZero) % 8];
+            const double tolerance = 1e-9;
+            if (Math.Abs(dx) <= tolerance && Math.Abs(dy) <= tolerance)
+                return "中心";
+            if (Math.Abs(dx) <= tolerance) return dy > 0 ? "北" : "南";
+            if (Math.Abs(dy) <= tolerance) return dx > 0 ? "东" : "西";
+            if (dx > 0) return dy > 0 ? "东北" : "东南";
+            return dy > 0 ? "西北" : "西南";
+        }
+
+        private static Tuple<decimal, decimal> GeometricCenter(
+            IList<ParcelBoundaryPointRecord> points)
+        {
+            List<ParcelBoundaryPointRecord> valid = (points
+                ?? new List<ParcelBoundaryPointRecord>())
+                .Where(x => x != null && x.X.HasValue && x.Y.HasValue)
+                .ToList();
+            if (valid.Count == 0) return Tuple.Create(0m, 0m);
+            if (valid.Count < 3)
+                return Tuple.Create(valid.Average(x => x.X.Value),
+                    valid.Average(x => x.Y.Value));
+
+            decimal twiceArea = 0m;
+            decimal weightedX = 0m;
+            decimal weightedY = 0m;
+            for (int i = 0; i < valid.Count; i++)
+            {
+                ParcelBoundaryPointRecord current = valid[i];
+                ParcelBoundaryPointRecord next = valid[(i + 1) % valid.Count];
+                decimal cross = current.X.Value * next.Y.Value
+                    - next.X.Value * current.Y.Value;
+                twiceArea += cross;
+                weightedX += (current.X.Value + next.X.Value) * cross;
+                weightedY += (current.Y.Value + next.Y.Value) * cross;
+            }
+            if (Math.Abs(twiceArea) <= 0.000000000001m)
+                return Tuple.Create(valid.Average(x => x.X.Value),
+                    valid.Average(x => x.Y.Value));
+            return Tuple.Create(weightedX / (3m * twiceArea),
+                weightedY / (3m * twiceArea));
         }
 
         private static string Cardinal(decimal dx, decimal dy)

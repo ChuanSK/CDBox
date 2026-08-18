@@ -1692,6 +1692,10 @@ namespace CDBox.CoreTests
                 "宗地南至应保留道路等相邻地物名称");
             Contains(record.Boundary.Points[0].Description, "J1位于",
                 "自动说明应同步填充界址点列表的点位说明");
+            Contains(record.Boundary.Points[0].Description, "西北方向",
+                "非严格正北或正西的界址点应按几何中心判定为西北方向");
+            Contains(record.Boundary.Points[1].Description, "外墙脚",
+                "界址点连接实体墙脚和普通界址线时应优先采用实体墙脚");
             Equal(ParcelFieldStatus.Automatic,
                 record.Field("boundary.lineDescription").Status,
                 "生成的最终界址说明应标记为自动来源");
@@ -1708,14 +1712,37 @@ namespace CDBox.CoreTests
                 ParcelSurveyValidator.Validate(record));
             Contains(html, "从图纸识别权属线",
                 "界址页应提供 CAD 权属线识别入口");
-            Contains(html, "从图纸选择界址段",
-                "界址页应提供带预览的界址段选取入口");
+            Contains(html, "连续选择界址段",
+                "界址页应提供带预览的连续界址段选取入口");
             Contains(html, "从图纸选择起终点",
                 "签章组应提供同套起终点选取入口");
-            Contains(html, "CDBoxParcelCadBoundarySelected",
-                "页面应接收 CAD 权属线识别结果并打开编号向导");
+            Contains(html, "CDBoxParcelCadInteractionFinished",
+                "页面应接收 CAD 外部浮窗完成结果并恢复编辑器");
             Contains(html, "生成界址说明与宗地四至",
                 "界址页应提供说明和四至重新生成入口");
+            Contains(html, "<strong>宗地四至</strong>",
+                "界址页应直接显示可编辑的宗地四至");
+            False(html.IndexOf("<th>处理/确认</th>",
+                    StringComparison.Ordinal) >= 0,
+                "界址段和签章列表不应保留处理确认列");
+            False(html.IndexOf("<th>确认</th>",
+                    StringComparison.Ordinal) >= 0,
+                "CAD 宗地几何的界址点列表不应保留确认列");
+            False(html.IndexOf("id=\"modalHost\"",
+                    StringComparison.Ordinal) >= 0,
+                "CAD 交互信息不应继续使用编辑器内部浮层");
+            Contains(html, "post('minimize','')",
+                "进入 CAD 图纸交互前应自动最小化编辑器");
+            Contains(html, "post('restore','')",
+                "CAD 图纸交互结束后应自动恢复编辑器");
+            Contains(html, "localStorage.setItem(viewKey",
+                "编辑器应持久记忆页签、滚动位置和文本框尺寸");
+            Equal("/", ParcelBoundaryPointNumberFormatter
+                    .FormatSignatureMiddle(string.Empty),
+                "签章组无中间点时应明确输出斜杠");
+            Equal("J2-J5", ParcelBoundaryPointNumberFormatter
+                    .FormatSignatureMiddle("J2、J3、J4、J5"),
+                "签章组三个以上中间点应使用首末点横杠范围");
         }
 
         private static ParcelBoundaryPointRecord BoundaryPoint(

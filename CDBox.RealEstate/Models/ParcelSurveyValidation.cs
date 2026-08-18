@@ -149,7 +149,6 @@ namespace CDBox.RealEstate.Models
                 if (string.IsNullOrWhiteSpace(point.MarkerType))
                     Add(result, "point-marker", "error",
                         (point.PointNumber ?? "界址点") + "尚未选择界标种类。", string.Empty);
-                if (!point.Confirmed) result.PendingConfirmationCount++;
             }
 
             for (int i = 0; i < record.Boundary.Segments.Count; i++)
@@ -174,11 +173,9 @@ namespace CDBox.RealEstate.Models
                     || string.Equals(segment.LinePosition, "待确认",
                         StringComparison.OrdinalIgnoreCase))
                     Add(result, "segment-position", "error", name + "尚未确认界址线位置。", string.Empty);
-                if (!segment.NeighborHandled
-                    && (string.IsNullOrWhiteSpace(segment.NeighborParcelCode)
-                        || string.IsNullOrWhiteSpace(segment.NeighborOwner)))
+                if (string.IsNullOrWhiteSpace(segment.NeighborParcelCode)
+                    && string.IsNullOrWhiteSpace(segment.NeighborOwner))
                     Add(result, "segment-neighbor", "error", name + "的相邻宗地尚未识别或处理。", string.Empty);
-                if (!segment.Confirmed) result.PendingConfirmationCount++;
                 if (i + 1 < record.Boundary.Segments.Count)
                 {
                     ParcelBoundarySegmentRecord next = record.Boundary.Segments[i + 1];
@@ -194,9 +191,6 @@ namespace CDBox.RealEstate.Models
                 if (!Same(last.EndPointNumber, first.StartPointNumber))
                     Add(result, "segment-close", "error", "界址段末段与首段未闭合。", string.Empty);
             }
-            foreach (ParcelBoundarySignatureGroupRecord group in
-                record.Boundary.SignatureGroups)
-                if (!group.Confirmed) result.PendingConfirmationCount++;
         }
 
         private static void ValidateCodes(ParcelSurveyRecord record,

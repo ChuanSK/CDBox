@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using CDBox.RealEstate.Models;
+using CDBox.RealEstate.UI;
 using CDBox.Shared.Services;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 using WorldDraw = Autodesk.AutoCAD.GraphicsInterface.WorldDraw;
@@ -69,8 +70,18 @@ namespace CDBox.RealEstate.Cad
                     "移动鼠标选择界址起点；预览引线自动吸附权属线节点，单击确认。");
                 if (start == null) return null;
                 result.SelectedStartSourceIndex = start.Index;
+                string prefix;
+                int startNumber;
+                if (!ParcelBoundaryCadDialogs.TryGetStartingPoint(out prefix,
+                    out startNumber)) return null;
+                bool clockwise;
+                if (!ParcelBoundaryCadDialogs.TryGetNumberingDirection(
+                    result.NativeClockwise, out clockwise)) return null;
+                result.StartPointPrefix = prefix;
+                result.StartPointNumber = startNumber;
+                result.ConfiguredClockwise = clockwise;
                 Notify("已识别权属线 " + result.Vertices.Count
-                    + " 个节点，请输入起点界址点号并选择编号方向。",
+                    + " 个节点并完成界址点编号。",
                     CDBoxNotificationLevel.Success);
                 return result;
             }
@@ -139,6 +150,60 @@ namespace CDBox.RealEstate.Cad
                     CDBoxNotificationLevel.Error);
                 return null;
             }
+        }
+
+        public IList<ParcelBoundarySegmentRecord>
+            SelectBoundarySegmentsContinuously(ParcelSurveyRecord record)
+        {
+            record = record ?? new ParcelSurveyRecord();
+            record.Normalize();
+            int applied = 0;
+            while (true)
+            {
+                ParcelBoundaryRangeSelection range = SelectBoundaryRange(
+                    record, false);
+                if (range == null) break;
+                ParcelBoundarySegmentRecord existing = record.Boundary.Segments
+                    .FirstOrDefault(x => SameRange(x.StartPointNumber,
+                        x.EndPointNumber, range.StartPointNumber,
+                        range.EndPointNumber));
+                ParcelBoundarySegmentRecord segment =
+                    ParcelBoundaryCadDialogs.EditSegment(range, existing);
+                if (segment == null) break;
+                record.Boundary.Segments.RemoveAll(x => SameRange(
+                    x.StartPointNumber, x.EndPointNumber,
+                    segment.StartPointNumber, segment.EndPointNumber));
+                record.Boundary.Segments.Add(segment);
+                SortSegments(record);
+                applied++;
+            }
+            if (applied > 0)
+                Notify("本轮已填入 " + applied
+                    + " 个界址段；连续选择已结束。",
+                    CDBoxNotificationLevel.Success);
+            return record.Boundary.Segments;
+        }
+
+        public ParcelBoundarySignatureGroupRecord SelectSignatureGroup(
+            ParcelSurveyRecord record)
+        {
+            record = record ?? new ParcelSurveyRecord();
+            record.Normalize();
+            ParcelBoundaryRangeSelection range = SelectBoundaryRange(record,
+                true);
+            if (range == null) return null;
+            ParcelBoundarySignatureGroupRecord existing = record.Boundary
+                .SignatureGroups.FirstOrDefault(x => SameRange(
+                    x.StartPointNumber, x.EndPointNumber,
+                    range.StartPointNumber, range.EndPointNumber));
+            ParcelBoundarySegmentRecord segment = record.Boundary.Segments
+                .FirstOrDefault(x => SameRange(x.StartPointNumber,
+                    x.EndPointNumber, range.StartPointNumber,
+                    range.EndPointNumber));
+            string representative = record.Field("rights.ownerName")
+                .TextValue;
+            return ParcelBoundaryCadDialogs.EditSignature(range, existing,
+                segment, representative);
         }
 
         public static ParcelBoundaryRangeSelection BuildRange(
@@ -271,6 +336,36 @@ namespace CDBox.RealEstate.Cad
             decimal dx = right.X.Value - left.X.Value;
             decimal dy = right.Y.Value - left.Y.Value;
             return (decimal)Math.Sqrt((double)(dx * dx + dy * dy));
+        }
+
+        private static bool SameRange(string leftStart, string leftEnd,
+            string rightStart, string rightEnd)
+        {
+            return string.Equals((leftStart ?? string.Empty).Trim(),
+                    (rightStart ?? string.Empty).Trim(),
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals((leftEnd ?? string.Empty).Trim(),
+                    (rightEnd ?? string.Empty).Trim(),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void SortSegments(ParcelSurveyRecord record)
+        {
+            var order = record.Boundary.Points
+                .Select((point, index) => new { point.PointNumber, index })
+                .Where(x => !string.IsNullOrWhiteSpace(x.PointNumber))
+                .ToDictionary(x => x.PointNumber, x => x.index,
+                    StringComparer.OrdinalIgnoreCase);
+            record.Boundary.Segments.Sort((left, right) =>
+            {
+                int leftIndex;
+                int rightIndex;
+                if (!order.TryGetValue(left.StartPointNumber ?? string.Empty,
+                    out leftIndex)) leftIndex = int.MaxValue;
+                if (!order.TryGetValue(right.StartPointNumber ?? string.Empty,
+                    out rightIndex)) rightIndex = int.MaxValue;
+                return leftIndex.CompareTo(rightIndex);
+            });
         }
 
         private static string Direction(ParcelBoundaryPointRecord start,
