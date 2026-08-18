@@ -160,6 +160,12 @@ namespace CDBox.RealEstate.Models
                 if (!pointNumbers.Contains(segment.StartPointNumber ?? string.Empty)
                     || !pointNumbers.Contains(segment.EndPointNumber ?? string.Empty))
                     Add(result, "segment-point", "error", name + "引用了不存在的界址点。", string.Empty);
+                foreach (string middle in SplitPointNumbers(
+                    segment.MiddlePointNumbers))
+                    if (!pointNumbers.Contains(middle))
+                        Add(result, "segment-middle-point", "error",
+                            name + "引用了不存在的中间界址点“" + middle
+                            + "”。", string.Empty);
                 if (!segment.Distance.HasValue || segment.Distance.Value <= 0)
                     Add(result, "segment-distance", "error", name + "缺少有效界址距离。", string.Empty);
                 if (string.IsNullOrWhiteSpace(segment.LineCategory))
@@ -317,6 +323,13 @@ namespace CDBox.RealEstate.Models
         {
             return string.Equals((left ?? string.Empty).Trim(),
                 (right ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IEnumerable<string> SplitPointNumbers(string value)
+        {
+            return (value ?? string.Empty).Split(new[] { '、', ',', '，',
+                ';', '；', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim()).Where(x => x.Length > 0);
         }
 
         private static void Add(ParcelSurveyValidationResult result,

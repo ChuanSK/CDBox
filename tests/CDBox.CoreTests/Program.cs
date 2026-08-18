@@ -10,6 +10,7 @@ using CDBox.Shared.Modules;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
+using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Geometry;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Settings;
@@ -64,6 +65,7 @@ namespace CDBox.CoreTests
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
             Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
+            Run("界址范围选择与说明自动生成", TestParcelBoundaryRangeAndDescriptions);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
             Run("工程量计算过程导出", TestQuantityCalculationProcessExport);
@@ -1641,6 +1643,112 @@ namespace CDBox.CoreTests
             Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
             Contains(html, "回读检查",
                 "页面应展示完整的预览、导出与回读流程");
+        }
+
+        private static void TestParcelBoundaryRangeAndDescriptions()
+        {
+            var record = new ParcelSurveyRecord();
+            record.Normalize();
+            record.Boundary.ParcelBoundaryClosed = true;
+            record.Boundary.Points = new List<ParcelBoundaryPointRecord>
+            {
+                BoundaryPoint("J1", 0, 10, 10),
+                BoundaryPoint("J2", 10, 10, 10),
+                BoundaryPoint("J3", 10, 0, 10),
+                BoundaryPoint("J4", 0, 0, 10)
+            };
+            record.Boundary.Segments = new List<ParcelBoundarySegmentRecord>
+            {
+                BoundarySegment("J1", "J2", "墙壁", "外", "李老七"),
+                BoundarySegment("J2", "J3", "界址线", "中", ""),
+                BoundarySegment("J3", "J4", "道路", "外", "2 米巷道"),
+                BoundarySegment("J4", "J1", "围墙", "中", "李新荣")
+            };
+
+            ParcelBoundaryRangeSelection wrapped =
+                ParcelBoundaryCadService.BuildRange(
+                    record.Boundary.Points, 2, 0);
+            Equal("J3", wrapped.StartPointNumber,
+                "CAD 范围起点应使用已识别界址点号");
+            Equal("J4", wrapped.MiddlePointNumbers,
+                "跨越闭合线末端时应保留中间界址点号");
+            Equal("J1", wrapped.EndPointNumber,
+                "CAD 范围终点应使用已识别界址点号");
+            Near(20, (double)wrapped.Distance, 1e-9,
+                "界址范围距离应累计真实边长而非起终点直线距离");
+
+            ParcelBoundaryDescriptionDraft generated =
+                ParcelBoundaryDescriptionGenerator.Apply(record, true);
+            Contains(generated.PointDescription, "J1",
+                "界址点位说明应包含自动编号");
+            Contains(generated.PointDescription, "外墙脚",
+                "界址点位说明应结合界址线类别与位置");
+            Contains(generated.LineDescription,
+                "由 J1 向东方向沿本宗地外墙脚至 J2",
+                "界址线走向说明应包含方向、位置和起终点");
+            Contains(generated.NorthBoundary, "李老七用地",
+                "宗地北至应结合相邻宗地权利人");
+            Contains(generated.SouthBoundary, "2 米巷道",
+                "宗地南至应保留道路等相邻地物名称");
+            Contains(record.Boundary.Points[0].Description, "J1位于",
+                "自动说明应同步填充界址点列表的点位说明");
+            Equal(ParcelFieldStatus.Automatic,
+                record.Field("boundary.lineDescription").Status,
+                "生成的最终界址说明应标记为自动来源");
+
+            record.Field("parcel.northBoundary").TextValue = "人工北至";
+            record.Field("parcel.northBoundary").Status =
+                ParcelFieldStatus.Manual;
+            ParcelBoundaryDescriptionGenerator.Apply(record, false);
+            Equal("人工北至",
+                record.Field("parcel.northBoundary").TextValue,
+                "自动刷新不得覆盖已经标记为人工的最终文字");
+
+            string html = ParcelSurveyEditorPage.BuildHtml(record,
+                ParcelSurveyValidator.Validate(record));
+            Contains(html, "从图纸识别权属线",
+                "界址页应提供 CAD 权属线识别入口");
+            Contains(html, "从图纸选择界址段",
+                "界址页应提供带预览的界址段选取入口");
+            Contains(html, "从图纸选择起终点",
+                "签章组应提供同套起终点选取入口");
+            Contains(html, "CDBoxParcelCadBoundarySelected",
+                "页面应接收 CAD 权属线识别结果并打开编号向导");
+            Contains(html, "生成界址说明与宗地四至",
+                "界址页应提供说明和四至重新生成入口");
+        }
+
+        private static ParcelBoundaryPointRecord BoundaryPoint(
+            string number, decimal x, decimal y, decimal distanceToNext)
+        {
+            return new ParcelBoundaryPointRecord
+            {
+                PointNumber = number,
+                X = x,
+                Y = y,
+                DistanceToNext = distanceToNext,
+                MarkerType = "喷涂",
+                Confirmed = true,
+                Status = ParcelFieldStatus.Automatic
+            };
+        }
+
+        private static ParcelBoundarySegmentRecord BoundarySegment(
+            string start, string end, string category, string position,
+            string neighbor)
+        {
+            return new ParcelBoundarySegmentRecord
+            {
+                StartPointNumber = start,
+                EndPointNumber = end,
+                Distance = 10,
+                LineCategory = category,
+                LinePosition = position,
+                NeighborOwner = neighbor,
+                NeighborHandled = true,
+                Confirmed = true,
+                Status = ParcelFieldStatus.Manual
+            };
         }
 
         private static void TestQuantityDashboardSharedPage()

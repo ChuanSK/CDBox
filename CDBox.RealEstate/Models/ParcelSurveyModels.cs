@@ -84,6 +84,7 @@ namespace CDBox.RealEstate.Models
         public string PointNumber { get; set; }
         public decimal? X { get; set; }
         public decimal? Y { get; set; }
+        public decimal? DistanceToNext { get; set; }
         public string MarkerType { get; set; }
         public string Description { get; set; }
         public bool Confirmed { get; set; }
@@ -103,6 +104,7 @@ namespace CDBox.RealEstate.Models
     public sealed class ParcelBoundarySegmentRecord
     {
         public string StartPointNumber { get; set; }
+        public string MiddlePointNumbers { get; set; }
         public string EndPointNumber { get; set; }
         public decimal? Distance { get; set; }
         public string LineCategory { get; set; }
@@ -118,6 +120,7 @@ namespace CDBox.RealEstate.Models
         public void Normalize()
         {
             StartPointNumber = StartPointNumber ?? string.Empty;
+            MiddlePointNumbers = MiddlePointNumbers ?? string.Empty;
             EndPointNumber = EndPointNumber ?? string.Empty;
             LineCategory = LineCategory ?? string.Empty;
             LinePosition = LinePosition ?? string.Empty;
@@ -164,6 +167,10 @@ namespace CDBox.RealEstate.Models
     public sealed class ParcelBoundaryData
     {
         public bool ParcelBoundaryClosed { get; set; }
+        public string SourceObjectHandle { get; set; }
+        public string SourceLayerName { get; set; }
+        public bool SourceClockwise { get; set; }
+        public decimal? SourceArea { get; set; }
         public List<ParcelBoundaryPointRecord> Points { get; set; }
         public List<ParcelBoundarySegmentRecord> Segments { get; set; }
         public List<ParcelBoundarySignatureGroupRecord> SignatureGroups { get; set; }
@@ -177,6 +184,8 @@ namespace CDBox.RealEstate.Models
 
         public void Normalize()
         {
+            SourceObjectHandle = SourceObjectHandle ?? string.Empty;
+            SourceLayerName = SourceLayerName ?? string.Empty;
             Points = Points ?? new List<ParcelBoundaryPointRecord>();
             Segments = Segments ?? new List<ParcelBoundarySegmentRecord>();
             SignatureGroups = SignatureGroups ??

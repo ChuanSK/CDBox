@@ -46,7 +46,8 @@ namespace CDBox.RealEstate.Module
                 prompts, notifications, logger);
             _buildingSettings = new BuildingLengthAnnotationSettingsService(
                 pageService, colors, _buildingAnnotations);
-            _parcelSurveyEditor = new ParcelSurveyEditorService(pageService);
+            _parcelSurveyEditor = new ParcelSurveyEditorService(pageService,
+                prompts, notifications, logger);
             _logger.Info("RealEstate 模块初始化完成，版本 " + Version + "。");
         }
 
