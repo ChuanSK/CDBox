@@ -62,6 +62,26 @@ namespace CDBox.RealEstate.UI
             return true;
         }
 
+        public static bool TryGetRegionName(string title, string current,
+            out string name)
+        {
+            name = (current ?? string.Empty).Trim();
+            var dialog = new BoundaryFloatingDialog(
+                string.IsNullOrWhiteSpace(title) ? "地籍调查区域" : title,
+                "区域名称用于区分同一张图纸内的宗地调查数据。", 430);
+            TextBox input = dialog.AddText("区域名称 *", name,
+                "例如 宗地 1、北侧宗地");
+            dialog.AcceptText = "确定";
+            dialog.Validate = delegate
+            {
+                return string.IsNullOrWhiteSpace(input.Text)
+                    ? "区域名称不能为空。" : string.Empty;
+            };
+            if (!dialog.ShowForAutoCad()) return false;
+            name = (input.Text ?? string.Empty).Trim();
+            return name.Length > 0;
+        }
+
         public static ParcelBoundarySegmentRecord EditSegment(
             ParcelBoundaryRangeSelection range,
             ParcelBoundarySegmentRecord existing)

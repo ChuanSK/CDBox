@@ -1537,6 +1537,10 @@ namespace CDBox.CoreTests
                     first.Field("project.organization");
                 organization.TextValue = "测试调查机构";
                 organization.Status = ParcelFieldStatus.Default;
+                ParcelSurveyFieldValue defaultParcelCode =
+                    first.Field("parcel.parcelCode");
+                defaultParcelCode.TextValue = "默认宗地编码规则";
+                defaultParcelCode.Status = ParcelFieldStatus.Default;
                 first.Field(ParcelSurveyFieldKeys.ParcelArea).NumericValue = 101.87m;
                 store.Save(first);
 
@@ -1550,6 +1554,51 @@ namespace CDBox.CoreTests
                 Equal(DateTime.Today.ToString("yyyy-MM-dd"),
                     next.Field("project.formDate").TextValue,
                     "新宗地填表日期应使用系统日期");
+
+                ParcelSurveyRecord drawing = store.Current("drawing-a",
+                    "A.dwg", string.Empty, string.Empty);
+                Equal("drawing-a", drawing.DocumentId,
+                    "旧版全局宗地应迁移到首张实际图纸");
+                ParcelSurveyRecord regionOne = store.Current("drawing-a",
+                    "A.dwg", "region-1", "区域一");
+                False(string.Equals(drawing.Id, regionOne.Id,
+                        StringComparison.OrdinalIgnoreCase),
+                    "整张图纸与图纸内区域必须使用不同宗地记录");
+                Equal("区域一", regionOne.RegionName,
+                    "区域宗地应保存当前区域名称");
+                Equal("测试调查机构",
+                    regionOne.Field("project.organization").TextValue,
+                    "新区域应继承项目默认字段");
+                Equal("默认宗地编码规则",
+                    regionOne.Field("parcel.parcelCode").TextValue,
+                    "任何明确标记为默认的字段都应继承到新区域");
+                False(regionOne.Field(ParcelSurveyFieldKeys.ParcelArea)
+                        .NumericValue.HasValue,
+                    "非默认面积不得从整图串入区域宗地");
+                regionOne.Field("parcel.location").TextValue = "区域一坐落";
+                regionOne.Field("parcel.location").Status =
+                    ParcelFieldStatus.Manual;
+                store.Save(regionOne);
+
+                ParcelSurveyRecord regionTwo = store.Current("drawing-a",
+                    "A.dwg", "region-2", "区域二");
+                Equal(string.Empty,
+                    regionTwo.Field("parcel.location").TextValue,
+                    "同一图纸的多个区域必须分别维护人工地籍信息");
+                ParcelSurveyRecord otherDrawing = store.Current("drawing-b",
+                    "B.dwg", string.Empty, string.Empty);
+                Equal("测试调查机构",
+                    otherDrawing.Field("project.organization").TextValue,
+                    "切换到新图纸时应保留默认字段");
+                Equal(string.Empty,
+                    otherDrawing.Field("parcel.location").TextValue,
+                    "不同图纸不得共享人工宗地信息");
+                store.SelectScope("drawing-a", "region-1");
+                Equal("region-1", store.GetCurrentRegionId("drawing-a"),
+                    "每张图纸应分别记忆当前地籍区域");
+                store.DeleteRegion("drawing-a", "region-1");
+                Equal(string.Empty, store.GetCurrentRegionId("drawing-a"),
+                    "删除当前区域后应回到整张图纸范围");
                 Contains(File.ReadAllText(path), "101.87",
                     "面积应以 JSON 数值保存而不是带单位文本");
             }
@@ -1627,8 +1676,34 @@ namespace CDBox.CoreTests
                 x.Code == "footprint-total"),
                 "各幢占地面积与总面积不一致时必须阻止导出");
 
+            var scope = new ParcelSurveyScopeContext
+            {
+                DocumentId = "drawing-a",
+                DocumentName = "A.dwg",
+                ScopeType = "region",
+                RegionId = "region-1",
+                RegionName = "区域一",
+                Documents = new List<ParcelSurveyDocumentInfo>
+                {
+                    new ParcelSurveyDocumentInfo
+                    {
+                        DocumentId = "drawing-a",
+                        DocumentName = "A.dwg",
+                        IsActive = true
+                    }
+                },
+                Regions = new List<ParcelSurveyRegionInfo>
+                {
+                    new ParcelSurveyRegionInfo
+                    {
+                        RegionId = "region-1",
+                        RegionName = "区域一",
+                        BoundaryValid = true
+                    }
+                }
+            };
             string html = ParcelSurveyEditorPage.BuildHtml(record,
-                checkedResult);
+                checkedResult, scope);
             foreach (string tab in new[] { "项目与人员", "宗地基本信息",
                 "权利人与权属", "土地用途与面积", "界址调查", "房屋调查",
                 "调查审核与导出" })
@@ -1639,6 +1714,16 @@ namespace CDBox.CoreTests
             Contains(html, "保存宗地", "编辑器顶部应提供保存宗地按钮");
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
+            Contains(html, "地籍范围",
+                "编辑器顶部应显示整图或区域地籍范围选择");
+            Contains(html, "新建区域",
+                "编辑器应提供与工程量看板一致的区域添加入口");
+            Contains(html, "选择闭合线",
+                "编辑器应允许绑定已有闭合线作为地籍区域");
+            Contains(html, "区域一",
+                "编辑器应呈现当前图纸已有的独立地籍区域");
+            Contains(html, "pollParcelScope",
+                "编辑器应轮询 CAD 当前图纸并自动切换宗地数据");
             Contains(html, "每页最多 26 段", "界址段应显示自动续页规则");
             Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
             Contains(html, "回读检查",
