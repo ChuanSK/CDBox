@@ -21,6 +21,7 @@ namespace CDBox.RealEstate.Models
         public int PaginationAnomalyCount { get; set; }
         public int BoundarySegmentPageCount { get; set; }
         public int SignatureGroupPageCount { get; set; }
+        public bool PassesDataChecks { get; set; }
         public bool CanExport { get; set; }
         public List<ParcelSurveyValidationIssue> Issues { get; set; }
 
@@ -95,11 +96,14 @@ namespace CDBox.RealEstate.Models
                 (int)Math.Ceiling(record.Boundary.Segments.Count / 26m));
             result.SignatureGroupPageCount = Math.Max(1,
                 (int)Math.Ceiling(record.Boundary.SignatureGroups.Count / 13m));
-            result.CanExport = result.RequiredMissingCount == 0
+            result.PassesDataChecks = result.RequiredMissingCount == 0
                 && result.PendingConfirmationCount == 0
                 && result.PaginationAnomalyCount == 0
                 && !result.Issues.Any(x => string.Equals(x.Severity, "error",
                     StringComparison.OrdinalIgnoreCase));
+            // 数据检查只用于提示和质量控制，不再阻止导出。用户可以在任意
+            // 完整度下导出模板，尚未填写的业务字段由导出器保持为空。
+            result.CanExport = true;
             return result;
         }
 

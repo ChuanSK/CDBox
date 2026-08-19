@@ -113,8 +113,10 @@ namespace CDBox.RealEstate.Services
             SetText(sheet, 17, 6, Value(record,
                 ParcelSurveyFieldKeys.ParcelSeaCode));
             SetText(sheet, 19, 6, Value(record, "project.organization"));
-            SetText(sheet, 28, 0, "调查时间："
-                + ChineseDate(Value(record, "project.surveyDate")));
+            string surveyDate = ChineseDate(Value(record,
+                "project.surveyDate"));
+            SetText(sheet, 28, 0, string.IsNullOrWhiteSpace(surveyDate)
+                ? string.Empty : "调查时间：" + surveyDate);
         }
 
         private static void WriteBasic(HSSFWorkbook workbook,
@@ -144,31 +146,30 @@ namespace CDBox.RealEstate.Services
             bool personal = string.Equals(Value(record,
                 ParcelSurveyFieldKeys.OwnerType), "个人",
                 StringComparison.OrdinalIgnoreCase);
-            SetText(sheet, 10, 6, personal ? "/" : SlashIfEmpty(Value(record,
-                "rights.legalRepresentativeName")));
-            SetText(sheet, 10, 13, personal ? "/" : SlashIfEmpty(Value(record,
-                "rights.legalRepresentativeCertificateType")));
-            SetText(sheet, 10, 22, personal ? "/" : SlashIfEmpty(Value(record,
-                "rights.legalRepresentativePhone")));
-            SetText(sheet, 11, 13, personal ? "/" : SlashIfEmpty(Value(record,
-                "rights.legalRepresentativeCertificateNumber")));
+            SetText(sheet, 10, 6, personal ? "/" : Value(record,
+                "rights.legalRepresentativeName"));
+            SetText(sheet, 10, 13, personal ? "/" : Value(record,
+                "rights.legalRepresentativeCertificateType"));
+            SetText(sheet, 10, 22, personal ? "/" : Value(record,
+                "rights.legalRepresentativePhone"));
+            SetText(sheet, 11, 13, personal ? "/" : Value(record,
+                "rights.legalRepresentativeCertificateNumber"));
 
             bool hasAgent = Boolean(record, "rights.hasAgent");
-            SetText(sheet, 12, 6, hasAgent ? SlashIfEmpty(Value(record,
-                "rights.agentName")) : "/");
-            SetText(sheet, 12, 13, hasAgent ? SlashIfEmpty(Value(record,
-                "rights.agentCertificateType")) : "/");
-            SetText(sheet, 12, 22, hasAgent ? SlashIfEmpty(Value(record,
-                "rights.agentPhone")) : "/");
-            SetText(sheet, 13, 13, hasAgent ? SlashIfEmpty(Value(record,
-                "rights.agentCertificateNumber")) : "/");
+            SetText(sheet, 12, 6, ConditionalValue(record, hasAgent,
+                "rights.agentName"));
+            SetText(sheet, 12, 13, ConditionalValue(record, hasAgent,
+                "rights.agentCertificateType"));
+            SetText(sheet, 12, 22, ConditionalValue(record, hasAgent,
+                "rights.agentPhone"));
+            SetText(sheet, 13, 13, ConditionalValue(record, hasAgent,
+                "rights.agentCertificateNumber"));
 
             SetText(sheet, 14, 6, Value(record,
                 "rights.establishmentMode"));
-            SetText(sheet, 15, 6, SlashIfEmpty(Value(record,
-                "rights.industryCode")));
-            SetText(sheet, 16, 6, SlashIfEmpty(Value(record,
-                ParcelSurveyFieldKeys.PreliminaryParcelCode)));
+            SetField(sheet, 15, 6, record, "rights.industryCode");
+            SetField(sheet, 16, 6, record,
+                ParcelSurveyFieldKeys.PreliminaryParcelCode);
             SetText(sheet, 16, 19, Value(record,
                 ParcelSurveyFieldKeys.ParcelCode));
             SetText(sheet, 17, 6, Value(record,
@@ -184,19 +185,19 @@ namespace CDBox.RealEstate.Services
                 "parcel.southBoundary")));
             SetText(sheet, 23, 6, BoundaryText("西", Value(record,
                 "parcel.westBoundary")));
-            SetField(sheet, 24, 6, record, "land.grade", true);
-            SetField(sheet, 24, 19, record, "land.price", true);
+            SetField(sheet, 24, 6, record, "land.grade");
+            SetField(sheet, 24, 19, record, "land.price");
             SetText(sheet, 25, 6, Value(record, "land.approvedUse"));
             SetText(sheet, 25, 17, Value(record, "land.actualUse"));
             SetText(sheet, 26, 10, Value(record, "land.approvedUseCode"));
             SetText(sheet, 26, 24, Value(record, "land.actualUseCode"));
-            SetField(sheet, 27, 6, record, "land.approvedArea", false);
+            SetField(sheet, 27, 6, record, "land.approvedArea");
             SetField(sheet, 27, 13, record,
-                ParcelSurveyFieldKeys.ParcelArea, false);
+                ParcelSurveyFieldKeys.ParcelArea);
             SetField(sheet, 27, 24, record,
-                ParcelSurveyFieldKeys.BuildingFootprintTotal, false);
+                ParcelSurveyFieldKeys.BuildingFootprintTotal);
             SetField(sheet, 28, 24, record,
-                ParcelSurveyFieldKeys.BuildingAreaTotal, false);
+                ParcelSurveyFieldKeys.BuildingAreaTotal);
             SetText(sheet, 29, 6, LandTerm(record));
             SetText(sheet, 30, 6, CoOwnership(record));
             SetText(sheet, 33, 6, Value(record, "parcel.description"));
@@ -299,12 +300,7 @@ namespace CDBox.RealEstate.Services
             ParcelSurveyRecord record)
         {
             ISheet sheet = RequireSheet(workbook, AuditSheet);
-            string rightsTemplate = CellText(sheet, 1, 1);
-            string surveyTemplate = CellText(sheet, 3, 1);
-            string reviewTemplate = CellText(sheet, 5, 1);
             string rightsNotes = Value(record, "audit.rightsNotes");
-            if (string.IsNullOrWhiteSpace(rightsNotes))
-                rightsNotes = rightsTemplate;
             rightsNotes = InsertParcelArea(rightsNotes,
                 Value(record, ParcelSurveyFieldKeys.ParcelArea));
             string surveyNotes = Value(record, "audit.surveyNotes");
@@ -314,15 +310,12 @@ namespace CDBox.RealEstate.Services
                 + ExportedName(record, "project.rightsSurveyor"));
             SetText(sheet, 2, 2, "日期："
                 + ChineseDate(Value(record, "project.rightsSurveyDate")));
-            SetText(sheet, 3, 1, ComposeSurveyNotes(record,
-                string.IsNullOrWhiteSpace(surveyNotes)
-                    ? surveyTemplate : surveyNotes));
+            SetText(sheet, 3, 1, ComposeSurveyNotes(record, surveyNotes));
             SetText(sheet, 4, 1, "测量员签名："
                 + ExportedName(record, "project.surveyor"));
             SetText(sheet, 4, 2, "日期："
                 + ChineseDate(Value(record, "project.measureDate")));
-            SetText(sheet, 5, 1, string.IsNullOrWhiteSpace(reviewOpinion)
-                ? reviewTemplate : reviewOpinion);
+            SetText(sheet, 5, 1, reviewOpinion);
             SetText(sheet, 6, 1, "审核人签名："
                 + ExportedName(record, "project.reviewer"));
             SetText(sheet, 6, 2, "审核日期："
@@ -398,7 +391,7 @@ namespace CDBox.RealEstate.Services
             SetText(sheet, 7, 35, Value(record, "house.coOwnership"));
             SetText(sheet, 8, 4, Value(record, "house.nature"));
             SetText(sheet, 8, 24, Value(record, "house.actualUse"));
-            SetField(sheet, 9, 4, record, "house.sharedArea", true);
+            SetField(sheet, 9, 4, record, "house.sharedArea");
 
             SetBuildingField(sheet, 12, 4, building, "building.number");
             SetBuildingField(sheet, 12, 6, building,
@@ -632,13 +625,12 @@ namespace CDBox.RealEstate.Services
         }
 
         private static void SetField(ISheet sheet, int row, int column,
-            ParcelSurveyRecord record, string key, bool slashWhenEmpty)
+            ParcelSurveyRecord record, string key)
         {
             ParcelSurveyFieldValue field = record.Field(key);
             if (field == null)
             {
-                SetText(sheet, row, column,
-                    slashWhenEmpty ? "/" : string.Empty);
+                SetText(sheet, row, column, string.Empty);
                 return;
             }
             if (field.Status == ParcelFieldStatus.NotApplicable)
@@ -649,8 +641,7 @@ namespace CDBox.RealEstate.Services
             if (field.NumericValue.HasValue)
                 SetNumber(sheet, row, column, field.NumericValue);
             else
-                SetText(sheet, row, column, slashWhenEmpty
-                    ? SlashIfEmpty(Value(record, key)) : Value(record, key));
+                SetText(sheet, row, column, Value(record, key));
         }
 
         private static void SetBuildingField(ISheet sheet, int row,
@@ -709,7 +700,17 @@ namespace CDBox.RealEstate.Services
 
         private static string BoundaryText(string direction, string value)
         {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             return direction + "：" + (value ?? string.Empty).Trim();
+        }
+
+        private static string ConditionalValue(ParcelSurveyRecord record,
+            bool condition, string key)
+        {
+            ParcelSurveyFieldValue field = record.Field(key);
+            if (field != null
+                && field.Status == ParcelFieldStatus.NotApplicable) return "/";
+            return condition ? Value(record, key) : string.Empty;
         }
 
         private static string LandTerm(ParcelSurveyRecord record)
@@ -737,9 +738,13 @@ namespace CDBox.RealEstate.Services
 
         private static string Footer(ParcelSurveyRecord record)
         {
-            return "填表人：" + Value(record, "project.formFiller")
+            string filler = Value(record, "project.formFiller");
+            string date = ChineseDate(Value(record, "project.formDate"));
+            if (string.IsNullOrWhiteSpace(filler)
+                && string.IsNullOrWhiteSpace(date)) return string.Empty;
+            return "填表人：" + filler
                 + "                                             填表时间："
-                + ChineseDate(Value(record, "project.formDate"));
+                + date;
         }
 
         private static string Neighbor(

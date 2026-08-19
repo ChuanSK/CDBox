@@ -1636,8 +1636,10 @@ namespace CDBox.CoreTests
                 ParcelSurveyValidator.Validate(record);
             True(blank.RequiredMissingCount > 0,
                 "空宗地必须报告必填字段缺失");
-            False(blank.CanExport,
-                "空宗地不得启用调查表导出");
+            False(blank.PassesDataChecks,
+                "空宗地仍应报告未通过数据检查");
+            True(blank.CanExport,
+                "空宗地也应允许导出空白调查表");
 
             for (int i = 0; i < 27; i++)
             {
@@ -1694,7 +1696,9 @@ namespace CDBox.CoreTests
                 "自动续表不应被误报为分页异常");
             True(checkedResult.Issues.Any(x =>
                 x.Code == "footprint-total"),
-                "各幢占地面积与总面积不一致时必须阻止导出");
+                "各幢占地面积与总面积不一致时仍应报告检查问题");
+            True(checkedResult.CanExport,
+                "数据检查问题不得再锁定调查表导出");
 
             var scope = new ParcelSurveyScopeContext
             {
@@ -1734,6 +1738,13 @@ namespace CDBox.CoreTests
             Contains(html, "保存宗地", "编辑器顶部应提供保存宗地按钮");
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
+            Contains(html, "exportSurvey').disabled=false",
+                "调查表导出按钮应始终启用");
+            Contains(html, "导出不受完整度限制",
+                "编辑器应明确数据检查不再阻止导出");
+            False(html.IndexOf("disabled=!v.CanExport",
+                StringComparison.Ordinal) >= 0,
+                "编辑器不得再按完整度锁定导出按钮");
             Contains(html, "地籍范围",
                 "编辑器顶部应显示整图或区域地籍范围选择");
             Contains(html, "新建区域",
@@ -1759,6 +1770,50 @@ namespace CDBox.CoreTests
             string output = Path.Combine(directory, "宗地测试_权籍调查表.xls");
             try
             {
+                string blankOutput = Path.Combine(directory,
+                    "空宗地_权籍调查表.xls");
+                var blankRecord = new ParcelSurveyRecord();
+                blankRecord.Normalize();
+                Equal(0, ParcelSurveyValidator.Validate(blankRecord)
+                    .CompletenessPercent, "空宗地完整度应为 0");
+                ParcelSurveyExcelExporter.Export(template, blankOutput,
+                    blankRecord);
+                True(File.Exists(blankOutput),
+                    "完整度为 0 的宗地也应成功导出工作簿");
+                using (FileStream blankInput = File.OpenRead(blankOutput))
+                {
+                    var blankWorkbook = new HSSFWorkbook(blankInput);
+                    try
+                    {
+                        ISheet basic = blankWorkbook.GetSheet("基本表");
+                        Equal(string.Empty, basic.GetRow(10).GetCell(6)
+                            .ToString(), "未填法定代表人不得自动输出斜杠");
+                        Equal(string.Empty, basic.GetRow(12).GetCell(6)
+                            .ToString(), "未填代理人不得自动输出斜杠");
+                        Equal(string.Empty, basic.GetRow(15).GetCell(6)
+                            .ToString(), "未填行业代码应保持空白");
+                        Equal(string.Empty, basic.GetRow(16).GetCell(6)
+                            .ToString(), "未填预编宗地代码应保持空白");
+                        Equal(string.Empty, basic.GetRow(20).GetCell(6)
+                            .ToString(), "未填宗地四至不得输出空标签");
+                        Equal(string.Empty, basic.GetRow(24).GetCell(6)
+                            .ToString(), "未填土地等级应保持空白");
+                        Equal(string.Empty, basic.GetRow(36).GetCell(0)
+                            .ToString(), "未填填表人和日期时页脚应保持空白");
+                        ISheet audit = blankWorkbook.GetSheet("调查审核表");
+                        Equal(string.Empty, audit.GetRow(1).GetCell(1)
+                            .ToString(), "空导出不得保留模板调查示例文字");
+                        Equal(string.Empty, audit.GetRow(3).GetCell(1)
+                            .ToString(), "空导出不得保留模板测绘示例文字");
+                        Equal(string.Empty, audit.GetRow(5).GetCell(1)
+                            .ToString(), "空导出不得保留模板审核示例文字");
+                    }
+                    finally
+                    {
+                        blankWorkbook.Close();
+                    }
+                }
+
                 var record = new ParcelSurveyRecord();
                 record.Normalize();
                 record.Field(ParcelSurveyFieldKeys.ParcelSeaCode).TextValue =
@@ -1771,6 +1826,8 @@ namespace CDBox.CoreTests
                     .TextValue = "532525000000GB00001F00010001";
                 record.Field(ParcelSurveyFieldKeys.ParcelLocation).TextValue =
                     "测试县测试镇一号";
+                record.Field(ParcelSurveyFieldKeys.PreliminaryParcelCode)
+                    .Status = ParcelFieldStatus.NotApplicable;
                 record.Field(ParcelSurveyFieldKeys.OwnerName).TextValue =
                     "张三";
                 record.Field(ParcelSurveyFieldKeys.OwnerType).TextValue =
@@ -1868,6 +1925,9 @@ namespace CDBox.CoreTests
                         Equal(string.Empty, workbook.GetSheet("基本表")
                             .GetRow(9).GetCell(33).StringCellValue,
                             "导出时应清除模板遗留的示例宗地号");
+                        Equal("/", workbook.GetSheet("基本表")
+                            .GetRow(16).GetCell(6).StringCellValue,
+                            "明确标记不适用的字段仍应输出斜杠");
                         Equal(CellType.String, workbook.GetSheet("基本表")
                             .GetRow(4).GetCell(17).CellType,
                             "证件号码必须以文本写入，避免变为科学计数法");
