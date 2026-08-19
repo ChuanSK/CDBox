@@ -188,7 +188,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
             {
                 if (pair.Value.IsNull) continue;
                 Entity clone;
-                try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
+                try { clone = tr.GetObject(pair.Value, OpenMode.ForRead, false) as Entity; }
                 catch { continue; }
                 SimpleMetadata metadata;
                 if (clone == null || !TryReadMetadata(tr, clone, out metadata)) continue;
@@ -203,7 +203,12 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     out clonedSourceHandle)) metadata.SourceHandle = clonedSourceHandle;
                 else if (isCrossDatabase) metadata.SourceHandle = string.Empty;
                 metadata.AnnotationId = newAnnotationId;
-                try { WriteMetadata(tr, clone, metadata); } catch { }
+                try
+                {
+                    if (!clone.IsWriteEnabled) clone.UpgradeOpen();
+                    WriteMetadata(tr, clone, metadata);
+                }
+                catch { }
             }
         }
 

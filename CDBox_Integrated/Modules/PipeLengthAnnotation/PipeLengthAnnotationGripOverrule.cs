@@ -35,11 +35,16 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (_instance != null) return;
             _instance = new PipeLengthAnnotationGripOverrule();
-            _instance.SetCustomFilter();
+            // 必须使用 AutoCAD 原生 XData 过滤。SetCustomFilter 会让所有普通
+            // Polyline/DBText 进入托管 IsApplicable；AutoCAD 2016 在
+            // COPYCLIP/PASTECLIP 的临时克隆对象上执行该回调时可能原生崩溃。
+            _instance.SetXDataFilter(
+                PipeLengthAnnotationObjectService.AnnotationXDataApplicationName);
             Overrule.AddOverrule(RXObject.GetClass(typeof(Polyline)), _instance, false);
             Overrule.AddOverrule(RXObject.GetClass(typeof(DBText)), _instance, false);
             _markerOverrule = new BindingMarkerDrawableOverrule();
-            _markerOverrule.SetCustomFilter();
+            _markerOverrule.SetXDataFilter(
+                PipeLengthAnnotationObjectService.AnnotationXDataApplicationName);
             Overrule.AddOverrule(RXObject.GetClass(typeof(Polyline)), _markerOverrule, false);
             Overrule.Overruling = true;
         }
@@ -77,7 +82,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             string annotationId;
             string part;
-            if (!PipeLengthAnnotationObjectService.TryGetAnnotationPart(entity, out annotationId, out part)) return;
+            if (!PipeLengthAnnotationObjectService.TryGetAnnotationPartFromXData(
+                entity, out annotationId, out part)) return;
 
             Polyline leader = entity as Polyline;
             if (leader != null && string.Equals(part, "LeaderLine", StringComparison.OrdinalIgnoreCase)
@@ -100,7 +106,9 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Entity entity = overruledSubject as Entity;
             string annotationId;
             string annotationPart;
-            return entity != null && PipeLengthAnnotationObjectService.TryGetAnnotationPart(entity, out annotationId, out annotationPart);
+            return entity != null
+                && PipeLengthAnnotationObjectService.TryGetAnnotationPartFromXData(
+                    entity, out annotationId, out annotationPart);
         }
 
         public override void MoveGripPointsAt(Entity entity, GripDataCollection grips, Vector3d offset,

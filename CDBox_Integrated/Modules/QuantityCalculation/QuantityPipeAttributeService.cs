@@ -361,7 +361,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             {
                 if (pair.Value.IsNull) continue;
                 Entity clone;
-                try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
+                try { clone = tr.GetObject(pair.Value, OpenMode.ForRead, false) as Entity; }
                 catch { continue; }
                 if (clone == null) continue;
 
@@ -386,7 +386,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 }
                 if (attributes == null) continue;
 
-                try { WritePipeAttributes(clone, tr, attributes.Clone()); }
+                try
+                {
+                    if (!clone.IsWriteEnabled) clone.UpgradeOpen();
+                    WritePipeAttributes(clone, tr, attributes.Clone());
+                }
                 catch { continue; }
                 if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
                     changedNodeHandles.Add(clone.Handle.ToString());

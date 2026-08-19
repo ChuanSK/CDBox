@@ -45,6 +45,7 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileSettings.cs" Link="Source\LongitudinalProfileSettings.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\WastewaterResultTable\WastewaterResultTableModels.cs" Link="Source\WastewaterResultTableModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationCloneSafetyPolicy.cs" Link="Source\PipeLengthAnnotationCloneSafetyPolicy.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\NodeAnnotation\NodeAnnotationTextComposer.cs" Link="Source\NodeAnnotationTextComposer.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableModels.cs" Link="Source\ExcelToCad\ExcelTableModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableReader.cs" Link="Source\ExcelToCad\ExcelTableReader.cs" />

@@ -508,12 +508,24 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     if (!pair.IsCloned || !pair.IsPrimary
                         || pair.Key.IsNull || pair.Value.IsNull) continue;
-                    batch.ObjectMap[pair.Key] = pair.Value;
+                    ObjectId stableKey =
+                        PipeLengthAnnotationCloneSafetyPolicy.StableMapKey(
+                            pair.Key, pair.Value, batch.IsCrossDatabase);
+                    batch.ObjectMap[stableKey] = pair.Value;
+                    if (!PipeLengthAnnotationCloneSafetyPolicy
+                        .MayRetainSourceIdentity(batch.IsCrossDatabase))
+                    {
+                        // COPYCLIP/PASTECLIP 的源对象属于临时或外部数据库，
+                        // 其生命周期不受当前文档保证，因此不得把源
+                        // ObjectId/Handle 留到命令结束后访问。
+                        continue;
+                    }
                     try
                     {
                         string originalHandle = pair.Key.Handle.ToString();
                         if (!string.IsNullOrWhiteSpace(originalHandle))
-                            batch.ClonesByOriginalHandle[originalHandle] = pair.Value;
+                            batch.ClonesByOriginalHandle[originalHandle] =
+                                pair.Value;
                     }
                     catch { }
                 }
@@ -679,7 +691,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     if (!refreshId.IsNull) RefreshCard(_document, refreshId);
                 }
             }
-            catch { }
+            catch (System.Exception ex)
+            {
+                CDBoxStudioLogger.Error("复制对象关联修复失败。", ex);
+            }
             finally { _bindingRefreshActive = previousRefreshState; }
         }
 

@@ -78,6 +78,8 @@ namespace CDBox.CoreTests
             Run("断面图 Preview 10 共享页面", TestSectionDrawingSharedPage);
             Run("属性默认表统一表格交互", TestQuantityDefaultsTableInteraction);
             Run("标注浮窗文字组合与旧数据迁移", TestAnnotationHudTextComposition);
+            Run("跨图纸深拷贝源标识生命周期",
+                TestPipeLengthAnnotationCloneSafety);
             Run("节点标注绑定文字组合", TestNodeAnnotationTextComposition);
             Run("Excel 表格范围读取与样式保留", TestExcelTableRangeReading);
             Run("图框布置设置归一化", TestFrameLayoutSettingsNormalization);
@@ -699,6 +701,22 @@ namespace CDBox.CoreTests
                 .SplitBottomLines("第一行\r\n第二行\\P第三行");
             Equal(3, bottomLines.Count, "下侧注记应按换行拆为多个单行文字");
             Equal("第二行", bottomLines[1], "下侧注记换行内容应保持顺序");
+        }
+
+        private static void TestPipeLengthAnnotationCloneSafety()
+        {
+            Equal("target", PipeLengthAnnotationCloneSafetyPolicy
+                .StableMapKey("source", "target", true),
+                "跨图纸复制只能保留目标数据库标识");
+            False(PipeLengthAnnotationCloneSafetyPolicy
+                .MayRetainSourceIdentity(true),
+                "跨图纸复制不得把临时源 ObjectId 带出深拷贝事件");
+            Equal("source", PipeLengthAnnotationCloneSafetyPolicy
+                .StableMapKey("source", "target", false),
+                "同图复制应保留源到目标映射");
+            True(PipeLengthAnnotationCloneSafetyPolicy
+                .MayRetainSourceIdentity(false),
+                "同图复制可安全保留源 Handle 以修复标注绑定");
         }
 
         private static void TestSpecialObjectsSkipQualityCheck()

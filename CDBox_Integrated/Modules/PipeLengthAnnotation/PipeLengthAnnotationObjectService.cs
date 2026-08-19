@@ -18,6 +18,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
     {
         internal const string ObjectIdentityXrecordName = "CDBoxObjectIdentity";
         internal const string AnnotationSourceXrecordName = "CDBoxAnnotationSource";
+        internal const string AnnotationXDataApplicationName =
+            "CDBOX_PIPE_LENGTH";
         private const string MetadataVersion = "2";
         private const string AnnotationType = "PipeLength";
         private const string GroupNamePrefix = "CDBOX_PIPE_LENGTH_";
@@ -214,6 +216,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             annotationId = string.Empty;
             annotationPart = string.Empty;
+            if (TryGetAnnotationPartFromXData(entity, out annotationId,
+                out annotationPart)) return true;
             if (entity == null || entity.Database == null || entity.ExtensionDictionary.IsNull) return false;
             Transaction top = entity.Database.TransactionManager.TopTransaction;
             if (top != null)
@@ -236,6 +240,47 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 }
                 tr.Commit();
                 return result;
+            }
+        }
+
+        internal static bool TryGetAnnotationPartFromXData(Entity entity,
+            out string annotationId, out string annotationPart)
+        {
+            annotationId = string.Empty;
+            annotationPart = string.Empty;
+            if (entity == null) return false;
+
+            ResultBuffer data = null;
+            try
+            {
+                data = entity.GetXDataForApplication(
+                    AnnotationXDataApplicationName);
+                if (data == null) return false;
+                foreach (TypedValue value in data)
+                {
+                    if (value.TypeCode != (int)DxfCode.ExtendedDataAsciiString
+                        || value.Value == null) continue;
+                    string text = value.Value.ToString();
+                    if (text.StartsWith("AnnotationId=",
+                        StringComparison.OrdinalIgnoreCase))
+                        annotationId = text.Substring("AnnotationId=".Length);
+                    else if (text.StartsWith("AnnotationPart=",
+                        StringComparison.OrdinalIgnoreCase))
+                        annotationPart = text.Substring(
+                            "AnnotationPart=".Length);
+                }
+                return IsGuid(annotationId)
+                    && !string.IsNullOrWhiteSpace(annotationPart);
+            }
+            catch
+            {
+                annotationId = string.Empty;
+                annotationPart = string.Empty;
+                return false;
+            }
+            finally
+            {
+                if (data != null) data.Dispose();
             }
         }
 
@@ -1684,38 +1729,58 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             var clonedSourceHandles = new List<string>();
             if (db == null || tr == null || cloneMap == null || cloneMap.Count == 0)
                 return clonedSourceHandles;
-            var sourceReferences = new Dictionary<string, ClonedSourceReference>(
+            var sourceReferencesByHandle = new Dictionary<string,
+                ClonedSourceReference>(StringComparer.OrdinalIgnoreCase);
+            var sourceReferencesByObjectId = new Dictionary<string,
+                ClonedSourceReference>(
                 StringComparer.OrdinalIgnoreCase);
-
+            var originalHandlesByCloneId = new Dictionary<ObjectId, string>();
             if (clonesByOriginalHandle != null)
             {
                 foreach (KeyValuePair<string, ObjectId> pair in clonesByOriginalHandle)
                 {
                     if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value.IsNull) continue;
-                    Entity clone;
-                    try { clone = tr.GetObject(pair.Value, OpenMode.ForWrite, false) as Entity; }
-                    catch { continue; }
-                    ObjectIdentity identity;
-                    if (clone == null || !TryReadObjectIdentity(tr, clone, out identity)) continue;
-
-                    string newObjectId = Guid.NewGuid().ToString("D");
-                    try
-                    {
-                        WriteRecord(tr, clone, ObjectIdentityXrecordName,
-                            "MetadataVersion=" + MetadataVersion,
-                            "CDBoxObjectId=" + newObjectId,
-                            "CDBoxObjectType=" + (string.IsNullOrWhiteSpace(identity.CDBoxObjectType)
-                                ? "Pipe" : identity.CDBoxObjectType));
-                    }
-                    catch { continue; }
-                    string clonedHandle = clone.Handle.ToString();
-                    sourceReferences[pair.Key] = new ClonedSourceReference
-                    {
-                        ObjectId = newObjectId,
-                        Handle = clonedHandle
-                    };
-                    clonedSourceHandles.Add(clonedHandle);
+                    originalHandlesByCloneId[pair.Value] = pair.Key;
                 }
+            }
+
+            var clonedIds = new HashSet<ObjectId>();
+            foreach (KeyValuePair<ObjectId, ObjectId> pair in cloneMap)
+                if (!pair.Value.IsNull) clonedIds.Add(pair.Value);
+            foreach (ObjectId cloneId in clonedIds)
+            {
+                Entity clone;
+                try { clone = tr.GetObject(cloneId, OpenMode.ForRead, false) as Entity; }
+                catch { continue; }
+                ObjectIdentity identity;
+                if (clone == null || !TryReadObjectIdentity(tr, clone,
+                    out identity)) continue;
+
+                string newObjectId = Guid.NewGuid().ToString("D");
+                try
+                {
+                    if (!clone.IsWriteEnabled) clone.UpgradeOpen();
+                    WriteRecord(tr, clone, ObjectIdentityXrecordName,
+                        "MetadataVersion=" + MetadataVersion,
+                        "CDBoxObjectId=" + newObjectId,
+                        "CDBoxObjectType=" + (string.IsNullOrWhiteSpace(
+                            identity.CDBoxObjectType)
+                            ? "Pipe" : identity.CDBoxObjectType));
+                }
+                catch { continue; }
+                string clonedHandle = clone.Handle.ToString();
+                var source = new ClonedSourceReference
+                {
+                    ObjectId = newObjectId,
+                    Handle = clonedHandle
+                };
+                if (IsGuid(identity.CDBoxObjectId))
+                    sourceReferencesByObjectId[identity.CDBoxObjectId] = source;
+                string originalHandle;
+                if (originalHandlesByCloneId.TryGetValue(cloneId,
+                    out originalHandle))
+                    sourceReferencesByHandle[originalHandle] = source;
+                clonedSourceHandles.Add(clonedHandle);
             }
 
             var clonedAnnotations = new Dictionary<string, List<ClonedAnnotationMember>>(
@@ -1780,7 +1845,12 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     values["AnnotationId"] = newAnnotationId;
                     values["GroupName"] = groupName;
                     ClonedSourceReference source;
-                    if (sourceReferences.TryGetValue(member.Metadata.SourceHandle, out source))
+                    if ((!string.IsNullOrWhiteSpace(
+                            member.Metadata.SourceObjectId)
+                            && sourceReferencesByObjectId.TryGetValue(
+                                member.Metadata.SourceObjectId, out source))
+                        || sourceReferencesByHandle.TryGetValue(
+                            member.Metadata.SourceHandle, out source))
                     {
                         values["SourceObjectId"] = source.ObjectId;
                         values["SourceHandle"] = source.Handle;
@@ -1921,6 +1991,37 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             WriteRecord(tr, entity, AnnotationSourceXrecordName, BuildRecordValues(values));
         }
 
+        private static void WriteAnnotationXData(Transaction tr,
+            Entity entity, string annotationId, string annotationPart)
+        {
+            if (tr == null || entity == null || entity.Database == null
+                || !IsGuid(annotationId)
+                || string.IsNullOrWhiteSpace(annotationPart)) return;
+
+            RegAppTable table = tr.GetObject(entity.Database.RegAppTableId,
+                OpenMode.ForRead, false) as RegAppTable;
+            if (table == null) return;
+            if (!table.Has(AnnotationXDataApplicationName))
+            {
+                table.UpgradeOpen();
+                var record = new RegAppTableRecord
+                {
+                    Name = AnnotationXDataApplicationName
+                };
+                table.Add(record);
+                tr.AddNewlyCreatedDBObject(record, true);
+            }
+
+            using (var data = new ResultBuffer(
+                new TypedValue((int)DxfCode.ExtendedDataRegAppName,
+                    AnnotationXDataApplicationName),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString,
+                    "AnnotationId=" + annotationId),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString,
+                    "AnnotationPart=" + annotationPart)))
+                entity.XData = data;
+        }
+
         private static void WriteRecord(Transaction tr, DBObject owner, string recordName, params string[] values)
         {
             if (owner.ExtensionDictionary.IsNull) owner.CreateExtensionDictionary();
@@ -1946,6 +2047,27 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 typedValues[i] = new TypedValue((int)DxfCode.Text, values[i] ?? string.Empty);
             }
             record.Data = new ResultBuffer(typedValues);
+            Entity entity = owner as Entity;
+            if (entity != null && string.Equals(recordName,
+                AnnotationSourceXrecordName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                string annotationId = string.Empty;
+                string annotationPart = string.Empty;
+                for (int i = 0; i < values.Length; i++)
+                {
+                    string value = values[i] ?? string.Empty;
+                    if (value.StartsWith("AnnotationId=",
+                        StringComparison.OrdinalIgnoreCase))
+                        annotationId = value.Substring("AnnotationId=".Length);
+                    else if (value.StartsWith("AnnotationPart=",
+                        StringComparison.OrdinalIgnoreCase))
+                        annotationPart = value.Substring(
+                            "AnnotationPart=".Length);
+                }
+                WriteAnnotationXData(tr, entity, annotationId,
+                    annotationPart);
+            }
         }
 
         private static bool TryReadAnnotationMetadata(Transaction tr, DBObject owner, out AnnotationMetadata metadata)
