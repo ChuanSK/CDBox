@@ -224,8 +224,11 @@ textarea.control{min-width:100%;resize:both}
                     }
                     else
                     {
+                        string path = ParcelSurveyExportDialog.Export(record);
+                        if (string.IsNullOrWhiteSpace(path)) return result;
                         result.ToastKind = "success";
-                        result.ToastMessage = "宗地业务数据已通过导出检查；XLS/PDF 模板适配器将在后续导出功能中接入。";
+                        result.ToastMessage = "权籍调查表已导出并完成回读检查："
+                            + path;
                     }
                     return result;
                 }

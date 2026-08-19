@@ -36,7 +36,8 @@ namespace CDBox.RealEstate.Cad
             {
                 var options = new PromptEntityOptions("\n ");
                 options.SetRejectMessage("\n请选择闭合二维多段线。\n");
-                options.AddAllowedClass(typeof(Polyline), true);
+                options.AddAllowedClass(typeof(Polyline), false);
+                options.AddAllowedClass(typeof(Polyline2d), false);
                 PromptEntityResult selected;
                 using (_prompts.Begin("选择权属线",
                     "请选择闭合的宗地权属线；按 Esc 取消。"))
@@ -48,15 +49,24 @@ namespace CDBox.RealEstate.Cad
                 using (Transaction transaction = document.Database
                     .TransactionManager.StartOpenCloseTransaction())
                 {
-                    Polyline polyline = transaction.GetObject(selected.ObjectId,
-                        OpenMode.ForRead, false) as Polyline;
-                    if (polyline == null || !polyline.Closed)
+                    Entity entity = transaction.GetObject(selected.ObjectId,
+                        OpenMode.ForRead, false) as Entity;
+                    Polyline polyline = entity as Polyline;
+                    Polyline2d legacy = entity as Polyline2d;
+                    if (polyline == null && legacy == null)
+                        throw new InvalidOperationException(
+                            "请选择二维多段线或 CASS 旧式二维多段线作为权属线。");
+                    bool closed = polyline != null
+                        ? polyline.Closed : legacy.Closed;
+                    if (!closed)
                         throw new InvalidOperationException(
                             "请选择已闭合的二维多段线作为权属线。");
-                    if (polyline.NumberOfVertices < 3)
+                    result = polyline != null
+                        ? ReadPolyline(polyline)
+                        : ReadPolyline(legacy, transaction);
+                    if (result.Vertices.Count < 3)
                         throw new InvalidOperationException(
                             "权属线至少需要三个界址节点。");
-                    result = ReadPolyline(polyline);
                     try { textStyleId = document.Database.Textstyle; }
                     catch { textStyleId = ObjectId.Null; }
                     transaction.Commit();
@@ -254,27 +264,63 @@ namespace CDBox.RealEstate.Cad
 
         private static ParcelBoundaryCadSelection ReadPolyline(Polyline polyline)
         {
+            var vertices = new List<BoundaryVertexSeed>();
+            for (int i = 0; i < polyline.NumberOfVertices; i++)
+            {
+                vertices.Add(new BoundaryVertexSeed(polyline.GetPoint3dAt(i),
+                    SafeBulge(polyline, i)));
+            }
+            return BuildSelection(polyline, vertices, SafeArea(polyline));
+        }
+
+        private static ParcelBoundaryCadSelection ReadPolyline(
+            Polyline2d polyline, Transaction transaction)
+        {
+            var vertices = new List<BoundaryVertexSeed>();
+            foreach (ObjectId vertexId in polyline)
+            {
+                Vertex2d vertex = transaction.GetObject(vertexId,
+                    OpenMode.ForRead, false) as Vertex2d;
+                if (vertex == null) continue;
+                vertices.Add(new BoundaryVertexSeed(vertex.Position,
+                    vertex.Bulge));
+            }
+            return BuildSelection(polyline, vertices, SafeArea(polyline));
+        }
+
+        private static ParcelBoundaryCadSelection BuildSelection(Entity source,
+            IList<BoundaryVertexSeed> rawVertices, double sourceArea)
+        {
+            var vertices = new List<BoundaryVertexSeed>();
+            foreach (BoundaryVertexSeed vertex in rawVertices
+                ?? new BoundaryVertexSeed[0])
+            {
+                if (vertex == null) continue;
+                if (vertices.Count > 0 && SamePoint(
+                    vertices[vertices.Count - 1].Point, vertex.Point))
+                    continue;
+                vertices.Add(vertex);
+            }
+            if (vertices.Count > 2 && SamePoint(vertices[0].Point,
+                vertices[vertices.Count - 1].Point))
+                vertices.RemoveAt(vertices.Count - 1);
+
             var result = new ParcelBoundaryCadSelection
             {
-                SourceObjectHandle = polyline.Handle.ToString(),
-                SourceLayerName = polyline.Layer ?? string.Empty,
-                Area = decimal.Round((decimal)Math.Abs(polyline.Area), 2,
+                SourceObjectHandle = source.Handle.ToString(),
+                SourceLayerName = source.Layer ?? string.Empty,
+                Area = decimal.Round((decimal)Math.Abs(sourceArea), 2,
                     MidpointRounding.AwayFromZero)
             };
             double signedArea = 0;
-            int count = polyline.NumberOfVertices;
+            int count = vertices.Count;
             for (int i = 0; i < count; i++)
             {
-                Point3d point = polyline.GetPoint3dAt(i);
-                Point3d next = polyline.GetPoint3dAt((i + 1) % count);
+                BoundaryVertexSeed vertex = vertices[i];
+                Point3d point = vertex.Point;
+                Point3d next = vertices[(i + 1) % count].Point;
                 signedArea += point.X * next.Y - next.X * point.Y;
-                double length;
-                try
-                {
-                    length = polyline.GetDistanceAtParameter(i + 1)
-                        - polyline.GetDistanceAtParameter(i);
-                }
-                catch { length = point.DistanceTo(next); }
+                double length = SegmentLength(point, next, vertex.Bulge);
                 result.Vertices.Add(new ParcelBoundaryCadVertex
                 {
                     SourceIndex = i,
@@ -284,8 +330,40 @@ namespace CDBox.RealEstate.Cad
                     DistanceToNext = ToDecimal(Math.Abs(length))
                 });
             }
+            if (result.Area <= 0 && Math.Abs(signedArea) > 0)
+                result.Area = decimal.Round((decimal)(Math.Abs(signedArea)
+                    / 2.0), 2, MidpointRounding.AwayFromZero);
             result.NativeClockwise = signedArea < 0;
             return result;
+        }
+
+        private static double SafeArea(Curve curve)
+        {
+            try { return curve == null ? 0 : curve.Area; }
+            catch { return 0; }
+        }
+
+        private static double SafeBulge(Polyline polyline, int index)
+        {
+            try { return polyline.GetBulgeAt(index); }
+            catch { return 0; }
+        }
+
+        private static double SegmentLength(Point3d start, Point3d end,
+            double bulge)
+        {
+            double chord = start.DistanceTo(end);
+            double absolute = Math.Abs(bulge);
+            if (chord <= 1e-9 || absolute <= 1e-9) return chord;
+            double angle = 4.0 * Math.Atan(absolute);
+            double radius = chord * (1.0 + absolute * absolute)
+                / (4.0 * absolute);
+            return Math.Abs(radius * angle);
+        }
+
+        private static bool SamePoint(Point3d left, Point3d right)
+        {
+            return left.DistanceTo(right) <= 0.000001;
         }
 
         private PointCandidate SelectPoint(Document document,
@@ -393,6 +471,18 @@ namespace CDBox.RealEstate.Cad
             public int Index { get; private set; }
             public string Label { get; private set; }
             public Point3d Position { get; private set; }
+        }
+
+        private sealed class BoundaryVertexSeed
+        {
+            public BoundaryVertexSeed(Point3d point, double bulge)
+            {
+                Point = point;
+                Bulge = bulge;
+            }
+
+            public Point3d Point { get; private set; }
+            public double Bulge { get; private set; }
         }
 
         private sealed class BoundaryPointSelectJig : DrawJig

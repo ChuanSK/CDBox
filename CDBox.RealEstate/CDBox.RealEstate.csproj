@@ -9,8 +9,13 @@
     <FileVersion>0.2.0.0</FileVersion>
     <InformationalVersion>0.2.0</InformationalVersion>
     <PlatformTarget>x64</PlatformTarget>
+    <AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
     <AutoCADManagedDir Condition="'$(AutoCADManagedDir)' == ''">C:\Program Files\Autodesk\AutoCAD 2023</AutoCADManagedDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NPOI" Version="2.8.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="AcMgd">

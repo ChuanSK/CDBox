@@ -76,6 +76,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\工程量计算表模板.xls</TargetPath>
     </Content>
+    <Content Include="CDBox_Integrated\Templates\权籍调查表.xls">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\权籍调查表.xls</TargetPath>
+    </Content>
     <Content Include="CDBox_Integrated\Config\CDBoxColors.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Config\CDBoxColors.json</TargetPath>

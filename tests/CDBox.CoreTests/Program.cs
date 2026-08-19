@@ -13,6 +13,7 @@ using CDBox.RealEstate.Module;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Geometry;
 using CDBox.RealEstate.Models;
+using CDBox.RealEstate.Services;
 using CDBox.RealEstate.Settings;
 using CDBox.RealEstate.UI;
 using CDBoxUpdater;
@@ -65,6 +66,7 @@ namespace CDBox.CoreTests
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
             Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
+            Run("权籍调查表模板导出与续表", TestParcelSurveyExcelExport);
             Run("界址范围选择与说明自动生成", TestParcelBoundaryRangeAndDescriptions);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
@@ -1728,6 +1730,155 @@ namespace CDBox.CoreTests
             Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
             Contains(html, "回读检查",
                 "页面应展示完整的预览、导出与回读流程");
+        }
+
+        private static void TestParcelSurveyExcelExport()
+        {
+            string template = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Templates", ParcelSurveyExcelExporter.TemplateFileName);
+            True(File.Exists(template), "测试输出目录应包含权籍调查表模板");
+            string directory = NewTemporaryDirectory("parcel-survey-export");
+            string output = Path.Combine(directory, "宗地测试_权籍调查表.xls");
+            try
+            {
+                var record = new ParcelSurveyRecord();
+                record.Normalize();
+                record.Field(ParcelSurveyFieldKeys.ParcelSeaCode).TextValue =
+                    "532525000000GB00001";
+                record.Field(ParcelSurveyFieldKeys.ParcelCode).TextValue =
+                    "532525000000GB00001";
+                record.Field(ParcelSurveyFieldKeys.ParcelNumber).TextValue =
+                    "GB00001";
+                record.Field(ParcelSurveyFieldKeys.RealEstateUnitNumber)
+                    .TextValue = "532525000000GB00001F00010001";
+                record.Field(ParcelSurveyFieldKeys.ParcelLocation).TextValue =
+                    "测试县测试镇一号";
+                record.Field(ParcelSurveyFieldKeys.OwnerName).TextValue =
+                    "张三";
+                record.Field(ParcelSurveyFieldKeys.OwnerType).TextValue =
+                    "个人";
+                record.Field(ParcelSurveyFieldKeys.CertificateType).TextValue =
+                    "居民身份证";
+                record.Field(ParcelSurveyFieldKeys.CertificateNumber).TextValue =
+                    "532525199001010011";
+                record.Field(ParcelSurveyFieldKeys.ContactAddress).TextValue =
+                    "测试县测试镇";
+                record.Field(ParcelSurveyFieldKeys.ContactPhone).TextValue =
+                    "13800000000";
+                record.Field("rights.identityRoles").Selections.Add("权利人");
+                record.Field(ParcelSurveyFieldKeys.ParcelArea).NumericValue =
+                    101.87m;
+                record.Field("project.organization").TextValue = "测试调查机构";
+                record.Field("project.formFiller").TextValue = "李四";
+                record.Field("project.formDate").TextValue = "2026-08-19";
+                record.Field("project.countyCode").TextValue = "532525";
+                record.Field("project.cadastralDistrictCode").TextValue =
+                    "001";
+                record.Field("project.cadastralSubdistrictCode").TextValue =
+                    "002";
+                record.Field("project.postalCode").TextValue = "662200";
+                record.Field("audit.signatureHandling").TextValue =
+                    "输出人员姓名";
+                record.Field("house.followParcelOwner").BooleanValue = true;
+                record.Field("house.unitCode").TextValue = "F00010001";
+                record.Field("house.unitType").TextValue = "幢";
+
+                record.Boundary.ParcelBoundaryClosed = true;
+                for (int i = 0; i < 27; i++)
+                {
+                    string start = "J" + (i + 1);
+                    string end = "J" + (i == 26 ? 1 : i + 2);
+                    record.Boundary.Points.Add(BoundaryPoint(start,
+                        i, i % 4, 1.25m));
+                    record.Boundary.Segments.Add(new
+                        ParcelBoundarySegmentRecord
+                    {
+                        StartPointNumber = start,
+                        EndPointNumber = end,
+                        Distance = 1.25m,
+                        LineCategory = "围墙",
+                        LinePosition = "外",
+                        Description = "测试界址段",
+                        NeighborHandled = true,
+                        Confirmed = true,
+                        Status = ParcelFieldStatus.Manual
+                    });
+                }
+                for (int i = 0; i < 14; i++)
+                    record.Boundary.SignatureGroups.Add(new
+                        ParcelBoundarySignatureGroupRecord
+                    {
+                        StartPointNumber = "J" + (i + 1),
+                        MiddlePointNumbers = "/",
+                        EndPointNumber = "J" + (i + 2),
+                        NeighborOwner = "邻宗权利人" + (i + 1),
+                        NeighborParcelCode = "N" + (i + 1),
+                        NeighborRepresentative = "邻宗指界人",
+                        ParcelRepresentative = "张三",
+                        ConfirmationDate = "2026-08-19",
+                        Confirmed = true,
+                        Status = ParcelFieldStatus.Manual
+                    });
+                record.Field("boundary.pointDescription").TextValue =
+                    "J1位于本宗地西北方向外墙脚。";
+                record.Field("boundary.lineDescription").TextValue =
+                    "J1至J2沿本宗地外墙脚布设。";
+                for (int i = 0; i < 2; i++)
+                {
+                    var building = new ParcelBuildingRecord();
+                    building.Normalize();
+                    building.Fields["building.number"].TextValue =
+                        (i + 1).ToString();
+                    building.Fields["building.totalFloors"].NumericValue = 2;
+                    building.Fields["building.structure"].TextValue = "砖混";
+                    building.Fields["building.footprintArea"].NumericValue =
+                        50m + i;
+                    building.Fields["building.area"].NumericValue = 100m + i;
+                    record.Buildings.Add(building);
+                }
+
+                ParcelSurveyExcelExporter.Export(template, output, record);
+                True(File.Exists(output), "导出器应生成 Excel 97-2003 工作簿");
+                using (FileStream input = File.OpenRead(output))
+                {
+                    var workbook = new HSSFWorkbook(input);
+                    try
+                    {
+                        Equal("532525000000GB00001", workbook.GetSheet("基本表")
+                            .GetRow(16).GetCell(19).StringCellValue,
+                            "宗地代码应写入基本表对应单元格");
+                        Equal(string.Empty, workbook.GetSheet("基本表")
+                            .GetRow(9).GetCell(33).StringCellValue,
+                            "导出时应清除模板遗留的示例宗地号");
+                        Equal(CellType.String, workbook.GetSheet("基本表")
+                            .GetRow(4).GetCell(17).CellType,
+                            "证件号码必须以文本写入，避免变为科学计数法");
+                        ISheet marks = workbook.GetSheet("界址标示表1");
+                        Equal("√", marks.GetRow(3).GetCell(4).StringCellValue,
+                            "喷涂界标应在对应列写入勾选符号");
+                        Equal("√", marks.GetRow(3).GetCell(7).StringCellValue,
+                            "围墙类别应在对应列写入勾选符号");
+                        Equal("√", marks.GetRow(3).GetCell(17).StringCellValue,
+                            "外侧界址线位置应写入勾选符号");
+                        Equal("J27", workbook.GetSheet("界址标示表2")
+                            .GetRow(3).GetCell(0).StringCellValue,
+                            "超过 26 段时第二张标示表应从下一界址点续写");
+                        True(workbook.GetSheet("界址签章表2") != null,
+                            "超过 13 个签章组时应自动生成续表");
+                        Equal("2", workbook.GetSheet("房屋调查表2")
+                            .GetRow(12).GetCell(4).StringCellValue,
+                            "多幢房屋应逐幢生成调查表");
+                    }
+                    finally
+                    {
+                        workbook.Close();
+                    }
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) DeleteDirectory(directory);
+            }
         }
 
         private static void TestParcelBoundaryRangeAndDescriptions()
