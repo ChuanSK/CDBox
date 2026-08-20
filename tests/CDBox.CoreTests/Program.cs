@@ -11,6 +11,7 @@ using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.RealEstate.Module;
 using CDBox.RealEstate.Cad;
+using CDBox.RealEstate.Commands;
 using CDBox.RealEstate.Geometry;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Services;
@@ -65,6 +66,7 @@ namespace CDBox.CoreTests
             Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
+            Run("独立宗地选择、命名与数据隔离", TestIndependentParcelSelection);
             Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
             Run("权籍调查表模板导出与续表", TestParcelSurveyExcelExport);
             Run("界址范围选择与说明自动生成", TestParcelBoundaryRangeAndDescriptions);
@@ -1126,6 +1128,26 @@ namespace CDBox.CoreTests
             Near(1.14, precisionResult.Layers.Find(x => QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9,
                 "自动管线层应使用保留两位后的平均深度");
 
+            QuantityPipeAttributes halfUpPipe = QuantityPipeAttributes.DefaultMainPipe;
+            halfUpPipe.StartDepth = 0.795;
+            halfUpPipe.EndDepth = 0.745;
+            halfUpPipe.BackfillStructure =
+                "中粗砂回填 0.00\n中粗砂垫层 0.10 锁定 垫层";
+            QuantityDependencyResult halfUpResult =
+                QuantityDependencyService.NormalizeDraft(
+                    halfUpPipe,
+                    QuantityStructureLayer.Parse(halfUpPipe.BackfillStructure),
+                    halfUpPipe, null, null, null, "StartDepth");
+            Near(0.795, halfUpResult.Attributes.StartDepth, 1e-9,
+                "平均深度计算不得改写端点实际值");
+            Near(0.745, halfUpResult.Attributes.EndDepth, 1e-9,
+                "平均深度计算不得改写端点实际值");
+            Near(0.78, halfUpResult.Attributes.AverageDepth, 1e-9,
+                "显示为 0.80 与 0.75 的端点平均值应按十进制四舍五入为 0.78");
+            Near(0.68, halfUpResult.Layers.Find(x =>
+                QuantityStructureLayer.IsSandBackfill(x)).Height, 1e-9,
+                "自动管线层应使用四舍五入后的 0.78");
+
             QuantityPipeAttributes typedWell = QuantityPipeAttributes.DefaultNodeWell;
             typedWell.WellDepth = 0.46;
             typedWell.BackfillStructure =
@@ -1626,6 +1648,153 @@ namespace CDBox.CoreTests
             {
                 if (Directory.Exists(directory)) DeleteDirectory(directory);
             }
+        }
+
+        private static void TestIndependentParcelSelection()
+        {
+            string directory = Path.Combine(Path.GetTempPath(),
+                "cdbox-independent-parcel-" + Guid.NewGuid().ToString("N"));
+            string path = Path.Combine(directory, "parcel-survey-data.json");
+            try
+            {
+                var store = new ParcelSurveyStore(path);
+                ParcelSurveyRecord defaults = store.Current("drawing-a",
+                    "A.dwg", string.Empty, string.Empty);
+                defaults.Field("project.organization").TextValue =
+                    "默认调查单位";
+                defaults.Field("project.organization").Status =
+                    ParcelFieldStatus.Default;
+                defaults.Field("parcel.location").TextValue = "不得继承";
+                defaults.Field("parcel.location").Status =
+                    ParcelFieldStatus.Manual;
+                store.Save(defaults);
+
+                ParcelBoundaryCadSelection firstSelection = Selection(
+                    "1A", "张三", 100m);
+                ParcelSurveyRecord first = store.CreateOrSelectParcel(
+                    "drawing-a", "A.dwg", firstSelection.OwnerName,
+                    firstSelection.SourceObjectHandle);
+                ParcelBoundaryRecognitionApplicator.Apply(first,
+                    firstSelection);
+                first.ParcelName = firstSelection.OwnerName;
+                first.Field("parcel.location").TextValue = "张三宗地坐落";
+                first.Field("parcel.location").Status =
+                    ParcelFieldStatus.Manual;
+                store.Save(first);
+
+                Equal("parcel", first.ScopeType,
+                    "选择权属线后必须建立独立宗地范围");
+                Equal("张三", first.ParcelName,
+                    "宗地名应使用权利人姓名");
+                Equal("张三", first.Field("rights.ownerName").TextValue,
+                    "权利人姓名应写入宗地业务字段");
+                Equal("1A", first.Boundary.SourceObjectHandle,
+                    "独立宗地应绑定一条权属线图元");
+                Equal(4, first.Boundary.Points.Count,
+                    "选择宗地应生成界址点和坐标");
+                Equal("J1", first.Boundary.Points[0].PointNumber,
+                    "界址点应从输入起点自动编号");
+                Equal(100m, first.Field(ParcelSurveyFieldKeys.ParcelArea)
+                    .NumericValue.Value,
+                    "权属线面积应同步到独立宗地");
+                Equal("默认调查单位",
+                    first.Field("project.organization").TextValue,
+                    "新宗地应继承项目默认值");
+
+                ParcelBoundaryCadSelection secondSelection = Selection(
+                    "2B", "李四", 80m);
+                ParcelSurveyRecord second = store.CreateOrSelectParcel(
+                    "drawing-a", "A.dwg", secondSelection.OwnerName,
+                    secondSelection.SourceObjectHandle);
+                ParcelBoundaryRecognitionApplicator.Apply(second,
+                    secondSelection);
+                second.ParcelName = secondSelection.OwnerName;
+                store.Save(second);
+                False(string.Equals(first.Id, second.Id,
+                        StringComparison.OrdinalIgnoreCase),
+                    "同一图纸的两条权属线必须维护两份宗地数据");
+                Equal(string.Empty,
+                    second.Field("parcel.location").TextValue,
+                    "不同宗地不得共享人工填写字段");
+                Equal("parcel", store.GetCurrentScopeType("drawing-a"),
+                    "每张图纸应记忆当前选择为宗地范围");
+                Equal(second.ParcelId,
+                    store.GetCurrentParcelId("drawing-a"),
+                    "每张图纸应记忆当前独立宗地");
+                store.SavePreservingCurrentScope(first);
+                Equal(second.ParcelId,
+                    store.GetCurrentParcelId("drawing-a"),
+                    "编辑器后台保存旧宗地时不得覆盖菜单刚选择的新宗地");
+                Equal(2, store.GetParcels("drawing-a").Count,
+                    "地籍范围应列出同图纸内全部独立宗地");
+
+                ParcelSurveyRecord selectedAgain =
+                    store.CreateOrSelectParcel("drawing-a", "A.dwg",
+                        "张三（更新）", "1A");
+                Equal(first.Id, selectedAgain.Id,
+                    "再次选择同一权属线应回到原独立宗地而非重复创建");
+                Equal("张三（更新）", selectedAgain.ParcelName,
+                    "再次选择时应按最新权利人更新宗地名");
+
+                var scope = new ParcelSurveyScopeContext
+                {
+                    DocumentId = "drawing-a",
+                    DocumentName = "A.dwg",
+                    ScopeType = "parcel",
+                    ParcelId = selectedAgain.ParcelId,
+                    ParcelName = selectedAgain.ParcelName,
+                    Parcels = store.GetParcels("drawing-a")
+                };
+                string html = ParcelSurveyEditorPage.BuildHtml(selectedAgain,
+                    ParcelSurveyValidator.Validate(selectedAgain), scope);
+                Contains(html, "新建宗地",
+                    "宗地调查数据编辑器应提供新建宗地入口");
+                Contains(html, "宗地（一条权属线）",
+                    "地籍范围应将宗地作为独立可选类型");
+                Contains(html, "张三（更新）",
+                    "地籍范围应以权利人姓名显示宗地");
+                Equal("CDRESELECTPARCEL",
+                    RealEstateCommandCatalog.SelectParcel,
+                    "不动产菜单应有独立选择宗地命令");
+                Equal("CDREFILLSEGMENT",
+                    RealEstateCommandCatalog.FillBoundarySegments,
+                    "不动产菜单应有独立填写界址段命令");
+                Equal("CDREFILLNEIGHBOR",
+                    RealEstateCommandCatalog.FillNeighborInformation,
+                    "不动产菜单应有独立填写邻宗信息命令");
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) DeleteDirectory(directory);
+            }
+        }
+
+        private static ParcelBoundaryCadSelection Selection(string handle,
+            string ownerName, decimal area)
+        {
+            return new ParcelBoundaryCadSelection
+            {
+                SourceObjectHandle = handle,
+                SourceLayerName = "JZD",
+                OwnerName = ownerName,
+                Area = area,
+                NativeClockwise = false,
+                ConfiguredClockwise = false,
+                SelectedStartSourceIndex = 0,
+                StartPointPrefix = "J",
+                StartPointNumber = 1,
+                Vertices = new List<ParcelBoundaryCadVertex>
+                {
+                    new ParcelBoundaryCadVertex { SourceIndex = 0, X = 0m,
+                        Y = 0m, DistanceToNext = 10m },
+                    new ParcelBoundaryCadVertex { SourceIndex = 1, X = 10m,
+                        Y = 0m, DistanceToNext = 10m },
+                    new ParcelBoundaryCadVertex { SourceIndex = 2, X = 10m,
+                        Y = 10m, DistanceToNext = 10m },
+                    new ParcelBoundaryCadVertex { SourceIndex = 3, X = 0m,
+                        Y = 10m, DistanceToNext = 10m }
+                }
+            };
         }
 
         private static void TestParcelSurveyValidationAndPage()

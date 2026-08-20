@@ -46,6 +46,26 @@ namespace CDBox.RealEstate.UI
                 out number);
         }
 
+        public static bool TryGetOwnerName(string current,
+            out string ownerName)
+        {
+            ownerName = (current ?? string.Empty).Trim();
+            var dialog = new BoundaryFloatingDialog("填写宗地权利人",
+                "一条权属线对应一份独立宗地数据，并以权利人姓名作为宗地名。",
+                430);
+            TextBox input = dialog.AddText("权利人姓名 *", ownerName,
+                "请输入个人姓名或单位名称");
+            dialog.AcceptText = "下一步";
+            dialog.Validate = delegate
+            {
+                return string.IsNullOrWhiteSpace(input.Text)
+                    ? "权利人姓名不能为空。" : string.Empty;
+            };
+            if (!dialog.ShowForAutoCad()) return false;
+            ownerName = (input.Text ?? string.Empty).Trim();
+            return ownerName.Length > 0;
+        }
+
         public static bool TryGetNumberingDirection(bool initialClockwise,
             out bool clockwise)
         {

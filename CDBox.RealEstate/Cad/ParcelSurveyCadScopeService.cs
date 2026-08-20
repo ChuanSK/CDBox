@@ -54,13 +54,37 @@ namespace CDBox.RealEstate.Cad
             context.DocumentId = GetDocumentId(current);
             context.DocumentName = GetDocumentName(current);
             context.Regions = GetRegions(current);
+            context.Parcels = store.GetParcels(context.DocumentId);
+            string scopeType = store.GetCurrentScopeType(context.DocumentId);
+            if (string.Equals(scopeType, "parcel",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                string selectedParcel = store.GetCurrentParcelId(
+                    context.DocumentId);
+                ParcelSurveyParcelInfo parcel = context.Parcels.FirstOrDefault(
+                    x => Same(x.ParcelId, selectedParcel));
+                if (parcel != null)
+                {
+                    context.ScopeType = "parcel";
+                    context.ParcelId = parcel.ParcelId;
+                    context.ParcelName = parcel.ParcelName;
+                    context.RegionName = string.Empty;
+                    return context;
+                }
+                store.SelectScope(context.DocumentId, "whole",
+                    string.Empty);
+                return context;
+            }
+            if (!string.Equals(scopeType, "region",
+                StringComparison.OrdinalIgnoreCase)) return context;
             string selected = store.GetCurrentRegionId(context.DocumentId);
             ParcelSurveyRegionInfo region = context.Regions.FirstOrDefault(x =>
                 Same(x.RegionId, selected));
             if (region == null)
             {
                 if (!string.IsNullOrWhiteSpace(selected))
-                    store.SelectScope(context.DocumentId, string.Empty);
+                    store.SelectScope(context.DocumentId, "whole",
+                        string.Empty);
                 return context;
             }
             context.ScopeType = "region";

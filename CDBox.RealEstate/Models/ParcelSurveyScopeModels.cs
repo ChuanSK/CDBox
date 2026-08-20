@@ -33,6 +33,23 @@ namespace CDBox.RealEstate.Models
         }
     }
 
+    public sealed class ParcelSurveyParcelInfo
+    {
+        public string ParcelId { get; set; }
+        public string ParcelName { get; set; }
+        public string OwnerName { get; set; }
+        public string SourceObjectHandle { get; set; }
+        public bool BoundaryValid { get; set; }
+
+        public ParcelSurveyParcelInfo()
+        {
+            ParcelId = string.Empty;
+            ParcelName = string.Empty;
+            OwnerName = string.Empty;
+            SourceObjectHandle = string.Empty;
+        }
+    }
+
     public sealed class ParcelSurveyScopeContext
     {
         public string DocumentId { get; set; }
@@ -40,8 +57,11 @@ namespace CDBox.RealEstate.Models
         public string ScopeType { get; set; }
         public string RegionId { get; set; }
         public string RegionName { get; set; }
+        public string ParcelId { get; set; }
+        public string ParcelName { get; set; }
         public IList<ParcelSurveyDocumentInfo> Documents { get; set; }
         public IList<ParcelSurveyRegionInfo> Regions { get; set; }
+        public IList<ParcelSurveyParcelInfo> Parcels { get; set; }
 
         public ParcelSurveyScopeContext()
         {
@@ -50,8 +70,11 @@ namespace CDBox.RealEstate.Models
             ScopeType = "whole";
             RegionId = string.Empty;
             RegionName = "整张图纸";
+            ParcelId = string.Empty;
+            ParcelName = string.Empty;
             Documents = new List<ParcelSurveyDocumentInfo>();
             Regions = new List<ParcelSurveyRegionInfo>();
+            Parcels = new List<ParcelSurveyParcelInfo>();
         }
     }
 
@@ -59,15 +82,21 @@ namespace CDBox.RealEstate.Models
     {
         public ParcelSurveyRecord Record { get; set; }
         public string DocumentId { get; set; }
+        public string ScopeType { get; set; }
         public string RegionId { get; set; }
         public string RegionName { get; set; }
+        public string ParcelId { get; set; }
+        public string ParcelName { get; set; }
         public string ScopeToken { get; set; }
 
         public ParcelSurveyScopeActionRequest()
         {
             DocumentId = string.Empty;
+            ScopeType = "whole";
             RegionId = string.Empty;
             RegionName = string.Empty;
+            ParcelId = string.Empty;
+            ParcelName = string.Empty;
             ScopeToken = string.Empty;
         }
     }

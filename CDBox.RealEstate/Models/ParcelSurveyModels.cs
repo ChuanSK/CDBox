@@ -256,6 +256,8 @@ namespace CDBox.RealEstate.Models
         public string ScopeType { get; set; }
         public string RegionId { get; set; }
         public string RegionName { get; set; }
+        public string ParcelId { get; set; }
+        public string ParcelName { get; set; }
         public Dictionary<string, ParcelSurveyFieldValue> Fields { get; set; }
         public ParcelBoundaryData Boundary { get; set; }
         public List<ParcelBuildingRecord> Buildings { get; set; }
@@ -278,11 +280,17 @@ namespace CDBox.RealEstate.Models
             UpdatedAtUtc = UpdatedAtUtc ?? string.Empty;
             DocumentId = DocumentId ?? string.Empty;
             DocumentName = DocumentName ?? string.Empty;
-            ScopeType = string.Equals(ScopeType, "region",
-                StringComparison.OrdinalIgnoreCase) ? "region" : "whole";
+            ScopeType = string.Equals(ScopeType, "parcel",
+                StringComparison.OrdinalIgnoreCase) ? "parcel"
+                : string.Equals(ScopeType, "region",
+                    StringComparison.OrdinalIgnoreCase) ? "region" : "whole";
             RegionId = ScopeType == "region" ? RegionId ?? string.Empty
                 : string.Empty;
             RegionName = ScopeType == "region" ? RegionName ?? string.Empty
+                : string.Empty;
+            ParcelId = ScopeType == "parcel" ? ParcelId ?? string.Empty
+                : string.Empty;
+            ParcelName = ScopeType == "parcel" ? ParcelName ?? string.Empty
                 : string.Empty;
             Fields = Fields ?? new Dictionary<string, ParcelSurveyFieldValue>(
                 StringComparer.OrdinalIgnoreCase);
@@ -320,14 +328,20 @@ namespace CDBox.RealEstate.Models
     {
         public string CurrentRecordId { get; set; }
         public Dictionary<string, ParcelSurveyFieldValue> ProjectDefaults { get; set; }
+        public Dictionary<string, string> CurrentScopeTypeByDocument { get; set; }
         public Dictionary<string, string> CurrentRegionByDocument { get; set; }
+        public Dictionary<string, string> CurrentParcelByDocument { get; set; }
         public List<ParcelSurveyRecord> Records { get; set; }
 
         public ParcelSurveyRepositoryState()
         {
             ProjectDefaults = new Dictionary<string, ParcelSurveyFieldValue>(
                 StringComparer.OrdinalIgnoreCase);
+            CurrentScopeTypeByDocument = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
             CurrentRegionByDocument = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+            CurrentParcelByDocument = new Dictionary<string, string>(
                 StringComparer.OrdinalIgnoreCase);
             Records = new List<ParcelSurveyRecord>();
         }

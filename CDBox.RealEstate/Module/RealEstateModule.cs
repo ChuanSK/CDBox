@@ -86,6 +86,27 @@ namespace CDBox.RealEstate.Module
                 _parcelSurveyEditor.Open();
                 return;
             }
+            if (string.Equals(commandId,
+                RealEstateCommandCatalog.SelectParcel,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSurveyEditor.SelectParcel();
+                return;
+            }
+            if (string.Equals(commandId,
+                RealEstateCommandCatalog.FillBoundarySegments,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSurveyEditor.FillBoundarySegments();
+                return;
+            }
+            if (string.Equals(commandId,
+                RealEstateCommandCatalog.FillNeighborInformation,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSurveyEditor.FillNeighborInformation();
+                return;
+            }
             throw new ArgumentException("未知的不动产命令：" + commandId,
                 "commandId");
         }

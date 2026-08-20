@@ -21,6 +21,7 @@ namespace CDBox.RealEstate.Models
         public string StartPointPrefix { get; set; }
         public int StartPointNumber { get; set; }
         public bool ConfiguredClockwise { get; set; }
+        public string OwnerName { get; set; }
         public List<ParcelBoundaryCadVertex> Vertices { get; set; }
 
         public ParcelBoundaryCadSelection()
@@ -29,6 +30,7 @@ namespace CDBox.RealEstate.Models
             SourceLayerName = string.Empty;
             StartPointPrefix = "J";
             StartPointNumber = 1;
+            OwnerName = string.Empty;
             Vertices = new List<ParcelBoundaryCadVertex>();
         }
     }

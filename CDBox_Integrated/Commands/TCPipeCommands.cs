@@ -289,6 +289,27 @@ namespace TCPipeAutoDraw.Commands
             RealEstateModuleHost.ExecuteCommand("CDREDJ");
         }
 
+        [CommandMethod("CDRESELECTPARCEL", CommandFlags.Modal)]
+        public void SelectRealEstateParcel()
+        {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
+            RealEstateModuleHost.ExecuteCommand("CDRESELECTPARCEL");
+        }
+
+        [CommandMethod("CDREFILLSEGMENT", CommandFlags.Modal)]
+        public void FillRealEstateBoundarySegments()
+        {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
+            RealEstateModuleHost.ExecuteCommand("CDREFILLSEGMENT");
+        }
+
+        [CommandMethod("CDREFILLNEIGHBOR", CommandFlags.Modal)]
+        public void FillRealEstateNeighborInformation()
+        {
+            CDBoxBusinessModeService.SetMode(CDBoxBusinessMode.RealEstate);
+            RealEstateModuleHost.ExecuteCommand("CDREFILLNEIGHBOR");
+        }
+
         [CommandMethod("CDREBL", CommandFlags.Modal)]
         public void AnnotateRealEstateBuildingLength()
         {

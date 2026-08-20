@@ -30,6 +30,12 @@ namespace CDBox.RealEstate.Cad
 
         public ParcelBoundaryCadSelection SelectOwnershipBoundary()
         {
+            return SelectOwnershipBoundary(string.Empty);
+        }
+
+        public ParcelBoundaryCadSelection SelectOwnershipBoundary(
+            string currentOwnerName)
+        {
             Document document = CurrentDocument();
             if (document == null) return null;
             try
@@ -71,6 +77,11 @@ namespace CDBox.RealEstate.Cad
                     catch { textStyleId = ObjectId.Null; }
                     transaction.Commit();
                 }
+
+                string ownerName;
+                if (!ParcelBoundaryCadDialogs.TryGetOwnerName(
+                    currentOwnerName, out ownerName)) return null;
+                result.OwnerName = ownerName;
 
                 var candidates = result.Vertices.Select((vertex, index) =>
                     new PointCandidate(index, "节点 " + (index + 1),

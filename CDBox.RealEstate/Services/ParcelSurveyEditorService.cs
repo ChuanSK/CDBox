@@ -13,6 +13,7 @@ namespace CDBox.RealEstate.Services
         private readonly ParcelSurveyStore _store;
         private readonly ParcelBoundaryCadService _cad;
         private readonly ParcelSurveyCadScopeService _scopes;
+        private readonly ParcelSurveyCadWorkflowService _workflow;
 
         public ParcelSurveyEditorService(ICDBoxPageService pages,
             ICDBoxPromptService prompts,
@@ -25,12 +26,26 @@ namespace CDBox.RealEstate.Services
                 logger);
             _scopes = new ParcelSurveyCadScopeService(prompts, notifications,
                 logger);
+            _workflow = new ParcelSurveyCadWorkflowService(_store, _cad,
+                _scopes, notifications);
         }
 
         public void Open()
         {
             _pages.Show(ParcelSurveyEditorPage.Create(_store, _cad,
-                _scopes));
+                _scopes, _workflow));
+        }
+
+        public void SelectParcel() { _workflow.SelectParcel(); }
+
+        public void FillBoundarySegments()
+        {
+            _workflow.FillBoundarySegments();
+        }
+
+        public void FillNeighborInformation()
+        {
+            _workflow.FillNeighborInformation();
         }
     }
 }

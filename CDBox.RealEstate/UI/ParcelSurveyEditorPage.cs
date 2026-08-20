@@ -4,6 +4,7 @@ using System.Text;
 using System.Web.Script.Serialization;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Models;
+using CDBox.RealEstate.Services;
 using CDBox.RealEstate.Settings;
 using CDBox.Shared.UI;
 
@@ -16,11 +17,13 @@ namespace CDBox.RealEstate.UI
             new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
 
         internal static CDBoxPageDefinition Create(ParcelSurveyStore store,
-            ParcelBoundaryCadService cad, ParcelSurveyCadScopeService scopes)
+            ParcelBoundaryCadService cad, ParcelSurveyCadScopeService scopes,
+            ParcelSurveyCadWorkflowService workflow)
         {
             if (store == null) throw new ArgumentNullException("store");
             if (cad == null) throw new ArgumentNullException("cad");
             if (scopes == null) throw new ArgumentNullException("scopes");
+            if (workflow == null) throw new ArgumentNullException("workflow");
             return new CDBoxPageDefinition(PageId, "宗地调查数据编辑器",
                 delegate
                 {
@@ -29,13 +32,14 @@ namespace CDBox.RealEstate.UI
                     ParcelSurveyRecord record = string.IsNullOrWhiteSpace(
                         scope.DocumentId) ? store.Current() : store.Current(
                             scope.DocumentId, scope.DocumentName,
-                            scope.RegionId, scope.RegionName);
+                            scope.ScopeType, scope.RegionId, scope.RegionName,
+                            scope.ParcelId, scope.ParcelName);
                     return BuildHtml(record,
                         ParcelSurveyValidator.Validate(record), scope);
                 },
                 delegate(CDBoxPageRouteRequest request)
                 {
-                    return Route(request, store, cad, scopes);
+                    return Route(request, store, cad, scopes, workflow);
                 })
             {
                 Width = 1380,
@@ -97,7 +101,7 @@ textarea.control{min-width:100%;resize:both}
                 .Append("<div class=\"completion\"><div id=\"ring\" class=\"ring\"><strong id=\"completeValue\"></strong></div><div><b>完整度</b><small>按当前必填业务字段计算</small></div></div>")
                 .Append("<div class=\"metrics\"><div class=\"metric\"><b id=\"missingCount\"></b><small>必填缺失</small></div><div class=\"metric\"><b id=\"pendingCount\"></b><small>待确认</small></div><div class=\"metric\"><b id=\"paginationCount\"></b><small>分页异常</small></div></div>")
                 .Append("<div class=\"actions\"><button id=\"saveParcel\" class=\"btn\" type=\"button\">保存宗地</button><button id=\"checkData\" class=\"btn\" type=\"button\">检查数据</button><button id=\"exportSurvey\" class=\"btn primary\" type=\"button\">导出调查表</button></div>")
-                .Append("</div><div class=\"scope-bar\"><label class=\"scope-field\"><span>图纸</span><select id=\"scopeDocument\"></select></label><label class=\"scope-field region\"><span>地籍范围</span><select id=\"scopeRegion\"></select></label><span id=\"scopeNote\" class=\"scope-note\"></span><div class=\"scope-actions\"><button class=\"mini\" data-scope-action=\"create\" type=\"button\">新建区域</button><button class=\"mini\" data-scope-action=\"bind\" type=\"button\">选择闭合线</button><button class=\"mini\" data-scope-region-only=\"1\" data-scope-action=\"locate\" type=\"button\">定位</button><button class=\"mini\" data-scope-region-only=\"1\" data-scope-action=\"rename\" type=\"button\">重命名</button><button class=\"mini danger\" data-scope-region-only=\"1\" data-scope-action=\"delete\" type=\"button\">删除</button></div></div></header><nav id=\"tabs\" class=\"tabs\"></nav><section id=\"content\" class=\"content\"></section></main>")
+                .Append("</div><div class=\"scope-bar\"><label class=\"scope-field\"><span>图纸</span><select id=\"scopeDocument\"></select></label><label class=\"scope-field region\"><span>地籍范围</span><select id=\"scopeRegion\"></select></label><span id=\"scopeNote\" class=\"scope-note\"></span><div class=\"scope-actions\"><button class=\"mini\" data-scope-action=\"newparcel\" type=\"button\">新建宗地</button><button class=\"mini\" data-scope-action=\"create\" type=\"button\">新建区域</button><button class=\"mini\" data-scope-action=\"bind\" type=\"button\">选择闭合线（绑定区域）</button><button class=\"mini\" data-scope-region-only=\"1\" data-scope-action=\"locate\" type=\"button\">定位区域</button><button class=\"mini\" data-scope-region-only=\"1\" data-scope-action=\"rename\" type=\"button\">重命名区域</button><button class=\"mini danger\" data-scope-region-only=\"1\" data-scope-action=\"delete\" type=\"button\">删除区域</button></div></div></header><nav id=\"tabs\" class=\"tabs\"></nav><section id=\"content\" class=\"content\"></section></main>")
                 .Append("<script>window.CDBoxParcelSurveyContext=")
                 .Append(SafeJson(context)).Append(";</script><script>")
                 .Append(BuildScript())
@@ -107,7 +111,8 @@ textarea.control{min-width:100%;resize:both}
 
         private static CDBoxPageRouteResult Route(CDBoxPageRouteRequest request,
             ParcelSurveyStore store, ParcelBoundaryCadService cad,
-            ParcelSurveyCadScopeService scopes)
+            ParcelSurveyCadScopeService scopes,
+            ParcelSurveyCadWorkflowService workflow)
         {
             var result = new CDBoxPageRouteResult { Handled = true };
             if (request == null) return result;
@@ -124,35 +129,37 @@ textarea.control{min-width:100%;resize:both}
                     ParcelSurveyScopeContext current = scopes.CurrentContext(
                         store);
                     string expected = (poll.ScopeToken ?? string.Empty).Trim();
-                    string actual = current.DocumentId + "|"
-                        + current.RegionId;
+                    string actual = ScopeToken(current);
                     if (!string.Equals(expected, actual,
                         StringComparison.OrdinalIgnoreCase))
                     {
-                        if (poll.Record != null) store.Save(poll.Record);
+                        if (poll.Record != null)
+                            store.SavePreservingCurrentScope(poll.Record);
                         result.RefreshPage = true;
                     }
                     return result;
                 }
                 if (name == "switchparceldocument"
                     || name == "switchparcelscope"
+                    || name == "newparcel"
                     || name == "createparcelregion"
                     || name == "bindparcelregion"
                     || name == "renameparcelregion"
                     || name == "deleteparcelregion"
                     || name == "locateparcelregion")
-                    return RouteScopeAction(name, request, store, scopes);
+                    return RouteScopeAction(name, request, store, scopes,
+                        workflow);
 
                 ParcelSurveyRecord record = Serializer.Deserialize<ParcelSurveyRecord>(
                     request.Argument ?? string.Empty) ?? new ParcelSurveyRecord();
                 record.Normalize();
                 if (name == "cadrecognizeboundary")
                 {
-                    ParcelBoundaryCadSelection selection =
-                        cad.SelectOwnershipBoundary();
+                    store.Save(record);
+                    ParcelSurveyRecord selected = workflow.SelectParcel();
                     result.ExecuteScript =
-                        "window.CDBoxParcelCadInteractionFinished && window.CDBoxParcelCadInteractionFinished('boundary',"
-                        + SafeJson(selection) + ");";
+                        "window.CDBoxParcelScopeInteractionFinished && window.CDBoxParcelScopeInteractionFinished();";
+                    result.RefreshPage = selected != null;
                     return result;
                 }
                 if (name == "cadselectboundarysegment")
@@ -231,6 +238,7 @@ textarea.control{min-width:100%;resize:both}
                     result.ExecuteScript =
                         "window.CDBoxParcelCadInteractionFinished && window.CDBoxParcelCadInteractionFinished('cancel',null);";
                 else if (name == "createparcelregion"
+                    || name == "newparcel"
                     || name == "bindparcelregion"
                     || name == "renameparcelregion"
                     || name == "locateparcelregion")
@@ -244,7 +252,8 @@ textarea.control{min-width:100%;resize:both}
 
         private static CDBoxPageRouteResult RouteScopeAction(string name,
             CDBoxPageRouteRequest request, ParcelSurveyStore store,
-            ParcelSurveyCadScopeService scopes)
+            ParcelSurveyCadScopeService scopes,
+            ParcelSurveyCadWorkflowService workflow)
         {
             var result = new CDBoxPageRouteResult { Handled = true };
             ParcelSurveyScopeActionRequest action = Serializer.Deserialize<
@@ -262,8 +271,19 @@ textarea.control{min-width:100%;resize:both}
                 ? action.DocumentId : action.Record.DocumentId;
             if (name == "switchparcelscope")
             {
-                store.SelectScope(documentId, action.RegionId);
+                string scopeId = string.Equals(action.ScopeType, "parcel",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? action.ParcelId : action.RegionId;
+                store.SelectScope(documentId, action.ScopeType, scopeId);
                 result.RefreshPage = true;
+                return result;
+            }
+            if (name == "newparcel")
+            {
+                ParcelSurveyRecord parcel = workflow.SelectParcel();
+                result.ExecuteScript =
+                    "window.CDBoxParcelScopeInteractionFinished && window.CDBoxParcelScopeInteractionFinished();";
+                result.RefreshPage = parcel != null;
                 return result;
             }
             if (name == "createparcelregion"
@@ -324,8 +344,19 @@ textarea.control{min-width:100%;resize:both}
                 ScopeType = record.ScopeType ?? "whole",
                 RegionId = record.RegionId ?? string.Empty,
                 RegionName = string.IsNullOrWhiteSpace(record.RegionName)
-                    ? "整张图纸" : record.RegionName
+                    ? "整张图纸" : record.RegionName,
+                ParcelId = record.ParcelId ?? string.Empty,
+                ParcelName = record.ParcelName ?? string.Empty
             };
+        }
+
+        private static string ScopeToken(ParcelSurveyScopeContext scope)
+        {
+            scope = scope ?? new ParcelSurveyScopeContext();
+            string id = string.Equals(scope.ScopeType, "parcel",
+                StringComparison.OrdinalIgnoreCase)
+                ? scope.ParcelId : scope.RegionId;
+            return scope.DocumentId + "|" + scope.ScopeType + "|" + id;
         }
 
         private static string SafeJson(object value)
@@ -355,10 +386,10 @@ function def(key){return (ctx.Fields||[]).find(function(x){return x.Key===key;})
 function statusName(n){var s=(ctx.Statuses||[]).find(function(x){return Number(x.Value)===Number(n);});return s?s.Label:'人工';}
 function statusOptions(d,v){return (ctx.Statuses||[]).filter(function(x){return Number(x.Value)!==4||d.AllowNotApplicable;}).map(function(x){return `<option value='${x.Value}'${Number(x.Value)===Number(v)?' selected':''}>${esc(x.Label)}</option>`;}).join('');}
 function optionList(items,current,empty){var h=empty===false?'':`<option value=''>请选择</option>`;return h+(items||[]).map(function(x){return `<option value='${attr(x)}'${String(x)===String(current)?' selected':''}>${esc(x)}</option>`;}).join('');}
-function scopePayload(extra){var data={Record:draft,DocumentId:scope.DocumentId||'',RegionId:scope.RegionId||'',RegionName:scope.RegionName||'',ScopeToken:(scope.DocumentId||'')+'|'+(scope.RegionId||'')};Object.keys(extra||{}).forEach(function(k){data[k]=extra[k];});return JSON.stringify(data);}
-function renderScope(){var documents=scope.Documents||[],regions=scope.Regions||[],doc=document.getElementById('scopeDocument'),region=document.getElementById('scopeRegion');doc.innerHTML=documents.map(function(x){return `<option value='${attr(x.DocumentId)}'${x.DocumentId===scope.DocumentId?' selected':''}>${esc(x.DocumentName)}${x.IsActive?' · 当前':''}</option>`;}).join('')||`<option value=''>未打开图纸</option>`;region.innerHTML=`<option value=''${scope.RegionId?'':' selected'}>整张图纸</option>`+regions.map(function(x){return `<option value='${attr(x.RegionId)}'${x.RegionId===scope.RegionId?' selected':''}>${esc(x.RegionName)}${x.BoundaryValid?'':' · 边界异常'}</option>`;}).join('');var hasRegion=!!scope.RegionId;document.querySelectorAll('[data-scope-region-only]').forEach(function(x){x.disabled=!hasRegion;});document.getElementById('scopeNote').textContent=hasRegion?'独立维护：'+(scope.RegionName||'当前区域'):(regions.length?'整图数据；可切换到区域独立维护':'当前图纸一份地籍信息');}
+function scopePayload(extra){var data={Record:draft,DocumentId:scope.DocumentId||'',ScopeType:scope.ScopeType||'whole',RegionId:scope.RegionId||'',RegionName:scope.RegionName||'',ParcelId:scope.ParcelId||'',ParcelName:scope.ParcelName||'',ScopeToken:(scope.DocumentId||'')+'|'+(scope.ScopeType||'whole')+'|'+((scope.ScopeType==='parcel'?scope.ParcelId:scope.RegionId)||'')};Object.keys(extra||{}).forEach(function(k){data[k]=extra[k];});return JSON.stringify(data);}
+function renderScope(){var documents=scope.Documents||[],regions=scope.Regions||[],parcels=scope.Parcels||[],doc=document.getElementById('scopeDocument'),range=document.getElementById('scopeRegion'),selected=scope.ScopeType==='parcel'?'parcel:'+(scope.ParcelId||''):scope.ScopeType==='region'?'region:'+(scope.RegionId||''):'whole:';doc.innerHTML=documents.map(function(x){return `<option value='${attr(x.DocumentId)}'${x.DocumentId===scope.DocumentId?' selected':''}>${esc(x.DocumentName)}${x.IsActive?' · 当前':''}</option>`;}).join('')||`<option value=''>未打开图纸</option>`;var h=`<option value='whole:'${selected==='whole:'?' selected':''}>整张图纸</option>`;if(regions.length)h+=`<optgroup label='区域'>`+regions.map(function(x){var v='region:'+x.RegionId;return `<option value='${attr(v)}'${v===selected?' selected':''}>${esc(x.RegionName)}${x.BoundaryValid?'':' · 边界异常'}</option>`;}).join('')+`</optgroup>`;if(parcels.length)h+=`<optgroup label='宗地（一条权属线）'>`+parcels.map(function(x){var v='parcel:'+x.ParcelId;return `<option value='${attr(v)}'${v===selected?' selected':''}>${esc(x.ParcelName||x.OwnerName||'未命名宗地')}${x.BoundaryValid?'':' · 边界异常'}</option>`;}).join('')+`</optgroup>`;range.innerHTML=h;var hasRegion=scope.ScopeType==='region'&&!!scope.RegionId;document.querySelectorAll('[data-scope-region-only]').forEach(function(x){x.disabled=!hasRegion;});document.getElementById('scopeNote').textContent=scope.ScopeType==='parcel'?'独立宗地：'+(scope.ParcelName||'未命名')+' · 一条权属线一份数据':hasRegion?'独立区域：'+(scope.RegionName||'当前区域'):(parcels.length||regions.length?'整图数据；可切换区域或宗地':'当前图纸一份地籍信息');}
 function conditionActive(d,fields){if(!d.ConditionKey)return true;var c=value(d.ConditionKey,fields),op=d.ConditionOperator||'';if(op==='true')return !!c.BooleanValue;if(op==='false')return !c.BooleanValue;if(op==='neq')return !!c.TextValue&&c.TextValue!==d.ConditionValue;return c.TextValue===d.ConditionValue;}
-function renderTop(){var v=ctx.Validation||{},p=value('parcel.parcelSeaCode').TextValue||value('parcel.parcelCode').TextValue||('未命名宗地 · '+String(draft.Id||'').slice(0,8));document.getElementById('currentParcel').textContent='当前宗地：'+p;var pc=Number(v.CompletenessPercent)||0,ring=document.getElementById('ring');ring.style.setProperty('--p',pc);document.getElementById('completeValue').textContent=pc+'%';document.getElementById('missingCount').textContent=v.RequiredMissingCount||0;document.getElementById('pendingCount').textContent=v.PendingConfirmationCount||0;document.getElementById('paginationCount').textContent=v.PaginationAnomalyCount||0;document.getElementById('exportSurvey').disabled=false;}
+function renderTop(){var v=ctx.Validation||{},p=scope.ScopeType==='parcel'&&scope.ParcelName?scope.ParcelName:value('parcel.parcelSeaCode').TextValue||value('parcel.parcelCode').TextValue||('未命名宗地 · '+String(draft.Id||'').slice(0,8));document.getElementById('currentParcel').textContent='当前宗地：'+p;var pc=Number(v.CompletenessPercent)||0,ring=document.getElementById('ring');ring.style.setProperty('--p',pc);document.getElementById('completeValue').textContent=pc+'%';document.getElementById('missingCount').textContent=v.RequiredMissingCount||0;document.getElementById('pendingCount').textContent=v.PendingConfirmationCount||0;document.getElementById('paginationCount').textContent=v.PaginationAnomalyCount||0;document.getElementById('exportSurvey').disabled=false;}
 function renderTabs(){document.getElementById('tabs').innerHTML=tabNames.map(function(n,i){return `<button class='tab${activeTab===i+1?' active':''}' data-tab='${i+1}' type='button'>${i+1}. ${n}</button>`;}).join('');}
 function fieldControl(d,v,scope){var id=scope+'-'+d.Key.replace(/[^a-zA-Z0-9]/g,'-'),disabled=d.ReadOnly?' readonly':'';if(d.Kind==='textarea')return `<textarea id='${id}' class='control' data-role='value'${resizeAttrs(scope,d.Key)}${disabled}>${esc(v.TextValue||'')}</textarea>`;if(d.Kind==='select')return `<select id='${id}' class='control' data-role='value'>${optionList(d.Options,v.TextValue)}</select>`;if(d.Kind==='multiselect')return `<select id='${id}' class='control' data-role='value' multiple>${(d.Options||[]).map(function(x){return `<option value='${attr(x)}'${(v.Selections||[]).indexOf(x)>=0?' selected':''}>${esc(x)}</option>`;}).join('')}</select>`;if(d.Kind==='checkbox')return `<label class='check-control'><input data-role='value' type='checkbox'${v.BooleanValue?' checked':''}> <span>${v.BooleanValue?'是':'否'}</span></label>`;var type=d.Kind==='number'?'number':d.Kind==='date'?'date':'text',step=d.Kind==='number'?' step=.01':'';return `<input id='${id}' class='control' data-role='value' type='${type}' value='${attr(d.Kind==='number'?(v.NumericValue==null?'':v.NumericValue):(v.TextValue||''))}'${step}${disabled}>`;}
 function renderField(d,fields,scope,buildingId){var v=value(d.Key,fields),wide=d.Kind==='textarea'?' wide':'',conditional=d.ConditionKey?' conditional':'',hidden=!conditionActive(d,fields)?' style=display:none':'',na=Number(v.Status)===4?' na':'';return `<div class='field-card${wide}${conditional}${na}' data-key='${attr(d.Key)}' data-kind='${attr(d.Kind)}' data-scope='${scope}'${buildingId?` data-building='${buildingId}'`:''}${hidden}><div class='field-head'><span class='field-label'>${esc(d.Label)}${d.Required?`<i class='required'>*</i>`:''}${d.Unit?` <small>(${esc(d.Unit)})</small>`:''}</span><select class='status-select s${Number(v.Status)||0}' data-role='status'>${statusOptions(d,v.Status)}</select></div>${fieldControl(d,v,scope)}<div class='na-note'>明确输出 /</div>${d.Help?`<small class='hint'>${esc(d.Help)}</small>`:''}</div>`;}
@@ -366,7 +397,7 @@ function groupsFor(fields,definitions,scope,buildingId){var defs=(definitions||[
 function intro(){return `<div class='intro'><div><strong>${esc(tabNames[activeTab-1])}</strong><p>状态用于记录数据来源；“不适用”会明确输出 /，不会与尚未填写混淆。</p></div><div class='legend'>${(ctx.Statuses||[]).map(function(s){return `<span class='badge s${s.Value}'>${esc(s.Label)}</span>`;}).join('')}</div></div>`;}
 function renderContent(){var h=intro();if(activeTab===5)h+=renderBoundary();else if(activeTab===6)h+=linkedReferences('house')+groupsFor(draft.Fields,ctx.Fields,'parcel','')+renderBuildings();else h+=(activeTab===7?linkedReferences('audit'):'')+groupsFor(draft.Fields,ctx.Fields,'parcel','');if(activeTab===7)h+=renderAuditFooter();document.getElementById('content').innerHTML=h;bindContent();}
 function linkedReferences(kind){var items=kind==='house'?[['项目名称','project.name'],['邮政编码','project.postalCode']]:[['填表人','project.formFiller'],['填表日期','project.formDate'],['权属调查员','project.rightsSurveyor'],['权属调查日期','project.rightsSurveyDate'],['测量员','project.surveyor'],['测量日期','project.measureDate'],['审核人','project.reviewer'],['审核日期','project.reviewDate']];if(kind==='house'&&value('house.followParcelOwner').BooleanValue)items=items.concat([['沿用的宗地权利人','rights.ownerName'],['证件种类','rights.certificateType'],['证件号码','rights.certificateNumber'],['通讯地址','rights.contactAddress'],['联系电话','rights.contactPhone']]);return `<section class='group'><div class='group-head'><strong>${kind==='house'?'跨表共用信息':'调查审核人员引用'}</strong><small>只在“项目与人员”或“权利人与权属”页签维护一次</small></div><div class='field-grid'>${items.map(function(x){var d=def(x[1]),v=value(x[1]);return `<div class='field-card'><div class='field-head'><span class='field-label'>${esc(x[0])}</span><span class='badge s${v.Status}'>${statusName(v.Status)}</span></div><div class='control' style='display:flex;align-items:center;background:#f0f3f7'>${esc(d?v.DisplayValue||v.TextValue:v.TextValue)||'尚未填写'}</div><small class='hint'>引用业务字段：${esc(x[1])}</small></div>`;}).join('')}</div></section>`;}
-function renderBoundary(){var b=draft.Boundary,v=ctx.Validation||{},source=b.SourceObjectHandle?`<div class='source-meta'><span>图元 ${esc(b.SourceObjectHandle)}</span><span>图层 ${esc(b.SourceLayerName||'未命名')}</span><span>${b.SourceClockwise?'顺时针':'逆时针'}编号</span><span>面积 ${esc(b.SourceArea==null?'--':b.SourceArea)} ㎡</span></div>`:'';return `<section class='group'><div class='group-head'><div><strong>CAD 宗地几何</strong>${source}</div><small>保留手工添加；坐标可由权属线节点自动读取</small></div><div class='section-tools'><label class='closed'><input id='boundaryClosed' type='checkbox'${b.ParcelBoundaryClosed?' checked':''}> 宗地权属线已闭合</label><div><button class='mini' data-cad='boundary' type='button'>从图纸识别权属线</button> <button class='mini' data-add='point' type='button'>+ 手工添加界址点</button></div></div>${pointTable()}</section><section class='group'><div class='group-head'><strong>界址段列表</strong><small>连续选择并填写；按 Esc 退出，每页最多 26 段</small></div><div class='section-tools'><p>预览引线仅吸附已识别界址点；每次保存后自动进入下一段选择。</p><div><button class='mini' data-cad='segment' type='button'>连续选择界址段</button> <button class='mini' data-add='segment' type='button'>+ 手工添加界址段</button></div></div>${segmentTable()}<div class='pages'>预计生成界址标示表 ${v.BoundarySegmentPageCount||1} 页；超过 26 段自动生成续表。</div></section><section class='group'><div class='group-head'><strong>界址签章分组</strong><small>同一邻宗的连续界址段自动合并，每页最多 13 组</small></div><div class='section-tools'><p>可在图中选择起终点后填写邻宗权利人、指界人和签章状态。</p><div><button class='mini' data-cad='signature' type='button'>从图纸选择起终点</button> <button class='mini' data-auto-signature='1' type='button'>按邻宗自动分组</button> <button class='mini' data-add='signature' type='button'>+ 手工添加签章组</button></div></div>${signatureTable()}<div class='pages'>预计生成界址签章表 ${v.SignatureGroupPageCount||1} 页；超过 13 组自动续表。</div></section><section class='group'><div class='group-head'><strong>自动说明</strong><small>根据权属线、界址段类别/位置及相邻宗地生成可编辑初稿</small></div><div class='section-tools'><p>重新生成会覆盖当前界址点位说明、界址线走向说明和宗地四至，并将状态设为“自动”。</p><button class='mini' data-generate-description='1' type='button'>生成界址说明与宗地四至</button></div></section>${fourBoundaries()}`+groupsFor(draft.Fields,ctx.Fields,'parcel','');}
+function renderBoundary(){var b=draft.Boundary,v=ctx.Validation||{},source=b.SourceObjectHandle?`<div class='source-meta'><span>图元 ${esc(b.SourceObjectHandle)}</span><span>图层 ${esc(b.SourceLayerName||'未命名')}</span><span>${b.SourceClockwise?'顺时针':'逆时针'}编号</span><span>面积 ${esc(b.SourceArea==null?'--':b.SourceArea)} ㎡</span></div>`:'';return `<section class='group'><div class='group-head'><div><strong>CAD 宗地几何</strong>${source}</div><small>一条权属线对应一份独立宗地数据</small></div><div class='section-tools'><label class='closed'><input id='boundaryClosed' type='checkbox'${b.ParcelBoundaryClosed?' checked':''}> 宗地权属线已闭合</label><div><button class='mini' data-cad='boundary' type='button'>选择宗地（从图纸识别权属线）</button> <button class='mini' data-add='point' type='button'>+ 手工添加界址点</button></div></div>${pointTable()}</section><section class='group'><div class='group-head'><strong>界址段列表</strong><small>连续选择并填写；按 Esc 退出，每页最多 26 段</small></div><div class='section-tools'><p>预览引线仅吸附已识别界址点；每次保存后自动进入下一段选择。</p><div><button class='mini' data-cad='segment' type='button'>填写界址段（连续选择界址段）</button> <button class='mini' data-add='segment' type='button'>+ 手工添加界址段</button></div></div>${segmentTable()}<div class='pages'>预计生成界址标示表 ${v.BoundarySegmentPageCount||1} 页；超过 26 段自动生成续表。</div></section><section class='group'><div class='group-head'><strong>界址签章分组</strong><small>同一邻宗的连续界址段自动合并，每页最多 13 组</small></div><div class='section-tools'><p>可在图中选择起终点后填写邻宗权利人、指界人和签章状态。</p><div><button class='mini' data-cad='signature' type='button'>填写邻宗信息（从图纸选择起终点）</button> <button class='mini' data-auto-signature='1' type='button'>按邻宗自动分组</button> <button class='mini' data-add='signature' type='button'>+ 手工添加签章组</button></div></div>${signatureTable()}<div class='pages'>预计生成界址签章表 ${v.SignatureGroupPageCount||1} 页；超过 13 组自动续表。</div></section><section class='group'><div class='group-head'><strong>自动说明</strong><small>根据权属线、界址段类别/位置及相邻宗地生成可编辑初稿</small></div><div class='section-tools'><p>重新生成会覆盖当前界址点位说明、界址线走向说明和宗地四至，并将状态设为“自动”。</p><button class='mini' data-generate-description='1' type='button'>生成界址说明与宗地四至</button></div></section>${fourBoundaries()}`+groupsFor(draft.Fields,ctx.Fields,'parcel','');}
 function fourBoundaries(){var keys=['parcel.northBoundary','parcel.eastBoundary','parcel.southBoundary','parcel.westBoundary'],defs=keys.map(def).filter(Boolean);return `<section class='group'><div class='group-head'><strong>宗地四至</strong><small>自动生成后仍可直接修订最终文字</small></div><div class='field-grid'>${defs.map(function(d){return renderField(d,draft.Fields,'parcel','');}).join('')}</div></section>`;}
 function pointTable(){var rows=draft.Boundary.Points.map(function(p,i){return `<tr data-point='${i}'><td>${i+1}</td><td><input class='cell' data-p='PointNumber' value='${attr(p.PointNumber||'')}'></td><td><input class='cell' value='${attr(p.X==null?'':p.X)}' readonly></td><td><input class='cell' value='${attr(p.Y==null?'':p.Y)}' readonly></td><td><select class='cell' data-p='MarkerType'>${optionList(ctx.MarkerTypes,p.MarkerType||'喷涂')}</select></td><td><input class='cell long' data-p='Description' value='${attr(p.Description||'')}'></td><td><select class='cell' data-p='Status'>${statusOptions({AllowNotApplicable:false},p.Status)}</select></td><td><button class='mini danger' data-remove-point='${i}' type='button'>删除</button></td></tr>`;}).join('');return `<div class='table-wrap'><table class='data-table'><thead><tr><th>序号</th><th>界址点号</th><th>X 坐标</th><th>Y 坐标</th><th>界标种类</th><th>点位说明</th><th>状态</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan='8' class='empty'>尚无界址点，请从 CAD 识别或添加记录。</td></tr>`}</tbody></table></div>`;}
 function segmentTable(){var rows=draft.Boundary.Segments.map(function(s,i){return `<tr data-segment='${i}'><td>${Math.floor(i/26)+1}</td><td><input class='cell small' data-p='StartPointNumber' value='${attr(s.StartPointNumber||'')}'></td><td><input class='cell' data-p='MiddlePointNumbers' value='${attr(s.MiddlePointNumbers||'')}'></td><td><input class='cell small' data-p='EndPointNumber' value='${attr(s.EndPointNumber||'')}'></td><td><input class='cell small' data-p='Distance' type='number' step='0.01' value='${attr(s.Distance==null?'':s.Distance)}'></td><td><select class='cell' data-p='LineCategory'>${optionList(ctx.LineCategories,s.LineCategory)}</select></td><td><select class='cell' data-p='LinePosition'>${optionList(ctx.LinePositions,s.LinePosition)}</select></td><td><input class='cell' data-p='NeighborParcelCode' value='${attr(s.NeighborParcelCode||'')}'></td><td><input class='cell' data-p='NeighborOwner' value='${attr(s.NeighborOwner||'')}'></td><td><input class='cell small' data-p='Direction' value='${attr(s.Direction||'')}'></td><td><input class='cell long' data-p='Description' value='${attr(s.Description||'')}'></td><td><select class='cell' data-p='Status'>${statusOptions({AllowNotApplicable:false},s.Status)}</select></td><td><button class='mini danger' data-remove-segment='${i}' type='button'>删除</button></td></tr>`;}).join('');return `<div class='table-wrap'><table class='data-table'><thead><tr><th>页</th><th>起点号</th><th>中间点号</th><th>终点号</th><th>距离</th><th>线类别</th><th>线位置</th><th>相邻宗地代码</th><th>相邻权利人</th><th>方向</th><th>段说明</th><th>状态</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan='13' class='empty'>尚无界址段。</td></tr>`}</tbody></table></div>`;}
@@ -385,7 +416,7 @@ function signatureMiddle(numbers){numbers=(numbers||[]).filter(Boolean);if(!numb
 function autoSignatureGroups(){var groups=[],current=null;(draft.Boundary.Segments||[]).forEach(function(s){var key=(s.NeighborParcelCode||'')+'|'+(s.NeighborOwner||''),inside=String(s.MiddlePointNumbers||'').split(/[、,，;； ]+/).filter(Boolean);if(!current||current._key!==key){current={_key:key,StartPointNumber:s.StartPointNumber||'',MiddlePointNumbers:'/',EndPointNumber:s.EndPointNumber||'',NeighborOwner:s.NeighborOwner||'',NeighborParcelCode:s.NeighborParcelCode||'',NeighborRepresentative:'',ParcelRepresentative:'',ConfirmationDate:'',SignatureStatus:'待签章',PreservePaperSignatureBlank:true,Confirmed:true,Status:0,_middle:inside.slice()};groups.push(current);}else{current._middle.push(s.StartPointNumber||'');current._middle=current._middle.concat(inside);current.EndPointNumber=s.EndPointNumber||'';}});groups.forEach(function(g){g.MiddlePointNumbers=signatureMiddle(g._middle);delete g._middle;delete g._key;});draft.Boundary.SignatureGroups=groups;toast('已按连续相邻宗生成 '+groups.length+' 个签章组，请继续填写指界与签章信息。','success');}
 function add(type){if(type==='point'){var n=draft.Boundary.Points.length+1;draft.Boundary.Points.push({Sequence:n,PointNumber:'J'+n,X:null,Y:null,DistanceToNext:null,MarkerType:'喷涂',Description:'',Confirmed:true,Status:3});}else if(type==='segment'){var a=draft.Boundary.Segments.length,b=draft.Boundary.Points;draft.Boundary.Segments.push({StartPointNumber:b[a]?b[a].PointNumber:'',MiddlePointNumbers:'',EndPointNumber:b[a+1]?b[a+1].PointNumber:(b.length&&a===b.length-1?b[0].PointNumber:''),Distance:null,LineCategory:'',LinePosition:'待确认',NeighborParcelCode:'',NeighborOwner:'',Direction:'',Description:'',Confirmed:true,NeighborHandled:true,Status:3});}else if(type==='signature'){draft.Boundary.SignatureGroups.push({StartPointNumber:'',MiddlePointNumbers:'/',EndPointNumber:'',NeighborOwner:'',NeighborParcelCode:'',NeighborRepresentative:'',ParcelRepresentative:'',ConfirmationDate:'',SignatureStatus:'',PreservePaperSignatureBlank:true,Confirmed:true,Status:3});}else if(type==='building'){var fs={};(ctx.BuildingFields||[]).forEach(function(d){fs[d.Key]={TextValue:'',NumericValue:null,BooleanValue:false,Selections:[],Status:d.DefaultStatus,Confirmed:false};});draft.Buildings.push({Id:'b'+Date.now()+Math.random().toString(16).slice(2),Fields:fs});}}
 function toast(m,k){var old=document.querySelector('.toast');if(old)old.remove();var x=document.createElement('div');x.className='toast '+(k||'');x.textContent=m||'';document.body.appendChild(x);setTimeout(function(){x.remove();},3200);}
-function init(){ensure();renderTop();renderScope();renderTabs();renderContent();restoreView();document.getElementById('tabs').onclick=function(e){var b=e.target.closest('[data-tab]');if(!b)return;syncAll();captureView();activeTab=Number(b.dataset.tab);view.scrollY=0;saveView();renderTabs();renderContent();window.scrollTo(0,0);};document.getElementById('scopeDocument').onchange=function(){syncAll();captureView();post('switchParcelDocument',scopePayload({DocumentId:this.value,RegionId:''}));};document.getElementById('scopeRegion').onchange=function(){syncAll();captureView();post('switchParcelScope',scopePayload({RegionId:this.value}));};document.querySelector('.scope-actions').onclick=function(e){var b=e.target.closest('[data-scope-action]');if(!b||b.disabled)return;syncAll();captureView();var action=b.dataset.scopeAction;if(action==='delete'){if(!confirm('确定删除当前地籍区域及其独立宗地调查数据吗？\n绑定的原闭合线将保留。'))return;post('deleteParcelRegion',scopePayload({RegionId:scope.RegionId}));return;}var routes={create:'createParcelRegion',bind:'bindParcelRegion',locate:'locateParcelRegion',rename:'renameParcelRegion'},route=routes[action];if(!route)return;interactionBusy=true;post('minimize','');setTimeout(function(){post(route,scopePayload({RegionId:scope.RegionId}));},100);};document.getElementById('saveParcel').onclick=function(){syncAll();captureView();post('saveParcel',JSON.stringify(draft));};document.getElementById('checkData').onclick=function(){syncAll();captureView();post('checkParcel',JSON.stringify(draft));};document.getElementById('exportSurvey').onclick=function(){syncAll();captureView();post('exportParcel',JSON.stringify(draft));};window.CDBoxStudioToast=toast;setTimeout(function(){post('ready','parcel-survey-editor');},50);setInterval(function(){if(interactionBusy||document.hidden)return;post('pollParcelScope',scopePayload());},1800);}
+function init(){ensure();renderTop();renderScope();renderTabs();renderContent();restoreView();document.getElementById('tabs').onclick=function(e){var b=e.target.closest('[data-tab]');if(!b)return;syncAll();captureView();activeTab=Number(b.dataset.tab);view.scrollY=0;saveView();renderTabs();renderContent();window.scrollTo(0,0);};document.getElementById('scopeDocument').onchange=function(){syncAll();captureView();post('switchParcelDocument',scopePayload({DocumentId:this.value,ScopeType:'whole',RegionId:'',ParcelId:''}));};document.getElementById('scopeRegion').onchange=function(){syncAll();captureView();var parts=String(this.value||'whole:').split(':'),type=parts.shift()||'whole',id=parts.join(':');post('switchParcelScope',scopePayload({ScopeType:type,RegionId:type==='region'?id:'',RegionName:'',ParcelId:type==='parcel'?id:'',ParcelName:''}));};document.querySelector('.scope-actions').onclick=function(e){var b=e.target.closest('[data-scope-action]');if(!b||b.disabled)return;syncAll();captureView();var action=b.dataset.scopeAction;if(action==='delete'){if(!confirm('确定删除当前地籍区域及其独立宗地调查数据吗？\n绑定的原闭合线将保留。'))return;post('deleteParcelRegion',scopePayload({RegionId:scope.RegionId}));return;}var routes={newparcel:'newParcel',create:'createParcelRegion',bind:'bindParcelRegion',locate:'locateParcelRegion',rename:'renameParcelRegion'},route=routes[action];if(!route)return;interactionBusy=true;post('minimize','');setTimeout(function(){post(route,scopePayload({RegionId:scope.RegionId}));},100);};document.getElementById('saveParcel').onclick=function(){syncAll();captureView();post('saveParcel',JSON.stringify(draft));};document.getElementById('checkData').onclick=function(){syncAll();captureView();post('checkParcel',JSON.stringify(draft));};document.getElementById('exportSurvey').onclick=function(){syncAll();captureView();post('exportParcel',JSON.stringify(draft));};window.CDBoxStudioToast=toast;setTimeout(function(){post('ready','parcel-survey-editor');},50);setInterval(function(){if(interactionBusy||document.hidden)return;post('pollParcelScope',scopePayload());},1800);}
 init();
 })();
 ";

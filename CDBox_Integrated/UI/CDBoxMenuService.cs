@@ -453,6 +453,10 @@ namespace TCPipeAutoDraw.UI
         {
             AddCommandItem(topMenu, "▤ 地籍信息", "CDREDJ");
             AddSeparator(topMenu);
+            AddCommandItem(topMenu, "▱ 选择宗地", "CDRESELECTPARCEL");
+            AddCommandItem(topMenu, "▱ 填写界址段", "CDREFILLSEGMENT");
+            AddCommandItem(topMenu, "▱ 填写邻宗信息", "CDREFILLNEIGHBOR");
+            AddSeparator(topMenu);
             AddCommandItem(topMenu, "▱ 注记建筑物边长", "CDREBL");
             AddCommandItem(topMenu, "⚙ 建筑物边长注记设置", "CDREBLSZ");
             AddSeparator(topMenu);
