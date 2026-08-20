@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Settings;
+using CDBox.RealEstate.UI;
 using CDBox.Shared.Services;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -29,6 +31,11 @@ namespace CDBox.RealEstate.Services
 
         public ParcelSurveyRecord SelectParcel()
         {
+            return SelectParcel(null);
+        }
+
+        public ParcelSurveyRecord SelectParcel(ParcelSurveyRecord boundRegion)
+        {
             Document document = AcadApp.DocumentManager.MdiActiveDocument;
             if (document == null)
             {
@@ -43,11 +50,21 @@ namespace CDBox.RealEstate.Services
                 document);
             string documentName = ParcelSurveyCadScopeService.GetDocumentName(
                 document);
-            ParcelSurveyRecord record = _store.CreateOrSelectParcel(
-                documentId, documentName, selection.OwnerName,
-                selection.SourceObjectHandle);
+            bool attachRegion = boundRegion != null
+                && string.Equals(boundRegion.ScopeType, "region",
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(boundRegion.DocumentId, documentId,
+                    StringComparison.OrdinalIgnoreCase);
+            ParcelSurveyRecord record = attachRegion ? boundRegion
+                : _store.CreateOrSelectParcel(documentId, documentName,
+                    selection.OwnerName, selection.SourceObjectHandle);
             ParcelBoundaryRecognitionApplicator.Apply(record, selection);
             record.ParcelName = selection.OwnerName.Trim();
+            if (attachRegion)
+            {
+                record.RegionName = record.ParcelName;
+                _scopes.RenameRegion(record.RegionId, record.ParcelName);
+            }
             ParcelBoundaryDescriptionGenerator.Apply(record, false);
             _store.Save(record);
             Notify("已保存独立宗地“" + record.ParcelName + "”（图元 "
@@ -58,19 +75,62 @@ namespace CDBox.RealEstate.Services
 
         public ParcelSurveyRecord FillBoundarySegments()
         {
-            ParcelSurveyRecord record = CurrentParcel();
-            if (record == null) return null;
-            _cad.SelectBoundarySegmentsContinuously(record);
-            ParcelBoundaryDescriptionGenerator.Apply(record, false);
-            return _store.Save(record);
+            IList<ParcelSurveyRecord> records = RecordsForCurrentDocument();
+            if (records.Count == 0) return null;
+            ParcelSurveyRecord last = null;
+            int applied = 0;
+            while (true)
+            {
+                ParcelBoundRangeSelection selected =
+                    _cad.SelectBoundaryRangeAcrossParcels(records, false);
+                if (selected == null) break;
+                ParcelSurveyRecord record = records.FirstOrDefault(x =>
+                    string.Equals(x.Id, selected.RecordId,
+                        StringComparison.OrdinalIgnoreCase));
+                if (record == null) continue;
+                ParcelBoundarySegmentRecord existing = record.Boundary.Segments
+                    .FirstOrDefault(x => SameRange(x.StartPointNumber,
+                        x.EndPointNumber, selected.Range.StartPointNumber,
+                        selected.Range.EndPointNumber));
+                ParcelBoundarySegmentRecord segment =
+                    ParcelBoundaryCadDialogs.EditSegment(selected.Range,
+                        existing);
+                if (segment == null) break;
+                ParcelBoundaryCadService.ApplySegment(record, segment);
+                ParcelBoundaryDescriptionGenerator.Apply(record, false);
+                last = _store.Save(record);
+                applied++;
+            }
+            if (applied > 0)
+                Notify("已向对应宗地填入 " + applied
+                    + " 个界址段。", CDBoxNotificationLevel.Success);
+            return last;
         }
 
         public ParcelSurveyRecord FillNeighborInformation()
         {
-            ParcelSurveyRecord record = CurrentParcel();
+            IList<ParcelSurveyRecord> records = RecordsForCurrentDocument();
+            if (records.Count == 0) return null;
+            ParcelBoundRangeSelection selected =
+                _cad.SelectBoundaryRangeAcrossParcels(records, true);
+            if (selected == null) return null;
+            ParcelSurveyRecord record = records.FirstOrDefault(x =>
+                string.Equals(x.Id, selected.RecordId,
+                    StringComparison.OrdinalIgnoreCase));
             if (record == null) return null;
+            ParcelBoundarySignatureGroupRecord existing = record.Boundary
+                .SignatureGroups.FirstOrDefault(x => SameRange(
+                    x.StartPointNumber, x.EndPointNumber,
+                    selected.Range.StartPointNumber,
+                    selected.Range.EndPointNumber));
+            ParcelBoundarySegmentRecord segment = record.Boundary.Segments
+                .FirstOrDefault(x => SameRange(x.StartPointNumber,
+                    x.EndPointNumber, selected.Range.StartPointNumber,
+                    selected.Range.EndPointNumber));
             ParcelBoundarySignatureGroupRecord group =
-                _cad.SelectSignatureGroup(record);
+                ParcelBoundaryCadDialogs.EditSignature(selected.Range,
+                    existing, segment,
+                    record.Field("rights.ownerName").TextValue);
             if (group == null) return null;
             record.Boundary.SignatureGroups.RemoveAll(x => SameRange(x,
                 group));
@@ -79,20 +139,28 @@ namespace CDBox.RealEstate.Services
             return _store.Save(record);
         }
 
-        private ParcelSurveyRecord CurrentParcel()
+        private IList<ParcelSurveyRecord> RecordsForCurrentDocument()
         {
-            ParcelSurveyScopeContext scope = _scopes.CurrentContext(_store);
-            if (!string.Equals(scope.ScopeType, "parcel",
-                StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(scope.ParcelId))
+            Document document = AcadApp.DocumentManager.MdiActiveDocument;
+            if (document == null)
             {
-                Notify("请先使用“选择宗地”选择一条权属线。",
+                Notify("当前没有可用的 CAD 图纸。",
                     CDBoxNotificationLevel.Warning);
-                return null;
+                return new List<ParcelSurveyRecord>();
             }
-            return _store.Current(scope.DocumentId, scope.DocumentName,
-                scope.ScopeType, scope.RegionId, scope.RegionName,
-                scope.ParcelId, scope.ParcelName);
+            string documentId = ParcelSurveyCadScopeService.GetDocumentId(
+                document);
+            ParcelSurveyScopeContext context = _scopes.CurrentContext(_store);
+            var validIds = new HashSet<string>(context.Parcels
+                .Where(x => x.BoundaryValid).Select(x => x.RecordId),
+                StringComparer.OrdinalIgnoreCase);
+            IList<ParcelSurveyRecord> records = _store.GetBoundRecords(
+                documentId).Where(x => validIds.Contains(x.Id)
+                    && x.Boundary.Points.Count >= 2).ToList();
+            if (records.Count == 0)
+                Notify("当前图纸没有已绑定权属线和界址点的宗地。",
+                    CDBoxNotificationLevel.Warning);
+            return records;
         }
 
         private void Notify(string message, CDBoxNotificationLevel level)
@@ -110,6 +178,17 @@ namespace CDBox.RealEstate.Services
                     StringComparison.OrdinalIgnoreCase)
                 && string.Equals(left.EndPointNumber ?? string.Empty,
                     right.EndPointNumber ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool SameRange(string leftStart, string leftEnd,
+            string rightStart, string rightEnd)
+        {
+            return string.Equals(leftStart ?? string.Empty,
+                    rightStart ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(leftEnd ?? string.Empty,
+                    rightEnd ?? string.Empty,
                     StringComparison.OrdinalIgnoreCase);
         }
     }

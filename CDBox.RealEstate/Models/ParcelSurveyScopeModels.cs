@@ -35,16 +35,27 @@ namespace CDBox.RealEstate.Models
 
     public sealed class ParcelSurveyParcelInfo
     {
+        public string RecordId { get; set; }
+        public string ScopeType { get; set; }
+        public string BindingKey { get; set; }
         public string ParcelId { get; set; }
         public string ParcelName { get; set; }
+        public string RegionId { get; set; }
+        public string RegionHandle { get; set; }
+        public bool RegionOwnedBoundary { get; set; }
         public string OwnerName { get; set; }
         public string SourceObjectHandle { get; set; }
         public bool BoundaryValid { get; set; }
 
         public ParcelSurveyParcelInfo()
         {
+            RecordId = string.Empty;
+            ScopeType = "parcel";
+            BindingKey = string.Empty;
             ParcelId = string.Empty;
             ParcelName = string.Empty;
+            RegionId = string.Empty;
+            RegionHandle = string.Empty;
             OwnerName = string.Empty;
             SourceObjectHandle = string.Empty;
         }
@@ -59,6 +70,8 @@ namespace CDBox.RealEstate.Models
         public string RegionName { get; set; }
         public string ParcelId { get; set; }
         public string ParcelName { get; set; }
+        public string RecordId { get; set; }
+        public bool BindingValid { get; set; }
         public IList<ParcelSurveyDocumentInfo> Documents { get; set; }
         public IList<ParcelSurveyRegionInfo> Regions { get; set; }
         public IList<ParcelSurveyParcelInfo> Parcels { get; set; }
@@ -72,6 +85,7 @@ namespace CDBox.RealEstate.Models
             RegionName = "整张图纸";
             ParcelId = string.Empty;
             ParcelName = string.Empty;
+            RecordId = string.Empty;
             Documents = new List<ParcelSurveyDocumentInfo>();
             Regions = new List<ParcelSurveyRegionInfo>();
             Parcels = new List<ParcelSurveyParcelInfo>();
@@ -87,6 +101,7 @@ namespace CDBox.RealEstate.Models
         public string RegionName { get; set; }
         public string ParcelId { get; set; }
         public string ParcelName { get; set; }
+        public string RecordId { get; set; }
         public string ScopeToken { get; set; }
 
         public ParcelSurveyScopeActionRequest()
@@ -97,6 +112,7 @@ namespace CDBox.RealEstate.Models
             RegionName = string.Empty;
             ParcelId = string.Empty;
             ParcelName = string.Empty;
+            RecordId = string.Empty;
             ScopeToken = string.Empty;
         }
     }

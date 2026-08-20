@@ -55,41 +55,55 @@ namespace CDBox.RealEstate.Cad
             context.DocumentName = GetDocumentName(current);
             context.Regions = GetRegions(current);
             context.Parcels = store.GetParcels(context.DocumentId);
-            string scopeType = store.GetCurrentScopeType(context.DocumentId);
-            if (string.Equals(scopeType, "parcel",
-                StringComparison.OrdinalIgnoreCase))
+            foreach (ParcelSurveyParcelInfo parcel in context.Parcels)
             {
-                string selectedParcel = store.GetCurrentParcelId(
-                    context.DocumentId);
-                ParcelSurveyParcelInfo parcel = context.Parcels.FirstOrDefault(
-                    x => Same(x.ParcelId, selectedParcel));
-                if (parcel != null)
+                if (string.Equals(parcel.ScopeType, "region",
+                    StringComparison.OrdinalIgnoreCase))
                 {
-                    context.ScopeType = "parcel";
-                    context.ParcelId = parcel.ParcelId;
-                    context.ParcelName = parcel.ParcelName;
-                    context.RegionName = string.Empty;
-                    return context;
+                    ParcelSurveyRegionInfo region = context.Regions
+                        .FirstOrDefault(x => Same(x.RegionId,
+                            parcel.RegionId));
+                    parcel.BoundaryValid = (region != null
+                        && region.BoundaryValid) || EntityExists(current,
+                            parcel.SourceObjectHandle);
+                    parcel.RegionHandle = region == null
+                        ? string.Empty : region.Handle;
+                    parcel.RegionOwnedBoundary = region != null
+                        && region.OwnedBoundary;
                 }
-                store.SelectScope(context.DocumentId, "whole",
-                    string.Empty);
-                return context;
+                else
+                {
+                    parcel.BoundaryValid = parcel.BoundaryValid
+                        && EntityExists(current,
+                            parcel.SourceObjectHandle);
+                }
             }
-            if (!string.Equals(scopeType, "region",
-                StringComparison.OrdinalIgnoreCase)) return context;
-            string selected = store.GetCurrentRegionId(context.DocumentId);
-            ParcelSurveyRegionInfo region = context.Regions.FirstOrDefault(x =>
-                Same(x.RegionId, selected));
-            if (region == null)
+            string scopeType = store.GetCurrentScopeType(context.DocumentId);
+            string selectedId = string.Equals(scopeType, "parcel",
+                StringComparison.OrdinalIgnoreCase)
+                ? store.GetCurrentParcelId(context.DocumentId)
+                : string.Equals(scopeType, "region",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? store.GetCurrentRegionId(context.DocumentId)
+                    : string.Empty;
+            ParcelSurveyParcelInfo selected = context.Parcels.FirstOrDefault(
+                x => Same(x.ScopeType, scopeType)
+                    && Same(scopeType == "region" ? x.RegionId : x.ParcelId,
+                        selectedId));
+            if (selected == null)
             {
-                if (!string.IsNullOrWhiteSpace(selected))
+                if (!string.IsNullOrWhiteSpace(selectedId))
                     store.SelectScope(context.DocumentId, "whole",
                         string.Empty);
                 return context;
             }
-            context.ScopeType = "region";
-            context.RegionId = region.RegionId;
-            context.RegionName = region.RegionName;
+            context.RecordId = selected.RecordId;
+            context.ScopeType = selected.ScopeType;
+            context.RegionId = selected.RegionId;
+            context.RegionName = selected.ParcelName;
+            context.ParcelId = selected.ParcelId;
+            context.ParcelName = selected.ParcelName;
+            context.BindingValid = selected.BoundaryValid;
             return context;
         }
 
@@ -240,12 +254,33 @@ namespace CDBox.RealEstate.Cad
             return FindRegion(document, regionId);
         }
 
+        public ParcelSurveyRegionInfo RenameRegion(string regionId,
+            string name)
+        {
+            Document document = CurrentDocument();
+            ParcelSurveyRegionInfo existing = FindRegion(document, regionId);
+            if (existing == null) return null;
+            string parcelName = (name ?? string.Empty).Trim();
+            if (parcelName.Length == 0) return null;
+            ObjectId id = FindRegionObjectId(document, regionId);
+            using (document.LockDocument())
+            using (Transaction transaction = document.Database
+                .TransactionManager.StartTransaction())
+            {
+                Polyline polyline = transaction.GetObject(id,
+                    OpenMode.ForWrite, false) as Polyline;
+                WriteRegion(polyline, existing.RegionId, parcelName,
+                    existing.CreatedAt, existing.OwnedBoundary);
+                transaction.Commit();
+            }
+            return FindRegion(document, regionId);
+        }
+
         public void DeleteRegion(string regionId)
         {
             Document document = CurrentDocument();
             ParcelSurveyRegionInfo info = FindRegion(document, regionId);
-            if (info == null) throw new InvalidOperationException(
-                "未找到地籍调查区域。");
+            if (info == null) return;
             ObjectId id = FindRegionObjectId(document, regionId);
             using (document.LockDocument())
             using (Transaction transaction = document.Database
@@ -506,6 +541,22 @@ namespace CDBox.RealEstate.Cad
             return string.Equals((left ?? string.Empty).Trim(),
                 (right ?? string.Empty).Trim(),
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool EntityExists(Document document,
+            string handleText)
+        {
+            long value;
+            if (document == null || string.IsNullOrWhiteSpace(handleText)
+                || !long.TryParse(handleText, NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out value)) return false;
+            try
+            {
+                ObjectId id = document.Database.GetObjectId(false,
+                    new Handle(value), 0);
+                return !id.IsNull && !id.IsErased;
+            }
+            catch { return false; }
         }
     }
 }

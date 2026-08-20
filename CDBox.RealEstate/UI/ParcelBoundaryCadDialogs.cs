@@ -102,6 +102,24 @@ namespace CDBox.RealEstate.UI
             return name.Length > 0;
         }
 
+        public static bool TryGetParcelName(string current, out string name)
+        {
+            name = (current ?? string.Empty).Trim();
+            var dialog = new BoundaryFloatingDialog("重命名宗地",
+                "区域或权属线只作为宗地的绑定与选择依据。", 430);
+            TextBox input = dialog.AddText("宗地名 *", name,
+                "例如 张三、北侧宗地");
+            dialog.AcceptText = "确定";
+            dialog.Validate = delegate
+            {
+                return string.IsNullOrWhiteSpace(input.Text)
+                    ? "宗地名不能为空。" : string.Empty;
+            };
+            if (!dialog.ShowForAutoCad()) return false;
+            name = (input.Text ?? string.Empty).Trim();
+            return name.Length > 0;
+        }
+
         public static ParcelBoundarySegmentRecord EditSegment(
             ParcelBoundaryRangeSelection range,
             ParcelBoundarySegmentRecord existing)

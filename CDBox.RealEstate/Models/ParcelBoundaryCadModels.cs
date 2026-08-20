@@ -51,4 +51,18 @@ namespace CDBox.RealEstate.Models
             Direction = string.Empty;
         }
     }
+
+    public sealed class ParcelBoundRangeSelection
+    {
+        public string RecordId { get; set; }
+        public string ParcelName { get; set; }
+        public ParcelBoundaryRangeSelection Range { get; set; }
+
+        public ParcelBoundRangeSelection()
+        {
+            RecordId = string.Empty;
+            ParcelName = string.Empty;
+            Range = new ParcelBoundaryRangeSelection();
+        }
+    }
 }

@@ -109,19 +109,109 @@ namespace CDBox.RealEstate.Settings
             string docId = NormalizeKey(documentId);
             ParcelSurveyRepositoryState state = Load();
             return state.Records.Where(x => Same(x.DocumentId, docId)
-                    && Same(x.ScopeType, "parcel")
-                    && !string.IsNullOrWhiteSpace(x.ParcelId))
+                    && (Same(x.ScopeType, "parcel")
+                        || Same(x.ScopeType, "region")))
                 .Select(x => new ParcelSurveyParcelInfo
                 {
+                    RecordId = x.Id,
+                    ScopeType = x.ScopeType,
+                    BindingKey = x.ScopeType + ":" + (x.ScopeType == "region"
+                        ? x.RegionId : x.ParcelId),
                     ParcelId = x.ParcelId,
-                    ParcelName = string.IsNullOrWhiteSpace(x.ParcelName)
-                        ? x.Field("rights.ownerName").TextValue : x.ParcelName,
+                    ParcelName = x.ScopeType == "region"
+                        ? First(x.ParcelName, x.RegionName)
+                        : First(x.ParcelName,
+                            x.Field("rights.ownerName").TextValue),
+                    RegionId = x.RegionId,
                     OwnerName = x.Field("rights.ownerName").TextValue,
                     SourceObjectHandle = x.Boundary.SourceObjectHandle,
                     BoundaryValid = x.Boundary.ParcelBoundaryClosed
                         && x.Boundary.Points.Count >= 3
                 }).OrderBy(x => x.ParcelName,
                     StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        public IList<ParcelSurveyRecord> GetBoundRecords(string documentId)
+        {
+            string docId = NormalizeKey(documentId);
+            ParcelSurveyRepositoryState state = Load();
+            return state.Records.Where(x => Same(x.DocumentId, docId)
+                    && (Same(x.ScopeType, "parcel")
+                        || Same(x.ScopeType, "region")))
+                .ToList();
+        }
+
+        public ParcelSurveyRecord GetRecord(string recordId)
+        {
+            string id = NormalizeKey(recordId);
+            if (id.Length == 0) return null;
+            return Load().Records.FirstOrDefault(x => Same(x.Id, id));
+        }
+
+        public ParcelSurveyRecord SelectRecord(string documentId,
+            string recordId)
+        {
+            string docId = NormalizeKey(documentId);
+            string id = NormalizeKey(recordId);
+            lock (Gate)
+            {
+                ParcelSurveyRepositoryState state = Load();
+                ParcelSurveyRecord record = state.Records.FirstOrDefault(x =>
+                    Same(x.Id, id) && Same(x.DocumentId, docId)
+                    && (Same(x.ScopeType, "parcel")
+                        || Same(x.ScopeType, "region")));
+                if (record == null) return null;
+                state.CurrentRecordId = record.Id;
+                ApplyCurrentScope(state, docId, record.ScopeType,
+                    record.RegionId, record.ParcelId);
+                SaveState(state);
+                return record;
+            }
+        }
+
+        public void RenameParcelInfo(string documentId, string recordId,
+            string parcelName)
+        {
+            string docId = NormalizeKey(documentId);
+            string id = NormalizeKey(recordId);
+            string name = NormalizeKey(parcelName);
+            if (docId.Length == 0 || id.Length == 0 || name.Length == 0)
+                return;
+            lock (Gate)
+            {
+                ParcelSurveyRepositoryState state = Load();
+                ParcelSurveyRecord record = state.Records.FirstOrDefault(x =>
+                    Same(x.Id, id) && Same(x.DocumentId, docId));
+                if (record == null) return;
+                record.ParcelName = name;
+                if (Same(record.ScopeType, "region"))
+                    record.RegionName = name;
+                SaveState(state);
+            }
+        }
+
+        public ParcelSurveyRecord DeleteParcelInfo(string documentId,
+            string recordId)
+        {
+            string docId = NormalizeKey(documentId);
+            string id = NormalizeKey(recordId);
+            if (docId.Length == 0 || id.Length == 0) return null;
+            lock (Gate)
+            {
+                ParcelSurveyRepositoryState state = Load();
+                ParcelSurveyRecord record = state.Records.FirstOrDefault(x =>
+                    Same(x.Id, id) && Same(x.DocumentId, docId));
+                if (record == null) return null;
+                state.Records.Remove(record);
+                if (Same(state.CurrentRecordId, record.Id))
+                {
+                    state.CurrentRecordId = string.Empty;
+                    ApplyCurrentScope(state, docId, "whole",
+                        string.Empty, string.Empty);
+                }
+                SaveState(state);
+                return record;
+            }
         }
 
         public ParcelSurveyRecord CreateOrSelectParcel(string documentId,
@@ -140,7 +230,9 @@ namespace CDBox.RealEstate.Settings
                 ParcelSurveyRepositoryState state = Load();
                 string handle = NormalizeKey(sourceObjectHandle);
                 ParcelSurveyRecord record = state.Records.FirstOrDefault(x =>
-                    Same(x.DocumentId, docId) && Same(x.ScopeType, "parcel")
+                    Same(x.DocumentId, docId)
+                    && (Same(x.ScopeType, "parcel")
+                        || Same(x.ScopeType, "region"))
                     && handle.Length > 0 && Same(
                         x.Boundary.SourceObjectHandle, handle));
                 if (record == null)
@@ -149,16 +241,22 @@ namespace CDBox.RealEstate.Settings
                     record.ParcelId = Guid.NewGuid().ToString("N");
                     state.Records.Add(record);
                 }
-                ApplyScope(record, docId, documentName, string.Empty,
-                    string.Empty, record.ParcelId, owner, "parcel");
+                if (!Same(record.ScopeType, "region"))
+                    ApplyScope(record, docId, documentName, string.Empty,
+                        string.Empty, record.ParcelId, owner, "parcel");
+                else
+                {
+                    record.DocumentName = (documentName ?? string.Empty).Trim();
+                    record.ParcelName = owner;
+                }
                 ParcelSurveyFieldValue ownerField = record.Field(
                     "rights.ownerName");
                 ownerField.TextValue = owner;
                 ownerField.Status = ParcelFieldStatus.Manual;
                 ownerField.Confirmed = true;
                 state.CurrentRecordId = record.Id;
-                ApplyCurrentScope(state, docId, "parcel", string.Empty,
-                    record.ParcelId);
+                ApplyCurrentScope(state, docId, record.ScopeType,
+                    record.RegionId, record.ParcelId);
                 SaveState(state);
                 return record;
             }
@@ -475,6 +573,12 @@ namespace CDBox.RealEstate.Settings
             string value;
             return values.TryGetValue(key ?? string.Empty, out value)
                 ? value ?? string.Empty : string.Empty;
+        }
+
+        private static string First(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? fallback ?? string.Empty : value;
         }
 
         private static string NormalizeKey(string value)

@@ -115,6 +115,47 @@ namespace CDBox.RealEstate.Cad
             }
         }
 
+        public void LocateOwnershipBoundary(ParcelSurveyRecord record)
+        {
+            Document document = CurrentDocument();
+            if (document == null || record == null) return;
+            string handleText = record.Boundary.SourceObjectHandle;
+            long handleValue;
+            if (string.IsNullOrWhiteSpace(handleText)
+                || !long.TryParse(handleText,
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out handleValue))
+                throw new InvalidOperationException("宗地未绑定有效权属线。");
+            ObjectId id = document.Database.GetObjectId(false,
+                new Handle(handleValue), 0);
+            if (id.IsNull || id.IsErased)
+                throw new InvalidOperationException("绑定的权属线已不存在。");
+            document.Editor.SetImpliedSelection(new[] { id });
+            Extents3d bounds;
+            using (Transaction transaction = document.Database
+                .TransactionManager.StartOpenCloseTransaction())
+            {
+                Entity entity = transaction.GetObject(id, OpenMode.ForRead,
+                    false) as Entity;
+                if (entity == null) throw new InvalidOperationException(
+                    "绑定的权属线无效。");
+                bounds = entity.GeometricExtents;
+                transaction.Commit();
+            }
+            using (ViewTableRecord view = document.Editor.GetCurrentView())
+            {
+                view.CenterPoint = new Point2d(
+                    (bounds.MinPoint.X + bounds.MaxPoint.X) / 2,
+                    (bounds.MinPoint.Y + bounds.MaxPoint.Y) / 2);
+                view.Width = Math.Max(1,
+                    (bounds.MaxPoint.X - bounds.MinPoint.X) * 1.25);
+                view.Height = Math.Max(1,
+                    (bounds.MaxPoint.Y - bounds.MinPoint.Y) * 1.25);
+                document.Editor.SetCurrentView(view);
+            }
+        }
+
         public ParcelBoundaryRangeSelection SelectBoundaryRange(
             ParcelSurveyRecord record, bool forSignature)
         {
@@ -170,6 +211,83 @@ namespace CDBox.RealEstate.Cad
                 Notify("选择界址范围失败：" + ex.Message,
                     CDBoxNotificationLevel.Error);
                 return null;
+            }
+        }
+
+        public ParcelBoundRangeSelection SelectBoundaryRangeAcrossParcels(
+            IList<ParcelSurveyRecord> records, bool forSignature)
+        {
+            Document document = CurrentDocument();
+            if (document == null) return null;
+            records = (records ?? new List<ParcelSurveyRecord>())
+                .Where(x => x != null).ToList();
+            foreach (ParcelSurveyRecord record in records) record.Normalize();
+            var candidates = new List<PointCandidate>();
+            foreach (ParcelSurveyRecord record in records)
+            {
+                List<ParcelBoundaryPointRecord> points = ValidPoints(record);
+                string parcelName = DisplayParcelName(record);
+                for (int i = 0; i < points.Count; i++)
+                {
+                    ParcelBoundaryPointRecord point = points[i];
+                    candidates.Add(new PointCandidate(i,
+                        point.PointNumber + " · " + parcelName,
+                        new Point3d((double)point.X.Value,
+                            (double)point.Y.Value, 0), record.Id,
+                        parcelName));
+                }
+            }
+            if (candidates.Count < 2)
+            {
+                Notify("没有可用的已绑定宗地界址点，请先识别权属线。",
+                    CDBoxNotificationLevel.Warning);
+                return null;
+            }
+
+            ObjectId textStyleId;
+            using (Transaction transaction = document.Database
+                .TransactionManager.StartOpenCloseTransaction())
+            {
+                try { textStyleId = document.Database.Textstyle; }
+                catch { textStyleId = ObjectId.Null; }
+                transaction.Commit();
+            }
+            string subject = forSignature ? "邻宗信息" : "界址段";
+            while (true)
+            {
+                PointCandidate start = SelectPoint(document, candidates,
+                    textStyleId, "选择" + subject + "起点",
+                    "可从所有已绑定宗地选择；引线预览宗地名和界址点号。");
+                if (start == null) return null;
+                List<PointCandidate> ends = candidates.Where(x =>
+                    !(SameText(x.RecordId, start.RecordId)
+                        && x.Index == start.Index)).ToList();
+                PointCandidate end = SelectPoint(document, ends,
+                    textStyleId, "选择" + subject + "终点",
+                    "请选择同一宗地的终点；若跨宗地将提示并重新选择。");
+                if (end == null) return null;
+                if (!SameText(start.RecordId, end.RecordId))
+                {
+                    Notify("起点属于“" + start.ParcelName + "”，终点属于“"
+                        + end.ParcelName + "”，不为同一宗地，请重新选择。",
+                        CDBoxNotificationLevel.Warning);
+                    continue;
+                }
+                ParcelSurveyRecord record = records.FirstOrDefault(x =>
+                    SameText(x.Id, start.RecordId));
+                if (record == null) continue;
+                ParcelBoundaryRangeSelection range = BuildRange(
+                    ValidPoints(record), start.Index, end.Index);
+                Notify("已在宗地“" + start.ParcelName + "”选择 "
+                    + range.StartPointNumber + " 至 "
+                    + range.EndPointNumber + "。",
+                    CDBoxNotificationLevel.Success);
+                return new ParcelBoundRangeSelection
+                {
+                    RecordId = record.Id,
+                    ParcelName = start.ParcelName,
+                    Range = range
+                };
             }
         }
 
@@ -387,7 +505,7 @@ namespace CDBox.RealEstate.Cad
             using (_prompts.Begin(title, message))
                 result = document.Editor.Drag(jig);
             return result.Status == PromptStatus.OK
-                ? jig.SelectedCandidate : null;
+                ? jig.PreviewCandidate : null;
         }
 
         private Document CurrentDocument()
@@ -457,6 +575,44 @@ namespace CDBox.RealEstate.Cad
             });
         }
 
+        public static void ApplySegment(ParcelSurveyRecord record,
+            ParcelBoundarySegmentRecord segment)
+        {
+            if (record == null || segment == null) return;
+            record.Normalize();
+            record.Boundary.Segments.RemoveAll(x => SameRange(
+                x.StartPointNumber, x.EndPointNumber,
+                segment.StartPointNumber, segment.EndPointNumber));
+            record.Boundary.Segments.Add(segment);
+            SortSegments(record);
+        }
+
+        private static List<ParcelBoundaryPointRecord> ValidPoints(
+            ParcelSurveyRecord record)
+        {
+            return (record == null ? new List<ParcelBoundaryPointRecord>()
+                : record.Boundary.Points.Where(x => x != null
+                    && x.X.HasValue && x.Y.HasValue
+                    && !string.IsNullOrWhiteSpace(x.PointNumber)).ToList());
+        }
+
+        private static string DisplayParcelName(ParcelSurveyRecord record)
+        {
+            if (record == null) return "未命名宗地";
+            string name = record.ScopeType == "region"
+                ? record.RegionName : record.ParcelName;
+            if (string.IsNullOrWhiteSpace(name))
+                name = record.Field("rights.ownerName").TextValue;
+            return string.IsNullOrWhiteSpace(name) ? "未命名宗地" : name;
+        }
+
+        private static bool SameText(string left, string right)
+        {
+            return string.Equals((left ?? string.Empty).Trim(),
+                (right ?? string.Empty).Trim(),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string Direction(ParcelBoundaryPointRecord start,
             ParcelBoundaryPointRecord end)
         {
@@ -474,14 +630,24 @@ namespace CDBox.RealEstate.Cad
         private sealed class PointCandidate
         {
             public PointCandidate(int index, string label, Point3d position)
+                : this(index, label, position, string.Empty, string.Empty)
+            {
+            }
+
+            public PointCandidate(int index, string label, Point3d position,
+                string recordId, string parcelName)
             {
                 Index = index;
                 Label = label ?? string.Empty;
                 Position = position;
+                RecordId = recordId ?? string.Empty;
+                ParcelName = parcelName ?? string.Empty;
             }
             public int Index { get; private set; }
             public string Label { get; private set; }
             public Point3d Position { get; private set; }
+            public string RecordId { get; private set; }
+            public string ParcelName { get; private set; }
         }
 
         private sealed class BoundaryVertexSeed
@@ -512,9 +678,11 @@ namespace CDBox.RealEstate.Cad
                 _pickPoint = _candidates.Count > 0
                     ? _candidates[0].Position : Point3d.Origin;
                 SelectedCandidate = FindNearest(_candidates, _pickPoint);
+                PreviewCandidate = SelectedCandidate;
             }
 
             public PointCandidate SelectedCandidate { get; private set; }
+            public PointCandidate PreviewCandidate { get; private set; }
 
             protected override SamplerStatus Sampler(JigPrompts prompts)
             {
@@ -539,6 +707,10 @@ namespace CDBox.RealEstate.Cad
                 if (draw == null || draw.Geometry == null) return true;
                 SelectedCandidate = FindNearest(_candidates, _pickPoint);
                 if (SelectedCandidate == null) return true;
+                // 确认结果必须使用用户最后实际看到的预览点。AutoCAD 在
+                // 单击结束 Drag 前可能再触发一次 Sampler，但不会再绘制，
+                // 若直接读取 SelectedCandidate 会出现预览 J6、结果 J14。
+                PreviewCandidate = SelectedCandidate;
                 using (var leader = new Polyline())
                 {
                     leader.AddVertexAt(0, new Point2d(

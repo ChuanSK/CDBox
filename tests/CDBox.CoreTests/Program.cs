@@ -1627,6 +1627,28 @@ namespace CDBox.CoreTests
                 Equal(string.Empty,
                     regionTwo.Field("parcel.location").TextValue,
                     "同一图纸的多个区域必须分别维护人工地籍信息");
+                IList<ParcelSurveyParcelInfo> selectable = store.GetParcels(
+                    "drawing-a");
+                True(selectable.Any(x => x.RecordId == regionTwo.Id
+                        && x.ParcelName == "区域二"),
+                    "区域与权属线宗地应进入同一个地籍范围列表");
+                False(selectable.Any(x => x.RecordId == drawing.Id),
+                    "整张图纸记录不得再作为可编辑宗地显示");
+                store.RenameParcelInfo("drawing-a", regionTwo.Id,
+                    "李四宗地");
+                Equal("李四宗地", store.GetRecord(regionTwo.Id).RegionName,
+                    "区域建宗后应按宗地统一重命名");
+                ParcelSurveyRecord regionWithBoundary = store.GetRecord(
+                    regionTwo.Id);
+                regionWithBoundary.Boundary.SourceObjectHandle = "3C";
+                store.Save(regionWithBoundary);
+                ParcelSurveyRecord regionSelectedByLine =
+                    store.CreateOrSelectParcel("drawing-a", "A.dwg",
+                        "李四", "3C");
+                Equal(regionTwo.Id, regionSelectedByLine.Id,
+                    "区域宗地绑定权属线后应从两种方式选中同一份数据");
+                Equal("region", regionSelectedByLine.ScopeType,
+                    "从权属线重新选择不得丢失原区域绑定");
                 ParcelSurveyRecord otherDrawing = store.Current("drawing-b",
                     "B.dwg", string.Empty, string.Empty);
                 Equal("测试调查机构",
@@ -1741,6 +1763,8 @@ namespace CDBox.CoreTests
                     DocumentId = "drawing-a",
                     DocumentName = "A.dwg",
                     ScopeType = "parcel",
+                    RecordId = selectedAgain.Id,
+                    BindingValid = true,
                     ParcelId = selectedAgain.ParcelId,
                     ParcelName = selectedAgain.ParcelName,
                     Parcels = store.GetParcels("drawing-a")
@@ -1749,10 +1773,14 @@ namespace CDBox.CoreTests
                     ParcelSurveyValidator.Validate(selectedAgain), scope);
                 Contains(html, "新建宗地",
                     "宗地调查数据编辑器应提供新建宗地入口");
-                Contains(html, "宗地（一条权属线）",
-                    "地籍范围应将宗地作为独立可选类型");
+                False(html.Contains("宗地（一条权属线）"),
+                    "地籍范围不得再按权属线来源区分宗地");
                 Contains(html, "张三（更新）",
                     "地籍范围应以权利人姓名显示宗地");
+                Contains(html, "重命名宗地",
+                    "宗地来源统一后应直接重命名宗地");
+                Contains(html, "删除宗地信息",
+                    "编辑器应提供统一删除宗地信息入口");
                 Equal("CDRESELECTPARCEL",
                     RealEstateCommandCatalog.SelectParcel,
                     "不动产菜单应有独立选择宗地命令");
@@ -1874,6 +1902,8 @@ namespace CDBox.CoreTests
                 DocumentId = "drawing-a",
                 DocumentName = "A.dwg",
                 ScopeType = "region",
+                RecordId = record.Id,
+                BindingValid = true,
                 RegionId = "region-1",
                 RegionName = "区域一",
                 Documents = new List<ParcelSurveyDocumentInfo>
@@ -1907,8 +1937,8 @@ namespace CDBox.CoreTests
             Contains(html, "保存宗地", "编辑器顶部应提供保存宗地按钮");
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
-            Contains(html, "exportSurvey').disabled=false",
-                "调查表导出按钮应始终启用");
+            Contains(html, "disabled=!canEdit",
+                "已绑定宗地应允许导出且不受完整度限制");
             Contains(html, "导出不受完整度限制",
                 "编辑器应明确数据检查不再阻止导出");
             False(html.IndexOf("disabled=!v.CanExport",
@@ -1916,10 +1946,10 @@ namespace CDBox.CoreTests
                 "编辑器不得再按完整度锁定导出按钮");
             Contains(html, "地籍范围",
                 "编辑器顶部应显示整图或区域地籍范围选择");
-            Contains(html, "新建区域",
-                "编辑器应提供与工程量看板一致的区域添加入口");
-            Contains(html, "选择闭合线",
-                "编辑器应允许绑定已有闭合线作为地籍区域");
+            Contains(html, "区域新建宗地",
+                "编辑器应允许使用插件区域新建宗地");
+            Contains(html, "选择区域建宗",
+                "编辑器应允许使用已有区域新建宗地");
             Contains(html, "区域一",
                 "编辑器应呈现当前图纸已有的独立地籍区域");
             Contains(html, "pollParcelScope",
@@ -1928,6 +1958,22 @@ namespace CDBox.CoreTests
             Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
             Contains(html, "回读检查",
                 "页面应展示完整的预览、导出与回读流程");
+
+            var noSelection = new ParcelSurveyScopeContext
+            {
+                DocumentId = "drawing-a",
+                DocumentName = "A.dwg"
+            };
+            string blocked = ParcelSurveyEditorPage.BuildHtml(
+                new ParcelSurveyRecord(), blank, noSelection);
+            Contains(blocked, "整张图纸不再保存宗地信息",
+                "未绑定区域或权属线时不得编辑整图宗地数据");
+            Contains(blocked, "请先通过区域或权属线新建并选择宗地",
+                "无宗地绑定时应提示用户先建宗");
+            False(blocked.Contains("宗地（一条权属线）"),
+                "地籍范围不得显示宗地来源分组");
+            False(blocked.Contains("<option value='whole:'"),
+                "地籍范围不得再提供整张图纸宗地选项");
         }
 
         private static void TestParcelSurveyExcelExport()

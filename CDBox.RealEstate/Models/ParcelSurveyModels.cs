@@ -290,8 +290,8 @@ namespace CDBox.RealEstate.Models
                 : string.Empty;
             ParcelId = ScopeType == "parcel" ? ParcelId ?? string.Empty
                 : string.Empty;
-            ParcelName = ScopeType == "parcel" ? ParcelName ?? string.Empty
-                : string.Empty;
+            ParcelName = ScopeType == "parcel" || ScopeType == "region"
+                ? ParcelName ?? string.Empty : string.Empty;
             Fields = Fields ?? new Dictionary<string, ParcelSurveyFieldValue>(
                 StringComparer.OrdinalIgnoreCase);
             foreach (ParcelSurveyFieldDefinition definition in
