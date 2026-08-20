@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using CDBox.RealEstate.Models;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
@@ -18,7 +17,6 @@ namespace CDBox.RealEstate.Services
         private const string BoundaryMarkSheet = "界址标示表1";
         private const string BoundarySignatureSheet = "界址签章表";
         private const string BoundaryDescriptionSheet = "界址说明表";
-        private const string AuditSheet = "调查审核表";
         private const string HouseSheet = "房屋调查表";
         private const int BoundaryRowsPerPage = 26;
         private const int SignatureRowsPerPage = 13;
@@ -91,7 +89,6 @@ namespace CDBox.RealEstate.Services
                     boundaryPages);
                 WriteBoundarySignatures(workbook, record, signaturePages);
                 WriteBoundaryDescriptions(workbook, record);
-                WriteAudit(workbook, record);
                 WriteHouses(workbook, record, housePages);
                 using (FileStream output = new FileStream(outputPath,
                     FileMode.Create, FileAccess.Write, FileShare.None))
@@ -251,7 +248,7 @@ namespace CDBox.RealEstate.Services
                 BoundarySignatureSheet, pageCount,
                 page => page == 1 ? BoundarySignatureSheet
                     : BoundarySignatureSheet + page);
-            bool outputNames = OutputSignatureNames(record);
+            const bool outputNames = false;
             for (int page = 0; page < sheets.Count; page++)
             {
                 ISheet sheet = sheets[page];
@@ -294,33 +291,6 @@ namespace CDBox.RealEstate.Services
             SetText(sheet, 2, 1, Value(record,
                 "boundary.lineDescription"));
             SetText(sheet, 4, 0, Footer(record));
-        }
-
-        private static void WriteAudit(HSSFWorkbook workbook,
-            ParcelSurveyRecord record)
-        {
-            ISheet sheet = RequireSheet(workbook, AuditSheet);
-            string rightsNotes = Value(record, "audit.rightsNotes");
-            rightsNotes = InsertParcelArea(rightsNotes,
-                Value(record, ParcelSurveyFieldKeys.ParcelArea));
-            string surveyNotes = Value(record, "audit.surveyNotes");
-            string reviewOpinion = Value(record, "audit.reviewOpinion");
-            SetText(sheet, 1, 1, rightsNotes);
-            SetText(sheet, 2, 1, "调查员签名："
-                + ExportedName(record, "project.rightsSurveyor"));
-            SetText(sheet, 2, 2, "日期："
-                + ChineseDate(Value(record, "project.rightsSurveyDate")));
-            SetText(sheet, 3, 1, ComposeSurveyNotes(record, surveyNotes));
-            SetText(sheet, 4, 1, "测量员签名："
-                + ExportedName(record, "project.surveyor"));
-            SetText(sheet, 4, 2, "日期："
-                + ChineseDate(Value(record, "project.measureDate")));
-            SetText(sheet, 5, 1, reviewOpinion);
-            SetText(sheet, 6, 1, "审核人签名："
-                + ExportedName(record, "project.reviewer"));
-            SetText(sheet, 6, 2, "审核日期："
-                + ChineseDate(Value(record, "project.reviewDate")));
-            SetText(sheet, 7, 0, Footer(record));
         }
 
         private static void WriteHouses(HSSFWorkbook workbook,
@@ -425,8 +395,7 @@ namespace CDBox.RealEstate.Services
             SetBuildingField(sheet, 13, 35, building, "building.notes");
             SetBuildingField(sheet, 14, 35, building,
                 "building.reviewOpinion");
-            SetText(sheet, 15, 1, "调查员："
-                + ExportedName(record, "project.rightsSurveyor"));
+            SetText(sheet, 15, 1, "调查员：");
             SetText(sheet, 15, 32, "日期："
                 + ChineseDate(Value(record, "project.rightsSurveyDate")));
         }
@@ -770,55 +739,6 @@ namespace CDBox.RealEstate.Services
         private static string SlashIfEmpty(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? "/" : value.Trim();
-        }
-
-        private static bool OutputSignatureNames(ParcelSurveyRecord record)
-        {
-            return string.Equals(Value(record, "audit.signatureHandling"),
-                "输出人员姓名", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string ExportedName(ParcelSurveyRecord record,
-            string key)
-        {
-            return OutputSignatureNames(record) ? Value(record, key)
-                : string.Empty;
-        }
-
-        private static string InsertParcelArea(string text, string area)
-        {
-            text = text ?? string.Empty;
-            area = (area ?? string.Empty).Trim();
-            text = text.Replace("{宗地面积}", area)
-                .Replace("[宗地面积]", area);
-            if (area.Length == 0) return text;
-            return Regex.Replace(text,
-                "宗地面积为[：:]\\s*(?:\\d+(?:\\.\\d+)?\\s*)?平方米",
-                "宗地面积为：" + area + " 平方米");
-        }
-
-        private static string ComposeSurveyNotes(ParcelSurveyRecord record,
-            string notes)
-        {
-            var facts = new List<string>();
-            AddFact(facts, "测量设备型号", Value(record,
-                "audit.deviceModel"), notes);
-            AddFact(facts, "测量方法", Value(record,
-                "audit.measureMethod"), notes);
-            AddFact(facts, "面积计算方法", Value(record,
-                "audit.areaMethod"), notes);
-            if (facts.Count == 0) return notes ?? string.Empty;
-            return (notes ?? string.Empty).TrimEnd() + Environment.NewLine
-                + string.Join("；", facts) + "。";
-        }
-
-        private static void AddFact(ICollection<string> facts, string label,
-            string value, string existing)
-        {
-            if (!string.IsNullOrWhiteSpace(value)
-                && (existing ?? string.Empty).IndexOf(value.Trim(),
-                    StringComparison.OrdinalIgnoreCase) < 0)
-                facts.Add(label + "：" + value.Trim());
         }
 
         private static decimal? Distance(ParcelBoundaryPointRecord left,

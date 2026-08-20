@@ -115,47 +115,6 @@ namespace CDBox.RealEstate.Cad
             }
         }
 
-        public void LocateOwnershipBoundary(ParcelSurveyRecord record)
-        {
-            Document document = CurrentDocument();
-            if (document == null || record == null) return;
-            string handleText = record.Boundary.SourceObjectHandle;
-            long handleValue;
-            if (string.IsNullOrWhiteSpace(handleText)
-                || !long.TryParse(handleText,
-                    System.Globalization.NumberStyles.HexNumber,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out handleValue))
-                throw new InvalidOperationException("宗地未绑定有效权属线。");
-            ObjectId id = document.Database.GetObjectId(false,
-                new Handle(handleValue), 0);
-            if (id.IsNull || id.IsErased)
-                throw new InvalidOperationException("绑定的权属线已不存在。");
-            document.Editor.SetImpliedSelection(new[] { id });
-            Extents3d bounds;
-            using (Transaction transaction = document.Database
-                .TransactionManager.StartOpenCloseTransaction())
-            {
-                Entity entity = transaction.GetObject(id, OpenMode.ForRead,
-                    false) as Entity;
-                if (entity == null) throw new InvalidOperationException(
-                    "绑定的权属线无效。");
-                bounds = entity.GeometricExtents;
-                transaction.Commit();
-            }
-            using (ViewTableRecord view = document.Editor.GetCurrentView())
-            {
-                view.CenterPoint = new Point2d(
-                    (bounds.MinPoint.X + bounds.MaxPoint.X) / 2,
-                    (bounds.MinPoint.Y + bounds.MaxPoint.Y) / 2);
-                view.Width = Math.Max(1,
-                    (bounds.MaxPoint.X - bounds.MinPoint.X) * 1.25);
-                view.Height = Math.Max(1,
-                    (bounds.MaxPoint.Y - bounds.MinPoint.Y) * 1.25);
-                document.Editor.SetCurrentView(view);
-            }
-        }
-
         public ParcelBoundaryRangeSelection SelectBoundaryRange(
             ParcelSurveyRecord record, bool forSignature)
         {

@@ -107,16 +107,6 @@ namespace CDBox.RealEstate.Cad
             return context;
         }
 
-        public Document ActivateDocument(string documentId)
-        {
-            Document document = ResolveDocument(documentId);
-            if (document == null)
-                throw new InvalidOperationException("未找到目标图纸。");
-            if (AcadApp.DocumentManager.MdiActiveDocument != document)
-                AcadApp.DocumentManager.MdiActiveDocument = document;
-            return document;
-        }
-
         public ParcelSurveyRegionInfo CreateRectangleRegion()
         {
             Document document = CurrentDocument();
@@ -294,35 +284,6 @@ namespace CDBox.RealEstate.Cad
             }
         }
 
-        public void LocateRegion(string regionId)
-        {
-            Document document = CurrentDocument();
-            ObjectId id = FindRegionObjectId(document, regionId);
-            if (id.IsNull) throw new InvalidOperationException(
-                "未找到地籍调查区域。");
-            document.Editor.SetImpliedSelection(new[] { id });
-            Extents3d bounds;
-            using (Transaction transaction = document.Database
-                .TransactionManager.StartOpenCloseTransaction())
-            {
-                Entity entity = transaction.GetObject(id, OpenMode.ForRead,
-                    false) as Entity;
-                bounds = entity.GeometricExtents;
-                transaction.Commit();
-            }
-            using (ViewTableRecord view = document.Editor.GetCurrentView())
-            {
-                view.CenterPoint = new Point2d(
-                    (bounds.MinPoint.X + bounds.MaxPoint.X) / 2,
-                    (bounds.MinPoint.Y + bounds.MaxPoint.Y) / 2);
-                view.Width = Math.Max(1,
-                    (bounds.MaxPoint.X - bounds.MinPoint.X) * 1.25);
-                view.Height = Math.Max(1,
-                    (bounds.MaxPoint.Y - bounds.MinPoint.Y) * 1.25);
-                document.Editor.SetCurrentView(view);
-            }
-        }
-
         public IList<ParcelSurveyRegionInfo> GetRegions(Document document)
         {
             var result = new List<ParcelSurveyRegionInfo>();
@@ -375,14 +336,6 @@ namespace CDBox.RealEstate.Cad
             string name = document.Name ?? string.Empty;
             try { name = Path.GetFileName(name); } catch { }
             return string.IsNullOrWhiteSpace(name) ? "未命名图纸" : name;
-        }
-
-        private Document ResolveDocument(string documentId)
-        {
-            foreach (Document document in AcadApp.DocumentManager)
-                if (document != null && Same(GetDocumentId(document),
-                    documentId)) return document;
-            return null;
         }
 
         private Document CurrentDocument()

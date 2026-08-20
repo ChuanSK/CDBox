@@ -1928,9 +1928,10 @@ namespace CDBox.CoreTests
             string html = ParcelSurveyEditorPage.BuildHtml(record,
                 checkedResult, scope);
             foreach (string tab in new[] { "项目与人员", "宗地基本信息",
-                "权利人与权属", "土地用途与面积", "界址调查", "房屋调查",
-                "调查审核与导出" })
-                Contains(html, tab, "编辑器应包含七个业务页签");
+                "权利人与权属", "土地用途与面积", "界址调查", "房屋调查" })
+                Contains(html, tab, "编辑器应包含六个业务页签");
+            False(html.Contains("调查审核与导出"),
+                "编辑器不应再显示调查审核与导出页签");
             foreach (string status in new[] { "自动", "默认", "导入", "人工",
                 "不适用" })
                 Contains(html, status, "编辑器应提供统一字段状态");
@@ -1938,15 +1939,21 @@ namespace CDBox.CoreTests
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
             Contains(html, "disabled=!canEdit",
-                "已绑定宗地应允许导出且不受完整度限制");
-            Contains(html, "导出不受完整度限制",
-                "编辑器应明确数据检查不再阻止导出");
+                "已绑定宗地应允许直接导出");
             False(html.IndexOf("disabled=!v.CanExport",
                 StringComparison.Ordinal) >= 0,
                 "编辑器不得再按完整度锁定导出按钮");
-            Contains(html, "地籍范围",
-                "编辑器顶部应显示整图或区域地籍范围选择");
-            Contains(html, "区域新建宗地",
+            Contains(html, "class=\"sidebar\"",
+                "编辑器应使用与污水工作台一致的左侧边栏布局");
+            Contains(html, "当前宗地",
+                "左侧边栏应直接提供宗地选择");
+            False(html.Contains("scopeDocument"),
+                "编辑器不得再显示图纸列表");
+            False(html.Contains("定位宗地"),
+                "编辑器不得再提供定位宗地功能");
+            False(html.Contains("完整度"),
+                "编辑器不得再显示完整度百分比");
+            Contains(html, "区域建宗",
                 "编辑器应允许使用插件区域新建宗地");
             Contains(html, "选择区域建宗",
                 "编辑器应允许使用已有区域新建宗地");
@@ -1954,10 +1961,8 @@ namespace CDBox.CoreTests
                 "编辑器应呈现当前图纸已有的独立地籍区域");
             Contains(html, "pollParcelScope",
                 "编辑器应轮询 CAD 当前图纸并自动切换宗地数据");
-            Contains(html, "每页最多 26 段", "界址段应显示自动续页规则");
-            Contains(html, "每页最多 13 组", "签章组应显示自动续页规则");
-            Contains(html, "回读检查",
-                "页面应展示完整的预览、导出与回读流程");
+            False(html.Contains("每页最多"),
+                "编辑器应移除分页规则类小字提示");
 
             var noSelection = new ParcelSurveyScopeContext
             {
@@ -1966,9 +1971,7 @@ namespace CDBox.CoreTests
             };
             string blocked = ParcelSurveyEditorPage.BuildHtml(
                 new ParcelSurveyRecord(), blank, noSelection);
-            Contains(blocked, "整张图纸不再保存宗地信息",
-                "未绑定区域或权属线时不得编辑整图宗地数据");
-            Contains(blocked, "请先通过区域或权属线新建并选择宗地",
+            Contains(blocked, "请通过区域或权属线新建宗地后再编辑",
                 "无宗地绑定时应提示用户先建宗");
             False(blocked.Contains("宗地（一条权属线）"),
                 "地籍范围不得显示宗地来源分组");
@@ -1985,6 +1988,25 @@ namespace CDBox.CoreTests
             string output = Path.Combine(directory, "宗地测试_权籍调查表.xls");
             try
             {
+                string[] templateAuditValues;
+                using (FileStream templateInput = File.OpenRead(template))
+                {
+                    var templateWorkbook = new HSSFWorkbook(templateInput);
+                    try
+                    {
+                        ISheet audit = templateWorkbook.GetSheet("调查审核表");
+                        templateAuditValues = new[]
+                        {
+                            audit.GetRow(1).GetCell(1).ToString(),
+                            audit.GetRow(3).GetCell(1).ToString(),
+                            audit.GetRow(5).GetCell(1).ToString()
+                        };
+                    }
+                    finally
+                    {
+                        templateWorkbook.Close();
+                    }
+                }
                 string blankOutput = Path.Combine(directory,
                     "空宗地_权籍调查表.xls");
                 var blankRecord = new ParcelSurveyRecord();
@@ -2016,12 +2038,12 @@ namespace CDBox.CoreTests
                         Equal(string.Empty, basic.GetRow(36).GetCell(0)
                             .ToString(), "未填填表人和日期时页脚应保持空白");
                         ISheet audit = blankWorkbook.GetSheet("调查审核表");
-                        Equal(string.Empty, audit.GetRow(1).GetCell(1)
-                            .ToString(), "空导出不得保留模板调查示例文字");
-                        Equal(string.Empty, audit.GetRow(3).GetCell(1)
-                            .ToString(), "空导出不得保留模板测绘示例文字");
-                        Equal(string.Empty, audit.GetRow(5).GetCell(1)
-                            .ToString(), "空导出不得保留模板审核示例文字");
+                        Equal(templateAuditValues[0], audit.GetRow(1).GetCell(1)
+                            .ToString(), "调查审核记事应保持模板原样");
+                        Equal(templateAuditValues[1], audit.GetRow(3).GetCell(1)
+                            .ToString(), "不动产测绘记事应保持模板原样");
+                        Equal(templateAuditValues[2], audit.GetRow(5).GetCell(1)
+                            .ToString(), "审核意见应保持模板原样");
                     }
                     finally
                     {
@@ -2067,8 +2089,14 @@ namespace CDBox.CoreTests
                 record.Field("project.cadastralSubdistrictCode").TextValue =
                     "002";
                 record.Field("project.postalCode").TextValue = "662200";
-                record.Field("audit.signatureHandling").TextValue =
-                    "输出人员姓名";
+                record.Fields["audit.signatureHandling"] =
+                    new ParcelSurveyFieldValue { TextValue = "输出人员姓名" };
+                record.Fields["audit.rightsNotes"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
+                record.Fields["audit.surveyNotes"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
+                record.Fields["audit.reviewOpinion"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
                 record.Field("house.followParcelOwner").BooleanValue = true;
                 record.Field("house.unitCode").TextValue = "F00010001";
                 record.Field("house.unitType").TextValue = "幢";
@@ -2161,6 +2189,16 @@ namespace CDBox.CoreTests
                         Equal("2", workbook.GetSheet("房屋调查表2")
                             .GetRow(12).GetCell(4).StringCellValue,
                             "多幢房屋应逐幢生成调查表");
+                        ISheet audit = workbook.GetSheet("调查审核表");
+                        Equal(templateAuditValues[0], audit.GetRow(1)
+                            .GetCell(1).ToString(),
+                            "已保存的旧审核字段不得覆盖模板原文");
+                        Equal(templateAuditValues[1], audit.GetRow(3)
+                            .GetCell(1).ToString(),
+                            "测绘审核内容应保持模板原文");
+                        Equal(templateAuditValues[2], audit.GetRow(5)
+                            .GetCell(1).ToString(),
+                            "最终审核意见应保持模板原文");
                     }
                     finally
                     {
@@ -2239,15 +2277,15 @@ namespace CDBox.CoreTests
 
             string html = ParcelSurveyEditorPage.BuildHtml(record,
                 ParcelSurveyValidator.Validate(record));
-            Contains(html, "从图纸识别权属线",
+            Contains(html, "data-cad='boundary'",
                 "界址页应提供 CAD 权属线识别入口");
-            Contains(html, "连续选择界址段",
+            Contains(html, ">填写界址段</button>",
                 "界址页应提供带预览的连续界址段选取入口");
-            Contains(html, "从图纸选择起终点",
+            Contains(html, ">填写邻宗信息</button>",
                 "签章组应提供同套起终点选取入口");
             Contains(html, "CDBoxParcelCadInteractionFinished",
                 "页面应接收 CAD 外部浮窗完成结果并恢复编辑器");
-            Contains(html, "生成界址说明与宗地四至",
+            Contains(html, "重新生成说明与四至",
                 "界址页应提供说明和四至重新生成入口");
             Contains(html, "<strong>宗地四至</strong>",
                 "界址页应直接显示可编辑的宗地四至");

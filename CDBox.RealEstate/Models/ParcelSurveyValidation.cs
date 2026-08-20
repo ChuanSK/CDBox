@@ -90,7 +90,6 @@ namespace CDBox.RealEstate.Models
             ValidateAreas(record, result);
             ValidateTemplateResidue(record, result);
             ValidateLayout(record, result);
-            ValidateSignaturePolicy(record, result);
 
             result.BoundarySegmentPageCount = Math.Max(1,
                 (int)Math.Ceiling(record.Boundary.Segments.Count / 26m));
@@ -267,17 +266,6 @@ namespace CDBox.RealEstate.Models
                 Add(result, "footer-orphan", "error",
                     "界址说明表存在将填表人单独挤到下一页的风险。", string.Empty);
             }
-        }
-
-        private static void ValidateSignaturePolicy(ParcelSurveyRecord record,
-            ParcelSurveyValidationResult result)
-        {
-            ParcelSurveyFieldValue field = record.Field("audit.signatureHandling");
-            if (field != null && string.Equals(field.TextValue,
-                "使用经授权的电子签章", StringComparison.Ordinal))
-                Add(result, "signature-authorization", "error",
-                    "尚未建立电子签章授权机制，请选择手写签章或输出人员姓名。",
-                    "audit.signatureHandling");
         }
 
         private static decimal? Number(ParcelSurveyRecord record, string key)

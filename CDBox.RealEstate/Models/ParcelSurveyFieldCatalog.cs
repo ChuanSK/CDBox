@@ -174,17 +174,6 @@ namespace CDBox.RealEstate.Models
                 options: O("单独所有", "共同共有", "按份共有"));
             Add(x, "house.sharedArea", 6, "房屋属性", "共有建筑面积", "number", false, true, unit: "㎡");
 
-            // 调查审核与导出
-            Add(x, "audit.rightsNotes", 7, "权属调查", "权属调查记事", "textarea", true, false, true,
-                help: "可使用项目标准文本并自动插入宗地面积，最终文字可直接修改。" );
-            Add(x, "audit.surveyNotes", 7, "不动产测绘", "不动产测绘记事", "textarea", true, false, true);
-            Add(x, "audit.deviceModel", 7, "不动产测绘", "测量设备型号", "text", true, false, true);
-            Add(x, "audit.measureMethod", 7, "不动产测绘", "测量方法", "text", true, false, true);
-            Add(x, "audit.areaMethod", 7, "不动产测绘", "面积计算方法", "text", true, false, true);
-            Add(x, "audit.reviewOpinion", 7, "审核", "审核意见", "textarea", true, false, true);
-            Add(x, "audit.signatureHandling", 7, "签章处理", "签章处理", "select", true,
-                options: O("留空，打印后手写签章", "输出人员姓名", "使用经授权的电子签章"),
-                help: "电子签章仅在以后建立明确授权机制后支持。" );
             return x;
         }
 
