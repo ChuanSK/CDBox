@@ -36,6 +36,7 @@ using TCPipeAutoDraw.Modules.ShortCodeRecognition;
 using TCPipeAutoDraw.Modules.LongitudinalProfile;
 using TCPipeAutoDraw.UI.Studio;
 using TCPipeAutoDraw.UI.FloatingCenter;
+using TCPipeAutoDraw.UI;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOI.HSSF.UserModel;
@@ -63,6 +64,7 @@ namespace CDBox.CoreTests
             Run("内置更新源优先级", TestBuiltInUpdateSourcePriority);
             Run("阶段 A 新安装启动职责", TestStageANewInstallDefaults);
             Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
+            Run("不动产菜单顺序与分组", TestRealEstateMenuLayout);
             Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
@@ -1413,6 +1415,27 @@ namespace CDBox.CoreTests
                 "RealEstate DLL 缺失时应保留明确错误原因");
         }
 
+        private static void TestRealEstateMenuLayout()
+        {
+            Equal(string.Join("|", new[]
+                {
+                    "选择宗地", "填写界址段", "填写邻宗信息", "---",
+                    "宗地调查数据编辑器", "---", "注记建筑边长",
+                    "建筑边长注记设置", "---", "CDBox不动产工作区",
+                    "CDBox设置"
+                }), string.Join("|", RealEstateMenuLayout.Items.Select(item =>
+                    item.IsSeparator ? "---" : item.Label)),
+                "不动产菜单应按业务流程排序并保留三处分隔线");
+            Equal(string.Join("|", new[]
+                {
+                    "CDRESELECTPARCEL", "CDREFILLSEGMENT", "CDREFILLNEIGHBOR",
+                    "CDREDJ", "CDREBL", "CDREBLSZ", "CDRE", "CDSET"
+                }), string.Join("|", RealEstateMenuLayout.Items
+                    .Where(item => !item.IsSeparator)
+                    .Select(item => item.CommandName)),
+                "不动产菜单项应绑定现有功能命令");
+        }
+
         private static void TestBuildingLengthAnnotationPlanner()
         {
             BuildingAnnotationPlan rectangle =
@@ -1938,6 +1961,16 @@ namespace CDBox.CoreTests
             Contains(html, "保存宗地信息", "编辑器顶部应提供保存宗地信息按钮");
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
+            Contains(html, "导出为 Word 文档",
+                "导出下拉框应预留 Word 文档入口");
+            Contains(html, "导出为 Excel 表格",
+                "导出下拉框应提供现有 Excel 导出入口");
+            Contains(html, "Word 文档导出功能暂未实现",
+                "Word 预留入口应明确提示尚未实现");
+            Contains(html, "data-export-format=\"excel\"",
+                "Excel 导出入口应具有独立下拉选项");
+            Contains(html, "post('exportParcel',JSON.stringify(draft))",
+                "Excel 下拉选项应继续调用现有调查表导出流程");
             Contains(html, "disabled=!canEdit",
                 "已绑定宗地应允许直接导出");
             False(html.IndexOf("disabled=!v.CanExport",

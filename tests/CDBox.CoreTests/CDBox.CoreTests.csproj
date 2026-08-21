@@ -63,6 +63,7 @@
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioShortCodeSettingsPage.cs" Link="Source\CDBoxStudioShortCodeSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDefaultsPage.cs" Link="Source\CDBoxStudioQuantityDefaultsPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\RealEstateMenuLayout.cs" Link="Source\RealEstateMenuLayout.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallException.cs" Link="Source\Updater\BundleInstallException.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstallOutcome.cs" Link="Source\Updater\BundleInstallOutcome.cs" />
     <Compile Include="..\..\CDBoxUpdater\BundleInstaller.cs" Link="Source\Updater\BundleInstaller.cs" />
