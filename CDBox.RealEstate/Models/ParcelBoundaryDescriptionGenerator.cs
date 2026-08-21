@@ -92,7 +92,7 @@ namespace CDBox.RealEstate.Models
                     segments);
                 point.Description = (point.PointNumber ?? string.Empty)
                     + "位于本宗地" + Compass(point, centerX, centerY)
-                    + "方向" + LineLocation(segment);
+                    + "方向" + PointLocation(segment);
                 if (point.Status != ParcelFieldStatus.Manual || overwriteManual)
                     point.Status = ParcelFieldStatus.Automatic;
             }
@@ -128,7 +128,7 @@ namespace CDBox.RealEstate.Models
                 string direction = Compass(point, centerX, centerY);
                 ParcelBoundarySegmentRecord segment = FindSegment(point,
                     segments);
-                string location = LineLocation(segment);
+                string location = PointLocation(segment);
                 string key = direction + "|" + location;
                 PointDescriptionGroup last = groups.LastOrDefault();
                 if (last == null || !string.Equals(last.Key, key,
@@ -231,6 +231,15 @@ namespace CDBox.RealEstate.Models
             return string.IsNullOrWhiteSpace(category) ? "界址点" : category;
         }
 
+        private static string PointLocation(
+            ParcelBoundarySegmentRecord segment)
+        {
+            if (segment == null) return "界址点";
+            string category = (segment.LineCategory ?? string.Empty).Trim();
+            return category == "界址线" || string.IsNullOrWhiteSpace(category)
+                ? "界址点" : LineLocation(segment);
+        }
+
         private static string Neighbor(ParcelBoundarySegmentRecord segment)
         {
             string owner = (segment.NeighborOwner ?? string.Empty).Trim();
@@ -262,12 +271,16 @@ namespace CDBox.RealEstate.Models
         {
             string category = segment == null
                 ? string.Empty : (segment.LineCategory ?? string.Empty).Trim();
-            if (category == "围墙" || category == "墙壁"
-                || category == "门墩") return 50;
-            if (category == "道路" || category == "田埂"
-                || category == "沟渠" || category == "铁丝网") return 40;
-            if (category == "界址线") return 10;
-            return string.IsNullOrWhiteSpace(category) ? 0 : 30;
+            if (category == "门墩") return 80;
+            if (category == "围墙") return 70;
+            if (category == "墙壁") return 60;
+            if (category == "铁丝网") return 50;
+            if (category == "道路") return 40;
+            if (category == "田埂") return 30;
+            if (category == "沟渠") return 20;
+            if (category == "界址线"
+                || string.IsNullOrWhiteSpace(category)) return 0;
+            return 10;
         }
 
         private static List<ParcelBoundaryPointRecord> SegmentPoints(

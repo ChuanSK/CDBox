@@ -80,10 +80,10 @@ namespace CDBox.RealEstate.Models
             Add(x, ParcelSurveyFieldKeys.ParcelLocation, 2, "代码与坐落", "宗地坐落", "textarea", true);
             Add(x, "parcel.mapScale", 2, "图幅信息", "所在图幅比例尺", "text", true, true, true);
             Add(x, "parcel.mapSheetNumber", 2, "图幅信息", "图幅号", "text", true, true);
-            Add(x, "parcel.northBoundary", 2, "宗地四至", "北至", "textarea", true);
-            Add(x, "parcel.eastBoundary", 2, "宗地四至", "东至", "textarea", true);
-            Add(x, "parcel.southBoundary", 2, "宗地四至", "南至", "textarea", true);
-            Add(x, "parcel.westBoundary", 2, "宗地四至", "西至", "textarea", true);
+            Add(x, "parcel.northBoundary", 5, "宗地四至", "北至", "textarea", true);
+            Add(x, "parcel.eastBoundary", 5, "宗地四至", "东至", "textarea", true);
+            Add(x, "parcel.southBoundary", 5, "宗地四至", "南至", "textarea", true);
+            Add(x, "parcel.westBoundary", 5, "宗地四至", "西至", "textarea", true);
             Add(x, "parcel.description", 2, "补充说明", "宗地说明", "textarea");
 
             // 权利人与权属

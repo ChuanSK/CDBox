@@ -1958,6 +1958,8 @@ namespace CDBox.CoreTests
                 "建宗与宗地管理操作应位于顶部第二行");
             Contains(html, "当前宗地",
                 "顶部工具区应直接提供宗地选择");
+            False(html.Contains("请选择宗地"),
+                "当前宗地列表不应再显示请选择宗地占位项");
             False(html.Contains("scopeDocument"),
                 "编辑器不得再显示图纸列表");
             False(html.Contains("定位宗地"),
@@ -1995,6 +1997,9 @@ namespace CDBox.CoreTests
             string template = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "Templates", ParcelSurveyExcelExporter.TemplateFileName);
             True(File.Exists(template), "测试输出目录应包含权籍调查表模板");
+            Equal("权籍调查表.xls",
+                ParcelSurveyExcelExporter.DefaultExportFileName,
+                "导出对话框默认文件名应固定为权籍调查表");
             string directory = NewTemporaryDirectory("parcel-survey-export");
             string output = Path.Combine(directory, "宗地测试_权籍调查表.xls");
             try
@@ -2285,6 +2290,44 @@ namespace CDBox.CoreTests
             Equal("人工北至",
                 record.Field("parcel.northBoundary").TextValue,
                 "自动刷新不得覆盖已经标记为人工的最终文字");
+
+            var priorityRecord = new ParcelSurveyRecord();
+            priorityRecord.Normalize();
+            priorityRecord.Boundary.Points = new List<ParcelBoundaryPointRecord>
+            {
+                BoundaryPoint("J1", 0, 0, 10),
+                BoundaryPoint("J2", 10, 0, 10)
+            };
+            Tuple<string, string, string>[] priorityCases =
+            {
+                Tuple.Create("门墩", "外", "门墩脚"),
+                Tuple.Create("围墙", "中", "围墙中线"),
+                Tuple.Create("墙壁", "外", "外墙脚"),
+                Tuple.Create("铁丝网", "中", "铁丝网中心线"),
+                Tuple.Create("道路", "外", "道路边线"),
+                Tuple.Create("田埂", "中", "田埂中线"),
+                Tuple.Create("沟渠", "中", "沟渠中线"),
+                Tuple.Create("界址线", "中", "界址点")
+            };
+            for (int i = 0; i < priorityCases.Length; i++)
+            {
+                priorityRecord.Boundary.Segments = priorityCases.Skip(i)
+                    .Select(x => BoundarySegment("J1", "J2", x.Item1,
+                        x.Item2, string.Empty)).ToList();
+                ParcelBoundaryDescriptionGenerator.Apply(priorityRecord, true);
+                Contains(priorityRecord.Boundary.Points[0].Description,
+                    priorityCases[i].Item3,
+                    "界址点位实体优先级应为门墩、围墙、墙壁、铁丝网、道路、田埂、沟渠、界址点");
+            }
+
+            foreach (string key in new[] { "parcel.northBoundary",
+                "parcel.eastBoundary", "parcel.southBoundary",
+                "parcel.westBoundary" })
+            {
+                Equal(5, ParcelSurveyFieldCatalog.Fields.Single(x =>
+                        x.Key == key).Tab,
+                    "宗地四至应仅归入界址调查页签");
+            }
 
             string html = ParcelSurveyEditorPage.BuildHtml(record,
                 ParcelSurveyValidator.Validate(record));

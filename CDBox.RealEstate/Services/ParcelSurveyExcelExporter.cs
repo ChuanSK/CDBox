@@ -12,6 +12,7 @@ namespace CDBox.RealEstate.Services
     public static class ParcelSurveyExcelExporter
     {
         public const string TemplateFileName = "权籍调查表.xls";
+        public const string DefaultExportFileName = "权籍调查表.xls";
         private const string HomeSheet = "首页";
         private const string BasicSheet = "基本表";
         private const string BoundaryMarkSheet = "界址标示表1";
