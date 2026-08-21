@@ -1935,7 +1935,7 @@ namespace CDBox.CoreTests
             foreach (string status in new[] { "自动", "默认", "导入", "人工",
                 "不适用" })
                 Contains(html, status, "编辑器应提供统一字段状态");
-            Contains(html, "保存宗地", "编辑器顶部应提供保存宗地按钮");
+            Contains(html, "保存宗地信息", "编辑器顶部应提供保存宗地信息按钮");
             Contains(html, "检查数据", "编辑器顶部应提供数据检查按钮");
             Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
             Contains(html, "disabled=!canEdit",
@@ -1945,8 +1945,19 @@ namespace CDBox.CoreTests
                 "编辑器不得再按完整度锁定导出按钮");
             Contains(html, "class=\"sidebar\"",
                 "编辑器应使用与污水工作台一致的左侧边栏布局");
+            int toolbarIndex = html.IndexOf("<header class=\"top\"",
+                StringComparison.Ordinal);
+            int sidebarIndex = html.IndexOf("<aside class=\"sidebar\"",
+                StringComparison.Ordinal);
+            int scopeActionsIndex = html.IndexOf("class=\"scope-actions\"",
+                StringComparison.Ordinal);
+            True(toolbarIndex >= 0 && sidebarIndex > toolbarIndex,
+                "编辑器顶部工具区应横跨左侧导航与右侧内容区");
+            True(scopeActionsIndex > toolbarIndex &&
+                scopeActionsIndex < sidebarIndex,
+                "建宗与宗地管理操作应位于顶部第二行");
             Contains(html, "当前宗地",
-                "左侧边栏应直接提供宗地选择");
+                "顶部工具区应直接提供宗地选择");
             False(html.Contains("scopeDocument"),
                 "编辑器不得再显示图纸列表");
             False(html.Contains("定位宗地"),
