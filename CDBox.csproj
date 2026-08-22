@@ -84,6 +84,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\地籍调查表.docx</TargetPath>
     </Content>
+    <Content Include="CDBox_Integrated\Templates\四张检查表.xls">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\四张检查表.xls</TargetPath>
+    </Content>
     <Content Include="CDBox_Integrated\Config\CDBoxColors.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Config\CDBoxColors.json</TargetPath>

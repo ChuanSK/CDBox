@@ -51,6 +51,25 @@ namespace CDBox.RealEstate.UI
             return dialog.FileName;
         }
 
+        public static string ExportCheckForms(ParcelSurveyRecord record)
+        {
+            record = record ?? new ParcelSurveyRecord();
+            record.Normalize();
+            var dialog = new SaveFileDialog
+            {
+                Title = "导出四张检查表",
+                Filter = "Excel 97-2003 工作簿 (*.xls)|*.xls",
+                DefaultExt = ".xls",
+                AddExtension = true,
+                FileName = ParcelSurveyCheckFormsExporter
+                    .DefaultExportFileName
+            };
+            SetInitialDirectory(dialog);
+            if (dialog.ShowDialog() != true) return string.Empty;
+            ParcelSurveyCheckFormsExporter.Export(dialog.FileName, record);
+            return dialog.FileName;
+        }
+
         private static void SetInitialDirectory(SaveFileDialog dialog)
         {
             Document document = AcadApp.DocumentManager.MdiActiveDocument;

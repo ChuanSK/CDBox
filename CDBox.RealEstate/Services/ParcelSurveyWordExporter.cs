@@ -162,12 +162,15 @@ namespace CDBox.RealEstate.Services
             XElement code = FindParagraph(table, "宗地/宗海代码");
             XElement organization = FindParagraph(table, "调查单位");
             XElement surveyDate = FindParagraph(table, "调查时间");
-            SetElementText(code, "    宗地/宗海代码："
-                + Value(record, ParcelSurveyFieldKeys.ParcelSeaCode));
-            SetElementText(organization, "    调查单位（机构）："
-                + Value(record, "project.organization"));
-            SetElementText(surveyDate, "调查时间：" + ChineseDate(
-                Value(record, "project.surveyDate")));
+            SetUnderlinedValueAfterLabel(code, "宗地/宗海代码：",
+                Value(record, ParcelSurveyFieldKeys.ParcelSeaCode));
+            SetUnderlinedValueAfterLabel(organization, "调查单位（机构）：",
+                Value(record, "project.organization"));
+            SetInlineFields(surveyDate, new[]
+            {
+                new InlineField("调查时间：", ChineseDate(
+                    Value(record, "project.surveyDate")))
+            });
         }
 
         private static void WriteBasic(XElement table,
@@ -175,7 +178,9 @@ namespace CDBox.RealEstate.Services
         {
             SetCellText(table, 1, 2, Value(record,
                 "rights.landOwnershipType"));
-            SetCellText(table, 2, 1, Value(record, "rights.identityRoles"));
+            SetCheckboxesByOrder(CellAt(table, 2, 1),
+                IsSelected(record, "rights.identityRoles", "权利人"),
+                IsSelected(record, "rights.identityRoles", "实际使用人"));
             SetCellText(table, 2, 2, Value(record,
                 ParcelSurveyFieldKeys.OwnerName));
             SetCellText(table, 2, 12, Value(record,
@@ -405,25 +410,38 @@ namespace CDBox.RealEstate.Services
                 : Value(record, "house.phone");
             string unitCode = Value(record, "house.unitCode");
 
-            SetCellText(table, 1, 0, "不动产单元代码：" + unitCode);
-            SetCellText(table, 1, 2, "县级行政区代码："
-                + Value(record, "project.countyCode")
-                + "    地籍区代码："
-                + Value(record, "project.cadastralDistrictCode")
-                + "    地籍子区代码："
-                + Value(record, "project.cadastralSubdistrictCode")
-                + "    宗地号："
-                + Value(record, ParcelSurveyFieldKeys.ParcelNumber)
-                + "    定着物单元（房屋）代码：" + unitCode);
-            SetCellText(table, 2, 2, Value(record, "house.unitType"));
+            SetInlineFields(CellAt(table, 1, 0), new[]
+            {
+                new InlineField("不动产单元代码", "：" + unitCode)
+            });
+            SetInlineFields(CellAt(table, 1, 2), new[]
+            {
+                new InlineField("县级行政区代码：",
+                    Value(record, "project.countyCode")),
+                new InlineField("地籍区代码：",
+                    Value(record, "project.cadastralDistrictCode")),
+                new InlineField("地籍子区代码：",
+                    Value(record, "project.cadastralSubdistrictCode")),
+                new InlineField("宗地号：",
+                    Value(record, ParcelSurveyFieldKeys.ParcelNumber)),
+                new InlineField("定着物单元（房屋）代码：", unitCode)
+            });
+            string unitType = Value(record, "house.unitType");
+            SetCheckboxesByOrder(CellAt(table, 2, 2),
+                string.Equals(unitType, "幢", StringComparison.Ordinal),
+                string.Equals(unitType, "层", StringComparison.Ordinal),
+                string.Equals(unitType, "套", StringComparison.Ordinal),
+                string.Equals(unitType, "间", StringComparison.Ordinal));
             SetCellText(table, 2, 15, Value(record, "project.name"));
             SetCellText(table, 3, 1, Value(record, "house.location"));
             SetCellText(table, 3, 16, Value(record, "project.postalCode"));
             string roles = followOwner
                 ? Value(record, "rights.identityRoles")
                 : Value(record, "house.identityRoles");
-            SetCellText(table, 4, 0, (roles ?? string.Empty)
-                .Replace("权利人", "所有权人"));
+            SetCheckboxesByOrder(CellAt(table, 4, 0),
+                ContainsSelection(roles, "权利人")
+                    || ContainsSelection(roles, "所有权人"),
+                ContainsSelection(roles, "实际使用人"));
             SetCellText(table, 4, 1, ownerName);
             SetCellText(table, 4, 13, certificateType);
             SetCellText(table, 5, 13, certificateNumber);
@@ -478,10 +496,13 @@ namespace CDBox.RealEstate.Services
                 "building.notes"));
             SetCellText(table, 14, 14, BuildingField(building,
                 "building.reviewOpinion"));
-            SetElementText(page.Footer, "调查员："
-                + Value(record, "project.rightsSurveyor")
-                + "                                                                 日期："
-                + ChineseDate(Value(record, "project.rightsSurveyDate")));
+            SetInlineFields(page.Footer, new[]
+            {
+                new InlineField("调查员：",
+                    Value(record, "project.rightsSurveyor")),
+                new InlineField("日期：", ChineseDate(
+                    Value(record, "project.rightsSurveyDate")))
+            });
         }
 
         private static IList<PageBlock> PrepareBoundaryPages(
@@ -631,6 +652,168 @@ namespace CDBox.RealEstate.Services
             SetElementText(CellAt(table, row, column), value);
         }
 
+        private static void SetCheckboxesByOrder(XElement element,
+            params bool[] selected)
+        {
+            if (element == null) throw new InvalidDataException(
+                "Word 模板缺少勾选项位置。");
+            var boxes = new List<XElement>();
+            foreach (XElement text in element.Descendants(W + "t"))
+            {
+                int count = (text.Value ?? string.Empty).Count(x =>
+                    x == '□' || x == '√' || x == '☑');
+                for (int i = 0; i < count; i++) boxes.Add(text);
+            }
+            if (boxes.Count < selected.Length)
+                throw new InvalidDataException(
+                    "地籍调查表 Word 模板中的勾选项数量不足。");
+            var occurrence = new Dictionary<XElement, int>();
+            for (int index = 0; index < selected.Length; index++)
+            {
+                XElement text = boxes[index];
+                int skip;
+                occurrence.TryGetValue(text, out skip);
+                string value = text.Value ?? string.Empty;
+                int found = -1;
+                for (int i = 0; i <= skip; i++)
+                {
+                    found = value.IndexOfAny(new[] { '□', '√', '☑' },
+                        found + 1);
+                    if (found < 0) break;
+                }
+                if (found >= 0)
+                {
+                    char mark = selected[index] ? '√' : '□';
+                    text.Value = value.Substring(0, found) + mark
+                        + value.Substring(found + 1);
+                    occurrence[text] = skip + 1;
+                }
+            }
+        }
+
+        private static void SetUnderlinedValueAfterLabel(XElement paragraph,
+            string label, string value)
+        {
+            if (paragraph == null) throw new InvalidDataException(
+                "Word 模板缺少带下划线的填写位置。");
+            List<XElement> texts = paragraph.Descendants(W + "t").ToList();
+            string full = string.Concat(texts.Select(x => x.Value));
+            int labelStart = full.IndexOf(label, StringComparison.Ordinal);
+            if (labelStart < 0) throw new InvalidDataException(
+                "地籍调查表 Word 模板缺少字段：“" + label + "”。");
+            int labelEnd = labelStart + label.Length;
+            int position = 0;
+            var slot = new List<XElement>();
+            foreach (XElement text in texts)
+            {
+                int end = position + (text.Value ?? string.Empty).Length;
+                XElement runProperties = text.Parent == null ? null
+                    : text.Parent.Element(W + "rPr");
+                XElement underline = runProperties == null ? null
+                    : runProperties.Element(W + "u");
+                string underlineValue = underline == null ? string.Empty
+                    : ((string)underline.Attribute(W + "val") ?? "single");
+                if (end > labelEnd && underline != null
+                    && !string.Equals(underlineValue, "none",
+                        StringComparison.OrdinalIgnoreCase))
+                    slot.Add(text);
+                position = end;
+            }
+            if (slot.Count == 0) throw new InvalidDataException(
+                "地籍调查表 Word 模板字段“" + label
+                + "”后缺少带下划线的填写位置。");
+            int capacity = slot.Sum(x => (x.Value ?? string.Empty).Length);
+            value = value ?? string.Empty;
+            string padded = value + new string(' ', Math.Max(1,
+                capacity - value.Length));
+            slot[0].Value = padded;
+            SetPreserveSpace(slot[0]);
+            for (int i = 1; i < slot.Count; i++) slot[i].Value = string.Empty;
+        }
+
+        private static void SetInlineFields(XElement element,
+            IList<InlineField> fields)
+        {
+            if (element == null) throw new InvalidDataException(
+                "Word 模板缺少待填写位置。");
+            if (fields == null || fields.Count == 0) return;
+            List<XElement> texts = element.Descendants(W + "t").ToList();
+            string full = string.Concat(texts.Select(x => x.Value));
+            var labelStarts = new int[fields.Count];
+            int searchFrom = 0;
+            for (int i = 0; i < fields.Count; i++)
+            {
+                labelStarts[i] = full.IndexOf(fields[i].Label, searchFrom,
+                    StringComparison.Ordinal);
+                if (labelStarts[i] < 0) throw new InvalidDataException(
+                    "地籍调查表 Word 模板缺少字段：“"
+                    + fields[i].Label + "”。");
+                searchFrom = labelStarts[i] + fields[i].Label.Length;
+            }
+            var spans = new List<TextSpan>();
+            int position = 0;
+            foreach (XElement text in texts)
+            {
+                string current = text.Value ?? string.Empty;
+                spans.Add(new TextSpan(text, position,
+                    position + current.Length));
+                position += current.Length;
+            }
+            for (int i = fields.Count - 1; i >= 0; i--)
+            {
+                int start = labelStarts[i] + fields[i].Label.Length;
+                int end = i + 1 < fields.Count ? labelStarts[i + 1]
+                    : full.Length;
+                string value = fields[i].Value ?? string.Empty;
+                if (i + 1 < fields.Count) value += "    ";
+                ReplaceTextSpan(element, spans, start, end, value);
+            }
+        }
+
+        private static void ReplaceTextSpan(XElement element,
+            IList<TextSpan> spans, int start, int end, string value)
+        {
+            List<TextSpan> affected = spans.Where(x => x.End > start
+                && x.Start < end).ToList();
+            if (affected.Count == 0)
+            {
+                XElement lastText = element.Descendants(W + "t")
+                    .LastOrDefault();
+                XElement paragraph = element.Name == W + "p" ? element
+                    : element.Descendants(W + "p").LastOrDefault();
+                if (paragraph == null) throw new InvalidDataException(
+                    "Word 模板缺少可继承样式的段落。");
+                XElement run = lastText == null ? null : lastText.Parent;
+                XElement clone = new XElement(W + "r");
+                XElement properties = run == null ? null
+                    : run.Element(W + "rPr");
+                if (properties != null) clone.Add(new XElement(properties));
+                var text = new XElement(W + "t", value);
+                SetPreserveSpace(text);
+                clone.Add(text);
+                paragraph.Add(clone);
+                return;
+            }
+            TextSpan target = affected.FirstOrDefault(x =>
+            {
+                string source = x.Text.Value ?? string.Empty;
+                int localStart = Math.Max(0, start - x.Start);
+                int localEnd = Math.Min(source.Length, end - x.Start);
+                return localEnd > localStart && source.Substring(localStart,
+                    localEnd - localStart).Trim().Length == 0;
+            }) ?? affected[0];
+            foreach (TextSpan span in affected)
+            {
+                string source = span.Text.Value ?? string.Empty;
+                int localStart = Math.Max(0, start - span.Start);
+                int localEnd = Math.Min(source.Length, end - span.Start);
+                string replacement = span == target ? value : string.Empty;
+                span.Text.Value = source.Substring(0, localStart)
+                    + replacement + source.Substring(localEnd);
+                SetPreserveSpace(span.Text);
+            }
+        }
+
         private static void SetElementText(XElement element, string value)
         {
             if (element == null) throw new InvalidDataException(
@@ -672,6 +855,26 @@ namespace CDBox.RealEstate.Services
                 SetPreserveSpace(text);
                 parentRun.Add(text);
             }
+        }
+
+        private static bool IsSelected(ParcelSurveyRecord record,
+            string key, string option)
+        {
+            ParcelSurveyFieldValue field = record.Field(key);
+            if (field != null && field.Selections != null
+                && field.Selections.Any(x => string.Equals((x ?? string.Empty)
+                    .Trim(), option, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            return ContainsSelection(Value(record, key), option);
+        }
+
+        private static bool ContainsSelection(string value, string option)
+        {
+            return (value ?? string.Empty).Split(new[] { '、', ',', '，',
+                    ';', '；', '/', '|', '\n', '\r' },
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Any(x => string.Equals(x.Trim(), option,
+                    StringComparison.OrdinalIgnoreCase));
         }
 
         private static void ClearElementText(XElement element)
@@ -926,6 +1129,32 @@ namespace CDBox.RealEstate.Services
         {
             return ElementText(table).StartsWith("调查审核表",
                 StringComparison.Ordinal);
+        }
+
+        private sealed class InlineField
+        {
+            public InlineField(string label, string value)
+            {
+                Label = label ?? string.Empty;
+                Value = value ?? string.Empty;
+            }
+
+            public string Label { get; private set; }
+            public string Value { get; private set; }
+        }
+
+        private sealed class TextSpan
+        {
+            public TextSpan(XElement text, int start, int end)
+            {
+                Text = text;
+                Start = start;
+                End = end;
+            }
+
+            public XElement Text { get; private set; }
+            public int Start { get; private set; }
+            public int End { get; private set; }
         }
 
         private sealed class PageBlock

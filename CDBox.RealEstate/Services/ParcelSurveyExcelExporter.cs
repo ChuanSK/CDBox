@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using CDBox.RealEstate.Models;
+using NPOI.HSSF.Record;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 
@@ -122,7 +124,11 @@ namespace CDBox.RealEstate.Services
         {
             ISheet sheet = RequireSheet(workbook, BasicSheet);
             SetText(sheet, 1, 6, Value(record, "rights.landOwnershipType"));
-            SetText(sheet, 2, 3, Value(record, "rights.identityRoles"));
+            SetCheckboxStates(sheet, new[]
+            {
+                IsSelected(record, "rights.identityRoles", "权利人"),
+                IsSelected(record, "rights.identityRoles", "实际使用人")
+            });
             SetText(sheet, 2, 6, Value(record,
                 ParcelSurveyFieldKeys.OwnerName));
             SetText(sheet, 2, 17, Value(record,
@@ -343,15 +349,23 @@ namespace CDBox.RealEstate.Services
                 + Value(record, "project.cadastralSubdistrictCode")
                 + "    宗地号：" + parcelNumber
                 + "    定着物单元（房屋）代码：" + unitCode);
-            SetText(sheet, 2, 6, Value(record, "house.unitType"));
+            string unitType = Value(record, "house.unitType");
             SetText(sheet, 2, 37, Value(record, "project.name"));
             SetText(sheet, 3, 4, Value(record, "house.location"));
             SetText(sheet, 3, 38, Value(record, "project.postalCode"));
             string roles = followOwner
                 ? Value(record, "rights.identityRoles")
                 : Value(record, "house.identityRoles");
-            roles = roles.Replace("权利人", "所有权人");
-            SetText(sheet, 4, 0, roles);
+            SetCheckboxStates(sheet, new[]
+            {
+                string.Equals(unitType, "幢", StringComparison.Ordinal),
+                string.Equals(unitType, "层", StringComparison.Ordinal),
+                string.Equals(unitType, "套", StringComparison.Ordinal),
+                string.Equals(unitType, "间", StringComparison.Ordinal),
+                ContainsSelection(roles, "权利人")
+                    || ContainsSelection(roles, "所有权人"),
+                ContainsSelection(roles, "实际使用人")
+            });
             SetText(sheet, 4, 4, ownerName);
             SetText(sheet, 4, 31, certificateType);
             SetText(sheet, 5, 31, certificateNumber);
@@ -570,6 +584,49 @@ namespace CDBox.RealEstate.Services
             EnsureCell(sheet, row, column).SetCellValue(value ?? string.Empty);
         }
 
+        private static void SetCheckboxStates(ISheet sheet,
+            IList<bool> selected)
+        {
+            HSSFSheet hssfSheet = sheet as HSSFSheet;
+            HSSFPatriarch patriarch = hssfSheet == null ? null
+                : hssfSheet.DrawingPatriarch as HSSFPatriarch;
+            IList<HSSFShape> shapes = patriarch == null
+                ? new List<HSSFShape>() : patriarch.Children
+                    .OfType<HSSFSimpleShape>()
+                    .Where(x => x.ShapeType == 201)
+                    .Cast<HSSFShape>().ToList();
+            if (shapes.Count < selected.Count)
+                throw new InvalidDataException("权籍调查表模板工作表“"
+                    + sheet.SheetName + "”中的复选框数量不足。");
+            for (int i = 0; i < selected.Count; i++)
+                SetCheckboxState(shapes[i], selected[i]);
+        }
+
+        private static void SetCheckboxState(HSSFShape shape, bool selected)
+        {
+            FieldInfo objectRecordField = typeof(HSSFShape).GetField(
+                "_objRecord", BindingFlags.Instance | BindingFlags.NonPublic);
+            ObjRecord objectRecord = objectRecordField == null ? null
+                : objectRecordField.GetValue(shape) as ObjRecord;
+            if (objectRecord == null) throw new InvalidDataException(
+                "权籍调查表模板中的复选框对象结构无效。");
+            bool changed = false;
+            foreach (SubRecord subRecord in objectRecord.SubRecords)
+            {
+                if (subRecord.Sid != 0x000A && subRecord.Sid != 0x0012)
+                    continue;
+                FieldInfo dataField = subRecord.GetType().GetField("_data",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                byte[] data = dataField == null ? null
+                    : dataField.GetValue(subRecord) as byte[];
+                if (data == null || data.Length == 0) continue;
+                data[0] = selected ? (byte)1 : (byte)0;
+                changed = true;
+            }
+            if (!changed) throw new InvalidDataException(
+                "权籍调查表模板中的复选框状态记录无效。");
+        }
+
         private static void SetNumber(ISheet sheet, int row, int column,
             decimal? value)
         {
@@ -630,6 +687,26 @@ namespace CDBox.RealEstate.Services
             if (field.Selections != null && field.Selections.Count > 0)
                 return string.Join("、", field.Selections);
             return field.TextValue ?? string.Empty;
+        }
+
+        internal static bool IsSelected(ParcelSurveyRecord record,
+            string key, string option)
+        {
+            ParcelSurveyFieldValue field = record.Field(key);
+            if (field != null && field.Selections != null
+                && field.Selections.Any(x => string.Equals((x ?? string.Empty)
+                    .Trim(), option, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            return ContainsSelection(Value(record, key), option);
+        }
+
+        internal static bool ContainsSelection(string value, string option)
+        {
+            return (value ?? string.Empty).Split(new[] { '、', ',', '，',
+                    ';', '；', '/', '|', '\n', '\r' },
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Any(x => string.Equals(x.Trim(), option,
+                    StringComparison.OrdinalIgnoreCase));
         }
 
         internal static bool Boolean(ParcelSurveyRecord record, string key)

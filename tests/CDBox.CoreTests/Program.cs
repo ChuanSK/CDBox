@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
@@ -41,6 +42,7 @@ using TCPipeAutoDraw.UI;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOI.HSSF.UserModel;
+using NPOI.HSSF.Record;
 using NPOI.XSSF.UserModel;
 
 namespace CDBox.CoreTests
@@ -76,6 +78,8 @@ namespace CDBox.CoreTests
             Run("权籍调查表模板导出与续表", TestParcelSurveyExcelExport);
             Run("地籍调查表 Word 模板导出与续页",
                 TestParcelSurveyWordExport);
+            Run("四张检查表模板导出与公式保留",
+                TestParcelSurveyCheckFormsExport);
             Run("界址范围选择与说明自动生成", TestParcelBoundaryRangeAndDescriptions);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
@@ -1970,6 +1974,8 @@ namespace CDBox.CoreTests
                 "导出下拉框应预留 Word 文档入口");
             Contains(html, "导出为 Excel 表格",
                 "导出下拉框应提供现有 Excel 导出入口");
+            Contains(html, "导出四张检查表",
+                "导出下拉框应提供四张检查表入口");
             False(html.Contains("Word 文档导出功能暂未实现"),
                 "Word 文档导出入口接入后不得再提示尚未实现");
             Contains(html, "data-export-format=\"excel\"",
@@ -1978,6 +1984,8 @@ namespace CDBox.CoreTests
                 "Word 下拉选项应调用 Word 调查表导出流程");
             Contains(html, "post('exportParcelExcel',JSON.stringify(draft))",
                 "Excel 下拉选项应调用 Excel 调查表导出流程");
+            Contains(html, "post('exportParcelChecks',JSON.stringify(draft))",
+                "四张检查表下拉选项应调用独立导出流程");
             Contains(html, "disabled=!canEdit",
                 "已绑定宗地应允许直接导出");
             False(html.IndexOf("disabled=!v.CanExport",
@@ -2230,6 +2238,13 @@ namespace CDBox.CoreTests
                         Equal(CellType.String, workbook.GetSheet("基本表")
                             .GetRow(4).GetCell(17).CellType,
                             "证件号码必须以文本写入，避免变为科学计数法");
+                        IList<bool> basicChecks = HssfCheckboxStates(
+                            workbook.GetSheet("基本表"));
+                        Equal(2, basicChecks.Count,
+                            "宗地基本表应保留两个身份角色复选框");
+                        True(basicChecks[0], "权利人复选框应按宗地信息勾选");
+                        False(basicChecks[1],
+                            "未选择实际使用人时对应复选框应取消勾选");
                         ISheet marks = workbook.GetSheet("界址标示表1");
                         Equal("√", marks.GetRow(3).GetCell(4).StringCellValue,
                             "喷涂界标应在对应列写入勾选符号");
@@ -2247,6 +2262,17 @@ namespace CDBox.CoreTests
                         Equal("2", workbook.GetSheet("房屋调查表2")
                             .GetRow(12).GetCell(4).StringCellValue,
                             "多幢房屋应逐幢生成调查表");
+                        IList<bool> houseChecks = HssfCheckboxStates(
+                            workbook.GetSheet("房屋调查表"));
+                        Equal(6, houseChecks.Count,
+                            "房屋调查表应保留六个模版复选框");
+                        True(houseChecks[0], "定着物类型“幢”应被勾选");
+                        False(houseChecks[1], "定着物类型“层”不应被勾选");
+                        False(houseChecks[2], "定着物类型“套”不应被勾选");
+                        False(houseChecks[3], "定着物类型“间”不应被勾选");
+                        True(houseChecks[4], "房屋所有权人应被勾选");
+                        False(houseChecks[5],
+                            "未选择实际使用人时房屋对应复选框应取消勾选");
                         ISheet audit = workbook.GetSheet("调查审核表");
                         Equal(templateAuditValues[0], audit.GetRow(1)
                             .GetCell(1).ToString(),
@@ -2262,6 +2288,15 @@ namespace CDBox.CoreTests
                     {
                         workbook.Close();
                     }
+                }
+                string qaExcelOutput = Environment.GetEnvironmentVariable(
+                    "CDBOX_EXCEL_QA_OUTPUT");
+                if (!string.IsNullOrWhiteSpace(qaExcelOutput))
+                {
+                    string qaDirectory = Path.GetDirectoryName(qaExcelOutput);
+                    if (!string.IsNullOrWhiteSpace(qaDirectory))
+                        Directory.CreateDirectory(qaDirectory);
+                    File.Copy(output, qaExcelOutput, true);
                 }
             }
             finally
@@ -2430,6 +2465,36 @@ namespace CDBox.CoreTests
                 True(File.Exists(output), "导出器应生成 Word 文档");
                 XDocument document = ReadWordDocument(output);
                 IList<XElement> tables = WordTables(document);
+                XElement templateCodeSlot = templateDocument
+                    .Descendants(WordMl + "p")
+                    .First(x => WordText(x).Contains("宗地/宗海代码"))
+                    .Descendants(WordMl + "t").First(WordTextIsUnderlined);
+                XElement templateOrganizationSlot = templateDocument
+                    .Descendants(WordMl + "p")
+                    .First(x => WordText(x).Contains("调查单位"))
+                    .Descendants(WordMl + "t").First(WordTextIsUnderlined);
+                XElement codeValue = document.Descendants(WordMl + "t")
+                    .First(x => x.Value.Contains("532525000000GB00001"));
+                XElement organizationValue = document
+                    .Descendants(WordMl + "t")
+                    .First(x => x.Value.Contains("测试调查机构"));
+                True(WordTextIsUnderlined(codeValue),
+                    "Word 首页宗地代码应保留模版文字下划线");
+                True(WordTextIsUnderlined(organizationValue),
+                    "Word 首页调查单位应保留模版文字下划线");
+                Equal(WordRunStyleSignature(templateCodeSlot),
+                    WordRunStyleSignature(codeValue),
+                    "宗地代码应使用模版填写位置的字体与字号");
+                Equal(WordRunStyleSignature(templateOrganizationSlot),
+                    WordRunStyleSignature(organizationValue),
+                    "调查单位应使用模版填写位置的字体与字号");
+
+                XElement basic = tables.First(WordIsBasicTable);
+                string basicRoles = WordCellText(basic, 2, 1);
+                Contains(basicRoles, "√权利人",
+                    "Word 宗地基本表应勾选权利人选项");
+                Contains(basicRoles, "□实际使用人",
+                    "Word 宗地基本表应保留未选身份角色方框");
                 IList<XElement> marks = tables.Where(WordIsBoundaryMarkTable)
                     .ToList();
                 Equal(3, marks.Count,
@@ -2455,6 +2520,17 @@ namespace CDBox.CoreTests
                     "无中间点的 Word 签章组应输出斜杠");
                 Equal(2, tables.Count(WordIsHouseTable),
                     "多幢房屋应逐幢生成 Word 房屋调查表");
+                XElement firstHouse = tables.First(WordIsHouseTable);
+                string unitTypes = WordCellText(firstHouse, 2, 2);
+                Contains(unitTypes, "√幢",
+                    "Word 房屋调查表应勾选“幢”类型");
+                Contains(unitTypes, "□层",
+                    "Word 房屋调查表应保留未选“层”方框");
+                string houseRoles = WordCellText(firstHouse, 4, 0);
+                Contains(houseRoles, "√所有权人",
+                    "Word 房屋调查表应勾选所有权人");
+                Contains(houseRoles, "□实际使用人",
+                    "Word 房屋调查表应保留未选实际使用人方框");
                 True(document.Descendants(WordMl + "br").Any(x =>
                         string.Equals((string)x.Attribute(WordMl + "type"),
                             "page", StringComparison.OrdinalIgnoreCase)),
@@ -2477,6 +2553,131 @@ namespace CDBox.CoreTests
 
                 string qaOutput = Environment.GetEnvironmentVariable(
                     "CDBOX_WORD_QA_OUTPUT");
+                if (!string.IsNullOrWhiteSpace(qaOutput))
+                {
+                    string qaDirectory = Path.GetDirectoryName(qaOutput);
+                    if (!string.IsNullOrWhiteSpace(qaDirectory))
+                        Directory.CreateDirectory(qaDirectory);
+                    File.Copy(output, qaOutput, true);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestParcelSurveyCheckFormsExport()
+        {
+            string template = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Templates", ParcelSurveyCheckFormsExporter.TemplateFileName);
+            True(File.Exists(template),
+                "测试输出目录应包含四张检查表模板");
+            Equal("四张检查表.xls",
+                ParcelSurveyCheckFormsExporter.DefaultExportFileName,
+                "四张检查表导出文件名应与模板一致");
+            string directory = NewTemporaryDirectory(
+                "parcel-survey-check-forms");
+            string output = Path.Combine(directory, "四张检查表.xls");
+            try
+            {
+                var record = new ParcelSurveyRecord();
+                record.Normalize();
+                record.Boundary.ParcelBoundaryClosed = true;
+                for (int i = 0; i < 21; i++)
+                {
+                    ParcelBoundaryPointRecord point = BoundaryPoint(
+                        "J" + (i + 1), 2624000m + i + 0.25m,
+                        549800m + i + 0.5m, 1.25m + i / 100m);
+                    point.MarkerType = i == 1 ? "钢钉" : "喷涂";
+                    record.Boundary.Points.Add(point);
+                }
+                var building = new ParcelBuildingRecord();
+                building.Normalize();
+                building.Fields["building.number"].TextValue = "F0007";
+                record.Buildings.Add(building);
+
+                ParcelSurveyCheckFormsExporter.Export(template, output,
+                    record);
+                True(File.Exists(output), "应成功导出四张检查表工作簿");
+                using (FileStream input = File.OpenRead(output))
+                {
+                    var workbook = new HSSFWorkbook(input);
+                    try
+                    {
+                        ISheet coordinates = workbook.GetSheet(
+                            "坐标检测成果表");
+                        Equal("J1", coordinates.GetRow(3).GetCell(0)
+                            .StringCellValue, "坐标检测表应写入界址点号");
+                        Near(2624000.25, coordinates.GetRow(3).GetCell(1)
+                            .NumericCellValue, 1e-9,
+                            "坐标检测表应写入已知 X 坐标");
+                        Near(549800.5, coordinates.GetRow(3).GetCell(2)
+                            .NumericCellValue, 1e-9,
+                            "坐标检测表应写入已知 Y 坐标");
+                        Equal(string.Empty, coordinates.GetRow(3).GetCell(3)
+                            .ToString(), "检测坐标应留给用户填写");
+                        Equal(CellType.Formula, coordinates.GetRow(3)
+                            .GetCell(5).CellType,
+                            "坐标差值单元格应保留模板公式");
+                        Equal("界址点", coordinates.GetRow(3).GetCell(6)
+                            .StringCellValue, "坐标检测备注应保持模板原样");
+                        Equal("J20", workbook.GetSheet("坐标检测成果表2")
+                            .GetRow(3).GetCell(0).StringCellValue,
+                            "超过十九个界址点时坐标检测表应自动续表");
+
+                        ISheet distances = workbook.GetSheet(
+                            "间距检测成果表");
+                        Equal("J1-J2", distances.GetRow(2).GetCell(0)
+                            .StringCellValue, "间距检测表应写入点号组合");
+                        Near(1.25, distances.GetRow(2).GetCell(1)
+                            .NumericCellValue, 1e-9,
+                            "间距检测表应写入已知边长");
+                        Equal(string.Empty, distances.GetRow(2).GetCell(2)
+                            .ToString(), "检测边长应留给用户填写");
+                        Equal(CellType.Formula, distances.GetRow(2)
+                            .GetCell(3).CellType,
+                            "间距差值单元格应保留模板公式");
+                        Equal("界址点至界址点", distances.GetRow(2)
+                            .GetCell(4).StringCellValue,
+                            "间距检测备注应保持模板原样");
+
+                        ISheet points = workbook.GetSheet("点测量成果表");
+                        Equal("J2", points.GetRow(3).GetCell(0)
+                            .StringCellValue, "点测量表应按宗地顺序填写");
+                        Equal("钢钉", points.GetRow(3).GetCell(3)
+                            .StringCellValue, "点测量表应填写界标种类");
+
+                        ISheet buildingEdges = workbook.GetSheet(
+                            "房屋边长检查记录表");
+                        Equal("房屋编号：F0007", buildingEdges.GetRow(1)
+                            .GetCell(0).StringCellValue,
+                            "房屋边长检查表应填写首幢房屋编号");
+                        Equal("1", buildingEdges.GetRow(3).GetCell(0)
+                            .StringCellValue, "房屋边长应自动填写序号");
+                        Near(1.25, buildingEdges.GetRow(3).GetCell(1)
+                            .NumericCellValue, 1e-9,
+                            "房屋边长检查表应填写原测边长");
+                        Equal(string.Empty, buildingEdges.GetRow(3)
+                            .GetCell(2).ToString(),
+                            "房屋检测边长应留给用户填写");
+                        Equal(CellType.Formula, buildingEdges.GetRow(3)
+                            .GetCell(3).CellType,
+                            "房屋边长差值应保留模板公式");
+                        Equal("钢尺丈量", buildingEdges.GetRow(3)
+                            .GetCell(4).StringCellValue,
+                            "房屋边长备注应保持模板原样");
+                        True(workbook.GetSheet("房屋边长检查记录表2")
+                            != null, "超过十九条边时房屋检查表应自动续表");
+                    }
+                    finally
+                    {
+                        workbook.Close();
+                    }
+                }
+
+                string qaOutput = Environment.GetEnvironmentVariable(
+                    "CDBOX_CHECKS_QA_OUTPUT");
                 if (!string.IsNullOrWhiteSpace(qaOutput))
                 {
                     string qaDirectory = Path.GetDirectoryName(qaOutput);
@@ -3919,6 +4120,69 @@ namespace CDBox.CoreTests
                 element.Descendants(WordMl + "t").Select(x => x.Value));
         }
 
+        private static bool WordTextIsUnderlined(XElement text)
+        {
+            XElement runProperties = text == null || text.Parent == null
+                ? null : text.Parent.Element(WordMl + "rPr");
+            XElement underline = runProperties == null ? null
+                : runProperties.Element(WordMl + "u");
+            string value = underline == null ? string.Empty
+                : ((string)underline.Attribute(WordMl + "val") ?? "single");
+            return underline != null && !string.Equals(value, "none",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string WordRunStyleSignature(XElement text)
+        {
+            XElement properties = text == null || text.Parent == null
+                ? null : text.Parent.Element(WordMl + "rPr");
+            if (properties == null) return string.Empty;
+            XElement fonts = properties.Element(WordMl + "rFonts");
+            XElement size = properties.Element(WordMl + "sz");
+            XElement sizeCs = properties.Element(WordMl + "szCs");
+            return string.Join("|", new[]
+            {
+                fonts == null ? string.Empty
+                    : (string)fonts.Attribute(WordMl + "ascii") ?? string.Empty,
+                fonts == null ? string.Empty
+                    : (string)fonts.Attribute(WordMl + "hAnsi") ?? string.Empty,
+                fonts == null ? string.Empty
+                    : (string)fonts.Attribute(WordMl + "eastAsia") ?? string.Empty,
+                size == null ? string.Empty
+                    : (string)size.Attribute(WordMl + "val") ?? string.Empty,
+                sizeCs == null ? string.Empty
+                    : (string)sizeCs.Attribute(WordMl + "val") ?? string.Empty
+            });
+        }
+
+        private static IList<bool> HssfCheckboxStates(ISheet sheet)
+        {
+            HSSFSheet hssf = sheet as HSSFSheet;
+            HSSFPatriarch patriarch = hssf == null ? null
+                : hssf.DrawingPatriarch as HSSFPatriarch;
+            if (patriarch == null) return new List<bool>();
+            var result = new List<bool>();
+            FieldInfo objectRecordField = typeof(HSSFShape).GetField(
+                "_objRecord", BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (HSSFSimpleShape shape in patriarch.Children
+                .OfType<HSSFSimpleShape>().Where(x => x.ShapeType == 201))
+            {
+                ObjRecord objectRecord = objectRecordField == null ? null
+                    : objectRecordField.GetValue(shape) as ObjRecord;
+                SubRecord state = objectRecord == null ? null
+                    : objectRecord.SubRecords.FirstOrDefault(x =>
+                        x.Sid == 0x0012);
+                FieldInfo dataField = state == null ? null
+                    : state.GetType().GetField("_data",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                byte[] data = dataField == null ? null
+                    : dataField.GetValue(state) as byte[];
+                result.Add(data != null && data.Length > 0
+                    && data[0] != 0);
+            }
+            return result;
+        }
+
         private static XElement WordCell(XElement table, int rowIndex,
             int logicalColumn)
         {
@@ -3966,6 +4230,12 @@ namespace CDBox.CoreTests
         private static bool WordIsHouseTable(XElement table)
         {
             return WordText(table).StartsWith("房屋基本信息调查表",
+                StringComparison.Ordinal);
+        }
+
+        private static bool WordIsBasicTable(XElement table)
+        {
+            return WordText(table).StartsWith("宗地基本信息表",
                 StringComparison.Ordinal);
         }
 
