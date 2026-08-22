@@ -74,6 +74,8 @@ namespace CDBox.CoreTests
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
             Run("独立宗地选择、命名与数据隔离", TestIndependentParcelSelection);
+            Run("界址点坐标约定与旧数据迁移",
+                TestParcelBoundaryCoordinateConvention);
             Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
             Run("权籍调查表模板导出与续表", TestParcelSurveyExcelExport);
             Run("地籍调查表 Word 模板导出与续页",
@@ -1428,10 +1430,10 @@ namespace CDBox.CoreTests
         {
             Equal(string.Join("|", new[]
                 {
-                    "选择宗地", "填写界址段", "填写邻宗信息", "---",
-                    "宗地调查数据编辑器", "---", "注记建筑边长",
-                    "建筑边长注记设置", "---", "CDBox不动产工作区",
-                    "CDBox设置"
+                    "▣ 选择宗地", "✎ 填写界址段", "◇ 填写邻宗信息", "---",
+                    "▤ 宗地调查数据编辑器", "---", "▱ 注记建筑边长",
+                    "⚙ 建筑边长注记设置", "---", "▦ CDBox不动产工作区",
+                    "⚙ CDBox设置"
                 }), string.Join("|", RealEstateMenuLayout.Items.Select(item =>
                     item.IsSeparator ? "---" : item.Label)),
                 "不动产菜单应按业务流程排序并保留三处分隔线");
@@ -1855,6 +1857,77 @@ namespace CDBox.CoreTests
                         Y = 10m, DistanceToNext = 10m }
                 }
             };
+        }
+
+        private static void TestParcelBoundaryCoordinateConvention()
+        {
+            Equal(2624000.5m,
+                ParcelBoundaryCoordinateConvention.SurveyXFromCad(
+                    550000.25m, 2624000.5m),
+                "地籍 X 应取 CAD 纵坐标（北坐标）");
+            Equal(550000.25m,
+                ParcelBoundaryCoordinateConvention.SurveyYFromCad(
+                    550000.25m, 2624000.5m),
+                "地籍 Y 应取 CAD 横坐标（东坐标）");
+            Equal(550000.25m,
+                ParcelBoundaryCoordinateConvention.CadXFromSurvey(
+                    2624000.5m, 550000.25m),
+                "图上吸附应把地籍 Y 还原为 CAD 横坐标");
+            Equal(2624000.5m,
+                ParcelBoundaryCoordinateConvention.CadYFromSurvey(
+                    2624000.5m, 550000.25m),
+                "图上吸附应把地籍 X 还原为 CAD 纵坐标");
+
+            var legacy = new ParcelBoundaryData
+            {
+                SourceObjectHandle = "1A",
+                Points = new List<ParcelBoundaryPointRecord>
+                {
+                    BoundaryPoint("J1", 550000.25m, 2624000.5m, 1m)
+                }
+            };
+            legacy.Normalize();
+            Equal(2624000.5m, legacy.Points[0].X.Value,
+                "旧版 CAD 识别宗地应自动交换为正确地籍 X");
+            Equal(550000.25m, legacy.Points[0].Y.Value,
+                "旧版 CAD 识别宗地应自动交换为正确地籍 Y");
+            Equal(ParcelBoundaryCoordinateConvention.Current,
+                legacy.CoordinateConvention,
+                "迁移后应记录坐标约定，防止重复交换");
+            legacy.Normalize();
+            Equal(2624000.5m, legacy.Points[0].X.Value,
+                "旧宗地坐标迁移必须只执行一次");
+
+            var current = new ParcelSurveyRecord();
+            current.Normalize();
+            ParcelBoundaryRecognitionApplicator.Apply(current,
+                new ParcelBoundaryCadSelection
+                {
+                    SourceObjectHandle = "2B",
+                    NativeClockwise = false,
+                    ConfiguredClockwise = false,
+                    SelectedStartSourceIndex = 0,
+                    StartPointNumber = 1,
+                    Vertices = new List<ParcelBoundaryCadVertex>
+                    {
+                        new ParcelBoundaryCadVertex { SourceIndex = 0,
+                            X = 2624000m, Y = 550000m,
+                            DistanceToNext = 10m },
+                        new ParcelBoundaryCadVertex { SourceIndex = 1,
+                            X = 2624000m, Y = 550010m,
+                            DistanceToNext = 10m },
+                        new ParcelBoundaryCadVertex { SourceIndex = 2,
+                            X = 2623990m, Y = 550010m,
+                            DistanceToNext = 10m },
+                        new ParcelBoundaryCadVertex { SourceIndex = 3,
+                            X = 2623990m, Y = 550000m,
+                            DistanceToNext = 10m }
+                    }
+                });
+            Equal(2624000m, current.Boundary.Points[0].X.Value,
+                "新识别宗地不得再次交换已经转换的地籍 X");
+            Equal(550000m, current.Boundary.Points[0].Y.Value,
+                "新识别宗地不得再次交换已经转换的地籍 Y");
         }
 
         private static void TestParcelSurveyValidationAndPage()
@@ -2699,9 +2772,9 @@ namespace CDBox.CoreTests
             record.Boundary.ParcelBoundaryClosed = true;
             record.Boundary.Points = new List<ParcelBoundaryPointRecord>
             {
-                BoundaryPoint("J1", 0, 10, 10),
+                BoundaryPoint("J1", 10, 0, 10),
                 BoundaryPoint("J2", 10, 10, 10),
-                BoundaryPoint("J3", 10, 0, 10),
+                BoundaryPoint("J3", 0, 10, 10),
                 BoundaryPoint("J4", 0, 0, 10)
             };
             record.Boundary.Segments = new List<ParcelBoundarySegmentRecord>

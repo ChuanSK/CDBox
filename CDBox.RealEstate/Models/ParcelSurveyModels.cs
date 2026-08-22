@@ -171,6 +171,7 @@ namespace CDBox.RealEstate.Models
         public bool ParcelBoundaryClosed { get; set; }
         public string SourceObjectHandle { get; set; }
         public string SourceLayerName { get; set; }
+        public string CoordinateConvention { get; set; }
         public bool SourceClockwise { get; set; }
         public decimal? SourceArea { get; set; }
         public List<ParcelBoundaryPointRecord> Points { get; set; }
@@ -188,6 +189,7 @@ namespace CDBox.RealEstate.Models
         {
             SourceObjectHandle = SourceObjectHandle ?? string.Empty;
             SourceLayerName = SourceLayerName ?? string.Empty;
+            CoordinateConvention = CoordinateConvention ?? string.Empty;
             Points = Points ?? new List<ParcelBoundaryPointRecord>();
             Segments = Segments ?? new List<ParcelBoundarySegmentRecord>();
             SignatureGroups = SignatureGroups ??
@@ -197,6 +199,7 @@ namespace CDBox.RealEstate.Models
                 if (Points[i] == null) Points[i] = new ParcelBoundaryPointRecord();
                 Points[i].Normalize(i + 1);
             }
+            ParcelBoundaryCoordinateConvention.Normalize(this);
             foreach (ParcelBoundarySegmentRecord segment in Segments)
                 if (segment != null) segment.Normalize();
             foreach (ParcelBoundarySignatureGroupRecord group in SignatureGroups)

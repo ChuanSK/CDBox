@@ -39,17 +39,17 @@ namespace TCPipeAutoDraw.UI
         private static readonly IReadOnlyList<RealEstateMenuItem> MenuItems =
             Array.AsReadOnly(new[]
             {
-                RealEstateMenuItem.Command("选择宗地", "CDRESELECTPARCEL"),
-                RealEstateMenuItem.Command("填写界址段", "CDREFILLSEGMENT"),
-                RealEstateMenuItem.Command("填写邻宗信息", "CDREFILLNEIGHBOR"),
+                RealEstateMenuItem.Command("▣ 选择宗地", "CDRESELECTPARCEL"),
+                RealEstateMenuItem.Command("✎ 填写界址段", "CDREFILLSEGMENT"),
+                RealEstateMenuItem.Command("◇ 填写邻宗信息", "CDREFILLNEIGHBOR"),
                 RealEstateMenuItem.Separator(),
-                RealEstateMenuItem.Command("宗地调查数据编辑器", "CDREDJ"),
+                RealEstateMenuItem.Command("▤ 宗地调查数据编辑器", "CDREDJ"),
                 RealEstateMenuItem.Separator(),
-                RealEstateMenuItem.Command("注记建筑边长", "CDREBL"),
-                RealEstateMenuItem.Command("建筑边长注记设置", "CDREBLSZ"),
+                RealEstateMenuItem.Command("▱ 注记建筑边长", "CDREBL"),
+                RealEstateMenuItem.Command("⚙ 建筑边长注记设置", "CDREBLSZ"),
                 RealEstateMenuItem.Separator(),
-                RealEstateMenuItem.Command("CDBox不动产工作区", "CDRE"),
-                RealEstateMenuItem.Command("CDBox设置", "CDSET")
+                RealEstateMenuItem.Command("▦ CDBox不动产工作区", "CDRE"),
+                RealEstateMenuItem.Command("⚙ CDBox设置", "CDSET")
             });
 
         public static IReadOnlyList<RealEstateMenuItem> Items => MenuItems;

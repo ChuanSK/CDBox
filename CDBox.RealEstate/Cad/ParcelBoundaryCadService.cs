@@ -141,8 +141,7 @@ namespace CDBox.RealEstate.Cad
                 }
                 var candidates = points.Select((point, index) =>
                     new PointCandidate(index, point.PointNumber,
-                        new Point3d((double)point.X.Value,
-                            (double)point.Y.Value, 0))).ToList();
+                        SurveyPointToCad(point))).ToList();
                 string subject = forSignature ? "签章界址线" : "界址段";
                 PointCandidate start = SelectPoint(document, candidates,
                     textStyleId, "选择" + subject + "起点",
@@ -191,8 +190,7 @@ namespace CDBox.RealEstate.Cad
                     ParcelBoundaryPointRecord point = points[i];
                     candidates.Add(new PointCandidate(i,
                         point.PointNumber + " · " + parcelName,
-                        new Point3d((double)point.X.Value,
-                            (double)point.Y.Value, 0), record.Id,
+                        SurveyPointToCad(point), record.Id,
                         parcelName));
                 }
             }
@@ -436,8 +434,10 @@ namespace CDBox.RealEstate.Cad
                 result.Vertices.Add(new ParcelBoundaryCadVertex
                 {
                     SourceIndex = i,
-                    X = ToDecimal(point.X),
-                    Y = ToDecimal(point.Y),
+                    X = ParcelBoundaryCoordinateConvention.SurveyXFromCad(
+                        ToDecimal(point.X), ToDecimal(point.Y)),
+                    Y = ParcelBoundaryCoordinateConvention.SurveyYFromCad(
+                        ToDecimal(point.X), ToDecimal(point.Y)),
                     Z = ToDecimal(point.Z),
                     DistanceToNext = ToDecimal(Math.Abs(length))
                 });
@@ -507,8 +507,22 @@ namespace CDBox.RealEstate.Cad
 
         private static Point3d ToPoint(ParcelBoundaryCadVertex vertex)
         {
-            return new Point3d((double)vertex.X, (double)vertex.Y,
+            return new Point3d((double)ParcelBoundaryCoordinateConvention
+                    .CadXFromSurvey(vertex.X, vertex.Y),
+                (double)ParcelBoundaryCoordinateConvention
+                    .CadYFromSurvey(vertex.X, vertex.Y),
                 (double)vertex.Z);
+        }
+
+        private static Point3d SurveyPointToCad(
+            ParcelBoundaryPointRecord point)
+        {
+            decimal surveyX = point == null ? 0m : point.X ?? 0m;
+            decimal surveyY = point == null ? 0m : point.Y ?? 0m;
+            return new Point3d((double)ParcelBoundaryCoordinateConvention
+                    .CadXFromSurvey(surveyX, surveyY),
+                (double)ParcelBoundaryCoordinateConvention
+                    .CadYFromSurvey(surveyX, surveyY), 0);
         }
 
         private static decimal ToDecimal(double value)
@@ -599,8 +613,8 @@ namespace CDBox.RealEstate.Cad
         private static string Direction(ParcelBoundaryPointRecord start,
             ParcelBoundaryPointRecord end)
         {
-            double dx = (double)((end.X ?? 0m) - (start.X ?? 0m));
-            double dy = (double)((end.Y ?? 0m) - (start.Y ?? 0m));
+            double dx = (double)((end.Y ?? 0m) - (start.Y ?? 0m));
+            double dy = (double)((end.X ?? 0m) - (start.X ?? 0m));
             double angle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
             if (angle < 0) angle += 360;
             string[] names = { "东", "东北", "北", "西北",

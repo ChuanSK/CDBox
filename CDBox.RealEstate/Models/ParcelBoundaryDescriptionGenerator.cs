@@ -197,7 +197,7 @@ namespace CDBox.RealEstate.Models
                     .Select(p => p.X.Value).DefaultIfEmpty(centerX).Average();
                 decimal y = path.Where(p => p.Y.HasValue)
                     .Select(p => p.Y.Value).DefaultIfEmpty(centerY).Average();
-                string cardinal = Cardinal(x - centerX, y - centerY);
+                string cardinal = Cardinal(y - centerY, x - centerX);
                 string text = (segment.StartPointNumber ?? string.Empty)
                     + "-" + (segment.EndPointNumber ?? string.Empty)
                     + " 至本宗地" + LineLocation(segment);
@@ -306,8 +306,8 @@ namespace CDBox.RealEstate.Models
         {
             if (point == null || !point.X.HasValue || !point.Y.HasValue)
                 return string.Empty;
-            return Compass((double)(point.X.Value - centerX),
-                (double)(point.Y.Value - centerY));
+            return Compass((double)(point.Y.Value - centerY),
+                (double)(point.X.Value - centerX));
         }
 
         private static string Direction(ParcelBoundaryPointRecord start,
@@ -316,8 +316,8 @@ namespace CDBox.RealEstate.Models
             if (start == null || end == null || !start.X.HasValue
                 || !start.Y.HasValue || !end.X.HasValue || !end.Y.HasValue)
                 return string.Empty;
-            return Compass((double)(end.X.Value - start.X.Value),
-                (double)(end.Y.Value - start.Y.Value));
+            return Compass((double)(end.Y.Value - start.Y.Value),
+                (double)(end.X.Value - start.X.Value));
         }
 
         private static string Compass(double dx, double dy)

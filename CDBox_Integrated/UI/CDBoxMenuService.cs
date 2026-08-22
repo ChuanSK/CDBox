@@ -403,15 +403,15 @@ namespace TCPipeAutoDraw.UI
 
             // ActiveX PopupMenu 在不同 AutoCAD/CASS 版本中没有稳定的位图图标接口，
             // 使用菜单字体可直接显示的单色符号作为兼容图标。
-            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
-            AddSeparator(topMenu);
-
             object annotation = AddSubMenu(topMenu, "✎ 标注", "CDBox_Annotation");
             AddCommandItem(annotation, "▱ 表面积标注", "CDSURF");
             AddCommandItem(annotation, "⌁ 管线长度标注", "CDLEN");
             AddCommandItem(annotation, "◇ 节点标注", "CDNODE");
             AddSeparator(annotation);
             AddCommandItem(annotation, "⚙ 标注设置", "CDBZSET");
+            AddSeparator(topMenu);
+
+            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
 
             object section = AddSubMenu(topMenu, "◫ 断面", "CDBox_Section");
             AddCommandItem(section, "▧ 断面图生成", "CDSEC");
@@ -510,7 +510,8 @@ namespace TCPipeAutoDraw.UI
             // - 有的版本支持 Index + Label + Tag；
             // - 部分 CASS 环境对“追加到末尾”更接受空字符串索引。
             // 因此这里按“最少破坏、最大兼容”的顺序逐一尝试。
-            object[] indexes = { string.Empty, count, count + 1, Math.Max(0, count - 1), 0, 1 };
+            object[] indexes = { count, count + 1, string.Empty,
+                Math.Max(0, count - 1), 0, 1 };
             for (int i = 0; i < indexes.Length; i++)
             {
                 object result = TryAddSubMenuWithAllSignatures(parent, indexes[i], label, tag);
@@ -561,7 +562,7 @@ namespace TCPipeAutoDraw.UI
             int count = GetCount(parent);
             object[] indexes =
             {
-                string.Empty, count, count + 1, Math.Max(0, count - 1), 0, 1
+                count, count + 1, string.Empty, Math.Max(0, count - 1), 0, 1
             };
             for (int i = 0; i < indexes.Length; i++)
             {

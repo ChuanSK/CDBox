@@ -59,6 +59,8 @@ namespace CDBox.RealEstate.Models
                 selection.SourceObjectHandle ?? string.Empty;
             record.Boundary.SourceLayerName =
                 selection.SourceLayerName ?? string.Empty;
+            record.Boundary.CoordinateConvention =
+                ParcelBoundaryCoordinateConvention.Current;
             record.Boundary.SourceClockwise = clockwise;
             record.Boundary.SourceArea = selection.Area;
 
