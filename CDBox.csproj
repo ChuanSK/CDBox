@@ -10,19 +10,19 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>3.6.2</Version>
+    <Version>4.1.1</Version>
 
-    <AssemblyVersion>3.6.2.0</AssemblyVersion>
-    <FileVersion>3.6.2.0</FileVersion>
-    <InformationalVersion>3.6.2</InformationalVersion>
+    <AssemblyVersion>4.1.1.0</AssemblyVersion>
+    <FileVersion>4.1.1.0</FileVersion>
+    <InformationalVersion>4.1.1</InformationalVersion>
 
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <CDBoxVersionCode>30602</CDBoxVersionCode>
+    <CDBoxVersionCode>40101</CDBoxVersionCode>
 
-    <CDBoxReleaseIdentity>CDBox-Studio-Preview-3.6.2</CDBoxReleaseIdentity>
-    <CDBoxReleaseTitle>CDBox Studio Preview 3.6.2</CDBoxReleaseTitle>
-    <CDBoxPackageFileName>CDBox.Studio.Preview.3.6.2.zip</CDBoxPackageFileName>
-    <CDBoxAppVersion>3.6.2</CDBoxAppVersion>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-4.1.1</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 4.1.1</CDBoxReleaseTitle>
+    <CDBoxPackageFileName>CDBox.Studio.Preview.4.1.1.zip</CDBoxPackageFileName>
+    <CDBoxAppVersion>4.1.1</CDBoxAppVersion>
 
     <CDBoxUpdateChannel>studio-preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>

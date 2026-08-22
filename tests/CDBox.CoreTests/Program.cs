@@ -3034,7 +3034,7 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("3.6.2", StringComparison.Ordinal) >= 0, "页面应显示 3.6.2 身份");
+            True(standalone.IndexOf("4.1.1", StringComparison.Ordinal) >= 0, "页面应显示 4.1.1 身份");
             True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");

@@ -640,7 +640,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 3.6.2 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 4.1.1 独立窗口失败。", ex);
             }
             return result;
         }

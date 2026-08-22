@@ -113,8 +113,8 @@ namespace TCPipeAutoDraw.Commands
             check(File.Exists(assemblyPath), "主程序集", assemblyPath);
             check(File.Exists(Path.Combine(baseDirectory, "CDBox.Shared.dll")), "Shared 程序集", Path.Combine(baseDirectory, "CDBox.Shared.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "CDBox.RealEstate.dll")), "RealEstate 程序集", Path.Combine(baseDirectory, "CDBox.RealEstate.dll"));
-            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-3.6.2", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
-            check(CDBoxStudioUpdateService.CurrentVersionCode == 30602, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
+            check(string.Equals(CDBoxStudioUpdateService.ReleaseIdentity, "CDBox-Studio-Preview-4.1.1", StringComparison.OrdinalIgnoreCase), "发布身份", CDBoxStudioUpdateService.ReleaseIdentity);
+            check(CDBoxStudioUpdateService.CurrentVersionCode == 40101, "版本码", CDBoxStudioUpdateService.CurrentVersionCode.ToString());
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll")), "WebView2 Core", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.Core.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll")), "WebView2 WinForms", Path.Combine(baseDirectory, "Microsoft.Web.WebView2.WinForms.dll"));
             check(File.Exists(Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll")), "WebView2 Loader", Path.Combine(baseDirectory, "runtimes", "win-x64", "native", "WebView2Loader.dll"));
