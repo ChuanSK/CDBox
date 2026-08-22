@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\CDBox.RealEstate\CDBox.RealEstate.csproj" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Web.Extensions" />
     <Content Include="$(NuGetPackageRoot)skiasharp\3.119.2\lib\net462\SkiaSharp.dll"
              Link="SkiaSharp.dll">
@@ -25,6 +26,11 @@
              Link="Templates\权籍调查表.xls">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\权籍调查表.xls</TargetPath>
+    </Content>
+    <Content Include="..\..\CDBox_Integrated\Templates\地籍调查表.docx"
+             Link="Templates\地籍调查表.docx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\地籍调查表.docx</TargetPath>
     </Content>
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityNodeRecognitionPolicy.cs" Link="Source\QuantityNodeRecognitionPolicy.cs" />

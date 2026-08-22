@@ -80,6 +80,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\权籍调查表.xls</TargetPath>
     </Content>
+    <Content Include="CDBox_Integrated\Templates\地籍调查表.docx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\地籍调查表.docx</TargetPath>
+    </Content>
     <Content Include="CDBox_Integrated\Config\CDBoxColors.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Config\CDBoxColors.json</TargetPath>

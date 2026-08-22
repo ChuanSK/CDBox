@@ -230,8 +230,7 @@ namespace CDBox.RealEstate.Services
                             item.LineCategory);
                         SetCheck(sheet, segmentRow, PositionColumns,
                             item.LinePosition);
-                        SetText(sheet, segmentRow, 18,
-                            BoundaryMarkNote(item));
+                        SetText(sheet, segmentRow, 18, string.Empty);
                         SetText(sheet, endpointRow, 0,
                             item.EndPointNumber);
                         SetMarker(sheet, endpointRow,
@@ -401,7 +400,7 @@ namespace CDBox.RealEstate.Services
                 + ChineseDate(Value(record, "project.rightsSurveyDate")));
         }
 
-        private static IList<BoundaryExportRow> BuildBoundaryRows(
+        internal static IList<BoundaryExportRow> BuildBoundaryRows(
             ParcelSurveyRecord record)
         {
             IList<ParcelBoundaryPointRecord> points = record.Boundary.Points;
@@ -524,20 +523,6 @@ namespace CDBox.RealEstate.Services
                 SetText(sheet, row, target, CheckMark);
         }
 
-        private static string BoundaryMarkNote(BoundaryExportRow row)
-        {
-            var notes = new List<string>();
-            if (!string.IsNullOrWhiteSpace(row.Description))
-                notes.Add(row.Description.Trim());
-            if (string.Equals(row.StartMarkerType, "其他",
-                StringComparison.OrdinalIgnoreCase)) notes.Add("界标：其他");
-            if (string.Equals(row.LineCategory, "其他",
-                StringComparison.OrdinalIgnoreCase)) notes.Add("界址线类别：其他");
-            if (string.Equals(row.LinePosition, "待确认",
-                StringComparison.OrdinalIgnoreCase)) notes.Add("界址线位置待确认");
-            return string.Join("；", notes.Distinct());
-        }
-
         private static string ResolveTemplatePath()
         {
             string assemblyDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -634,7 +619,7 @@ namespace CDBox.RealEstate.Services
                 SetText(sheet, row, column, field.TextValue);
         }
 
-        private static string Value(ParcelSurveyRecord record, string key)
+        internal static string Value(ParcelSurveyRecord record, string key)
         {
             ParcelSurveyFieldValue field = record.Field(key);
             if (field == null) return string.Empty;
@@ -647,19 +632,19 @@ namespace CDBox.RealEstate.Services
             return field.TextValue ?? string.Empty;
         }
 
-        private static bool Boolean(ParcelSurveyRecord record, string key)
+        internal static bool Boolean(ParcelSurveyRecord record, string key)
         {
             ParcelSurveyFieldValue field = record.Field(key);
             return field != null && field.BooleanValue;
         }
 
-        private static string Contact(ParcelSurveyRecord record,
+        internal static string Contact(ParcelSurveyRecord record,
             string addressKey, string phoneKey)
         {
             return Contact(Value(record, addressKey), Value(record, phoneKey));
         }
 
-        private static string Contact(string address, string phone)
+        internal static string Contact(string address, string phone)
         {
             address = (address ?? string.Empty).Trim();
             phone = (phone ?? string.Empty).Trim();
@@ -668,13 +653,13 @@ namespace CDBox.RealEstate.Services
             return address + "，联系电话：" + phone;
         }
 
-        private static string BoundaryText(string direction, string value)
+        internal static string BoundaryText(string direction, string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             return direction + "：" + (value ?? string.Empty).Trim();
         }
 
-        private static string ConditionalValue(ParcelSurveyRecord record,
+        internal static string ConditionalValue(ParcelSurveyRecord record,
             bool condition, string key)
         {
             ParcelSurveyFieldValue field = record.Field(key);
@@ -683,7 +668,7 @@ namespace CDBox.RealEstate.Services
             return condition ? Value(record, key) : string.Empty;
         }
 
-        private static string LandTerm(ParcelSurveyRecord record)
+        internal static string LandTerm(ParcelSurveyRecord record)
         {
             string start = ChineseDate(Value(record, "land.termStart"));
             string end = ChineseDate(Value(record, "land.termEnd"));
@@ -697,7 +682,7 @@ namespace CDBox.RealEstate.Services
             return string.Join("；", values);
         }
 
-        private static string CoOwnership(ParcelSurveyRecord record)
+        internal static string CoOwnership(ParcelSurveyRecord record)
         {
             string type = Value(record, "rights.coOwnershipType");
             string description = Value(record, "rights.coOwnerDescription");
@@ -706,7 +691,7 @@ namespace CDBox.RealEstate.Services
             return type + "；" + description;
         }
 
-        private static string Footer(ParcelSurveyRecord record)
+        internal static string Footer(ParcelSurveyRecord record)
         {
             string filler = Value(record, "project.formFiller");
             string date = ChineseDate(Value(record, "project.formDate"));
@@ -717,7 +702,7 @@ namespace CDBox.RealEstate.Services
                 + date;
         }
 
-        private static string Neighbor(
+        internal static string Neighbor(
             ParcelBoundarySignatureGroupRecord group)
         {
             string owner = (group.NeighborOwner ?? string.Empty).Trim();
@@ -727,7 +712,7 @@ namespace CDBox.RealEstate.Services
             return owner + "（" + code + "）";
         }
 
-        private static string ChineseDate(string value)
+        internal static string ChineseDate(string value)
         {
             value = (value ?? string.Empty).Trim();
             DateTime date;
@@ -737,7 +722,7 @@ namespace CDBox.RealEstate.Services
                 : value;
         }
 
-        private static string SlashIfEmpty(string value)
+        internal static string SlashIfEmpty(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? "/" : value.Trim();
         }
@@ -801,7 +786,7 @@ namespace CDBox.RealEstate.Services
             }
         }
 
-        private sealed class BoundaryExportRow
+        internal sealed class BoundaryExportRow
         {
             public string StartPointNumber { get; set; }
             public string EndPointNumber { get; set; }

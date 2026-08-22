@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using CDBox.Shared;
 using CDBox.Shared.Modules;
 using CDBox.Shared.Services;
@@ -47,6 +48,8 @@ namespace CDBox.CoreTests
     internal static class Program
     {
         private static readonly List<string> Failures = new List<string>();
+        private static readonly XNamespace WordMl =
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
         private static int _passed;
 
         private static int Main()
@@ -71,6 +74,8 @@ namespace CDBox.CoreTests
             Run("独立宗地选择、命名与数据隔离", TestIndependentParcelSelection);
             Run("宗地调查校验、分页与统一页面", TestParcelSurveyValidationAndPage);
             Run("权籍调查表模板导出与续表", TestParcelSurveyExcelExport);
+            Run("地籍调查表 Word 模板导出与续页",
+                TestParcelSurveyWordExport);
             Run("界址范围选择与说明自动生成", TestParcelBoundaryRangeAndDescriptions);
             Run("数值输入步长统一", TestNumericInputSteps);
             Run("工程量看板共享页面", TestQuantityDashboardSharedPage);
@@ -1965,12 +1970,14 @@ namespace CDBox.CoreTests
                 "导出下拉框应预留 Word 文档入口");
             Contains(html, "导出为 Excel 表格",
                 "导出下拉框应提供现有 Excel 导出入口");
-            Contains(html, "Word 文档导出功能暂未实现",
-                "Word 预留入口应明确提示尚未实现");
+            False(html.Contains("Word 文档导出功能暂未实现"),
+                "Word 文档导出入口接入后不得再提示尚未实现");
             Contains(html, "data-export-format=\"excel\"",
                 "Excel 导出入口应具有独立下拉选项");
-            Contains(html, "post('exportParcel',JSON.stringify(draft))",
-                "Excel 下拉选项应继续调用现有调查表导出流程");
+            Contains(html, "post('exportParcelWord',JSON.stringify(draft))",
+                "Word 下拉选项应调用 Word 调查表导出流程");
+            Contains(html, "post('exportParcelExcel',JSON.stringify(draft))",
+                "Excel 下拉选项应调用 Excel 调查表导出流程");
             Contains(html, "disabled=!canEdit",
                 "已绑定宗地应允许直接导出");
             False(html.IndexOf("disabled=!v.CanExport",
@@ -2230,6 +2237,8 @@ namespace CDBox.CoreTests
                             "围墙类别应在对应列写入勾选符号");
                         Equal("√", marks.GetRow(3).GetCell(17).StringCellValue,
                             "外侧界址线位置应写入勾选符号");
+                        Equal(string.Empty, marks.GetRow(3).GetCell(18)
+                            .ToString(), "界址标示表备注列应保持空白");
                         Equal("J27", workbook.GetSheet("界址标示表2")
                             .GetRow(3).GetCell(0).StringCellValue,
                             "超过 26 段时第二张标示表应从下一界址点续写");
@@ -2253,6 +2262,227 @@ namespace CDBox.CoreTests
                     {
                         workbook.Close();
                     }
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestParcelSurveyWordExport()
+        {
+            string template = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Templates", ParcelSurveyWordExporter.TemplateFileName);
+            True(File.Exists(template),
+                "测试输出目录应包含地籍调查表 Word 模板");
+            Equal("地籍调查表.docx",
+                ParcelSurveyWordExporter.DefaultExportFileName,
+                "Word 导出文件名应与模板文件名一致");
+            string directory = NewTemporaryDirectory(
+                "parcel-survey-word-export");
+            string blankOutput = Path.Combine(directory,
+                "空宗地_地籍调查表.docx");
+            string output = Path.Combine(directory, "地籍调查表.docx");
+            try
+            {
+                XDocument templateDocument = ReadWordDocument(template);
+                XElement templateAudit = WordTables(templateDocument)
+                    .First(WordIsAuditTable);
+                string templateAuditText = WordText(templateAudit);
+
+                var blankRecord = new ParcelSurveyRecord();
+                blankRecord.Normalize();
+                ParcelSurveyWordExporter.Export(template, blankOutput,
+                    blankRecord);
+                True(File.Exists(blankOutput),
+                    "完整度为 0 的宗地也应成功导出 Word 空表");
+                XDocument blankDocument = ReadWordDocument(blankOutput);
+                IList<XElement> blankTables = WordTables(blankDocument);
+                Equal(1, blankTables.Count(WordIsBoundaryMarkTable),
+                    "无界址段时应删除 Word 模板多余的第二张界址标示表");
+                Equal(1, blankTables.Count(WordIsBoundarySignatureTable),
+                    "无签章组时仍应保留一张空白界址签章表");
+                Equal(1, blankTables.Count(WordIsHouseTable),
+                    "无房屋时仍应保留一张空白房屋调查表");
+                string blankText = WordText(blankDocument.Root);
+                False(blankText.Contains("黄鳕峰"),
+                    "Word 空表不得遗留模板示例权利人");
+                False(blankText.Contains("石屏县异龙镇西正街"),
+                    "Word 空表不得遗留模板示例坐落");
+                Contains(blankText, "该不动产宗地面积为：平方米",
+                    "空宗地调查审核记事应保留模板句式且面积留空");
+                string qaBlankOutput = Environment.GetEnvironmentVariable(
+                    "CDBOX_WORD_QA_BLANK_OUTPUT");
+                if (!string.IsNullOrWhiteSpace(qaBlankOutput))
+                {
+                    string qaBlankDirectory = Path.GetDirectoryName(
+                        qaBlankOutput);
+                    if (!string.IsNullOrWhiteSpace(qaBlankDirectory))
+                        Directory.CreateDirectory(qaBlankDirectory);
+                    File.Copy(blankOutput, qaBlankOutput, true);
+                }
+
+                var record = new ParcelSurveyRecord();
+                record.Normalize();
+                record.Field(ParcelSurveyFieldKeys.ParcelSeaCode).TextValue =
+                    "532525000000GB00001";
+                record.Field(ParcelSurveyFieldKeys.ParcelCode).TextValue =
+                    "532525000000GB00001";
+                record.Field(ParcelSurveyFieldKeys.ParcelNumber).TextValue =
+                    "GB00001";
+                record.Field(ParcelSurveyFieldKeys.RealEstateUnitNumber)
+                    .TextValue = "532525000000GB00001F00010001";
+                record.Field(ParcelSurveyFieldKeys.ParcelLocation).TextValue =
+                    "测试县测试镇一号";
+                record.Field(ParcelSurveyFieldKeys.PreliminaryParcelCode)
+                    .Status = ParcelFieldStatus.NotApplicable;
+                record.Field(ParcelSurveyFieldKeys.OwnerName).TextValue =
+                    "张三";
+                record.Field(ParcelSurveyFieldKeys.OwnerType).TextValue =
+                    "个人";
+                record.Field(ParcelSurveyFieldKeys.CertificateType).TextValue =
+                    "居民身份证";
+                record.Field(ParcelSurveyFieldKeys.CertificateNumber).TextValue =
+                    "532525199001010011";
+                record.Field(ParcelSurveyFieldKeys.ContactAddress).TextValue =
+                    "测试县测试镇";
+                record.Field(ParcelSurveyFieldKeys.ContactPhone).TextValue =
+                    "13800000000";
+                record.Field("rights.identityRoles").Selections.Add("权利人");
+                record.Field(ParcelSurveyFieldKeys.ParcelArea).NumericValue =
+                    101.87m;
+                record.Field("project.organization").TextValue =
+                    "测试调查机构";
+                record.Field("project.surveyDate").TextValue = "2026-08-19";
+                record.Field("project.formFiller").TextValue = "李四";
+                record.Field("project.formDate").TextValue = "2026-08-19";
+                record.Field("project.countyCode").TextValue = "532525";
+                record.Field("project.cadastralDistrictCode").TextValue =
+                    "001";
+                record.Field("project.cadastralSubdistrictCode").TextValue =
+                    "002";
+                record.Field("project.postalCode").TextValue = "662200";
+                record.Fields["audit.rightsNotes"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
+                record.Fields["audit.surveyNotes"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
+                record.Fields["audit.reviewOpinion"] =
+                    new ParcelSurveyFieldValue { TextValue = "不得写入审核表" };
+                record.Field("house.followParcelOwner").BooleanValue = true;
+                record.Field("house.unitCode").TextValue = "F00010001";
+                record.Field("house.unitType").TextValue = "幢";
+
+                record.Boundary.ParcelBoundaryClosed = true;
+                for (int i = 0; i < 35; i++)
+                {
+                    string start = "J" + (i + 1);
+                    string end = "J" + (i == 34 ? 1 : i + 2);
+                    record.Boundary.Points.Add(BoundaryPoint(start,
+                        i, i % 6, 1.25m));
+                    record.Boundary.Segments.Add(new
+                        ParcelBoundarySegmentRecord
+                    {
+                        StartPointNumber = start,
+                        EndPointNumber = end,
+                        Distance = 1.25m,
+                        LineCategory = "围墙",
+                        LinePosition = "外",
+                        Description = "不得写入备注列",
+                        NeighborHandled = true,
+                        Confirmed = true,
+                        Status = ParcelFieldStatus.Manual
+                    });
+                }
+                for (int i = 0; i < 7; i++)
+                    record.Boundary.SignatureGroups.Add(new
+                        ParcelBoundarySignatureGroupRecord
+                    {
+                        StartPointNumber = "J" + (i + 1),
+                        MiddlePointNumbers = i == 0 ? string.Empty
+                            : "J" + (i + 2),
+                        EndPointNumber = "J" + (i + 3),
+                        NeighborOwner = "邻宗权利人" + (i + 1),
+                        NeighborParcelCode = "N" + (i + 1),
+                        ConfirmationDate = "2026-08-19",
+                        Confirmed = true,
+                        Status = ParcelFieldStatus.Manual
+                    });
+                record.Field("boundary.pointDescription").TextValue =
+                    "J1位于本宗地西北方向围墙脚。";
+                record.Field("boundary.lineDescription").TextValue =
+                    "J1至J2沿本宗地围墙布设。";
+                for (int i = 0; i < 2; i++)
+                {
+                    var building = new ParcelBuildingRecord();
+                    building.Normalize();
+                    building.Fields["building.number"].TextValue =
+                        (i + 1).ToString();
+                    building.Fields["building.totalFloors"].NumericValue = 2;
+                    building.Fields["building.structure"].TextValue = "砖混";
+                    building.Fields["building.footprintArea"].NumericValue =
+                        50m + i;
+                    building.Fields["building.area"].NumericValue = 100m + i;
+                    record.Buildings.Add(building);
+                }
+
+                ParcelSurveyWordExporter.Export(template, output, record);
+                True(File.Exists(output), "导出器应生成 Word 文档");
+                XDocument document = ReadWordDocument(output);
+                IList<XElement> tables = WordTables(document);
+                IList<XElement> marks = tables.Where(WordIsBoundaryMarkTable)
+                    .ToList();
+                Equal(3, marks.Count,
+                    "超过两页时应自动增加 Word 界址标示表续页");
+                Equal("J18", WordCellText(marks[1], 5, 0),
+                    "第二张 Word 界址标示表应从第 18 个界址点续写");
+                Equal("J35", WordCellText(marks[2], 5, 0),
+                    "第三张 Word 界址标示表应从第 35 个界址点续写");
+                Equal("√", WordCellText(marks[0], 5, 4),
+                    "Word 界址标示表应使用勾选符号标记喷涂界标");
+                Equal("√", WordCellText(marks[0], 5, 7),
+                    "Word 界址标示表应使用勾选符号标记围墙");
+                Equal("√", WordCellText(marks[0], 5, 17),
+                    "Word 界址标示表应使用勾选符号标记外侧位置");
+                foreach (XElement mark in marks)
+                    for (int row = 5; row < 40; row++)
+                        Equal(string.Empty, WordCellText(mark, row, 18),
+                            "Word 界址标示表备注列应始终保持空白");
+                Equal(2, tables.Count(WordIsBoundarySignatureTable),
+                    "超过六组时应自动增加 Word 界址签章续表");
+                Equal("/", WordCellText(tables
+                    .First(WordIsBoundarySignatureTable), 3, 1),
+                    "无中间点的 Word 签章组应输出斜杠");
+                Equal(2, tables.Count(WordIsHouseTable),
+                    "多幢房屋应逐幢生成 Word 房屋调查表");
+                True(document.Descendants(WordMl + "br").Any(x =>
+                        string.Equals((string)x.Attribute(WordMl + "type"),
+                            "page", StringComparison.OrdinalIgnoreCase)),
+                    "多幢房屋之间应插入整页分页符");
+                XElement audit = tables.First(WordIsAuditTable);
+                string auditText = WordText(audit);
+                Contains(auditText, "该不动产宗地面积为：101.87平方米",
+                    "Word 调查审核表应仅在模板句式中插入宗地面积");
+                Contains(auditText, "本宗地及邻宗地相关人员均按规定到现场指界",
+                    "Word 权属调查记事模板原文应保留");
+                Contains(auditText, "本宗地界址边及建筑物边长采用经检校的30m钢尺",
+                    "Word 不动产测绘记事模板原文应保留");
+                Contains(auditText, "经检查：该宗地权属合法",
+                    "Word 审核意见模板原文应保留");
+                False(auditText.Contains("不得写入审核表"),
+                    "编辑器旧审核字段不得覆盖 Word 模板原文");
+                Equal(templateAuditText.Replace("面积为：平方米",
+                    "面积为：101.87平方米"), auditText,
+                    "Word 调查审核表除宗地面积外应与模板原文完全一致");
+
+                string qaOutput = Environment.GetEnvironmentVariable(
+                    "CDBOX_WORD_QA_OUTPUT");
+                if (!string.IsNullOrWhiteSpace(qaOutput))
+                {
+                    string qaDirectory = Path.GetDirectoryName(qaOutput);
+                    if (!string.IsNullOrWhiteSpace(qaDirectory))
+                        Directory.CreateDirectory(qaDirectory);
+                    File.Copy(output, qaOutput, true);
                 }
             }
             finally
@@ -3659,6 +3889,90 @@ namespace CDBox.CoreTests
                 "不同图纸的同步任务必须隔离");
             Equal(1, manager.GetSnapshot("doc-sync-b").Tasks.Count,
                 "目标图纸应保留自己的同步任务");
+        }
+
+        private static XDocument ReadWordDocument(string path)
+        {
+            using (FileStream stream = File.OpenRead(path))
+            using (ZipArchive package = new ZipArchive(stream,
+                ZipArchiveMode.Read, false))
+            {
+                ZipArchiveEntry entry = package.GetEntry("word/document.xml");
+                if (entry == null) throw new InvalidDataException(
+                    "Word 文档缺少 document.xml");
+                using (Stream input = entry.Open())
+                    return XDocument.Load(input, LoadOptions.PreserveWhitespace);
+            }
+        }
+
+        private static IList<XElement> WordTables(XDocument document)
+        {
+            XElement body = document.Root?.Element(WordMl + "body");
+            if (body == null) throw new InvalidDataException(
+                "Word 文档缺少正文");
+            return body.Elements(WordMl + "tbl").ToList();
+        }
+
+        private static string WordText(XElement element)
+        {
+            return element == null ? string.Empty : string.Concat(
+                element.Descendants(WordMl + "t").Select(x => x.Value));
+        }
+
+        private static XElement WordCell(XElement table, int rowIndex,
+            int logicalColumn)
+        {
+            IList<XElement> rows = table.Elements(WordMl + "tr").ToList();
+            if (rowIndex < 0 || rowIndex >= rows.Count)
+                throw new InvalidDataException("Word 表格行索引越界");
+            int start = 0;
+            foreach (XElement cell in rows[rowIndex]
+                .Elements(WordMl + "tc"))
+            {
+                int span = 1;
+                XElement spanElement = cell.Element(WordMl + "tcPr")
+                    ?.Element(WordMl + "gridSpan");
+                int parsed;
+                if (spanElement != null && int.TryParse(
+                    (string)spanElement.Attribute(WordMl + "val"),
+                    out parsed) && parsed > 0)
+                    span = parsed;
+                if (logicalColumn >= start && logicalColumn < start + span)
+                    return cell;
+                start += span;
+            }
+            throw new InvalidDataException("Word 表格列索引越界");
+        }
+
+        private static string WordCellText(XElement table, int row,
+            int column)
+        {
+            return WordText(WordCell(table, row, column));
+        }
+
+        private static bool WordIsBoundaryMarkTable(XElement table)
+        {
+            string text = WordText(table);
+            return text.Contains("界址点号") && text.Contains("界标种类")
+                && text.Contains("界址线位置") && text.Contains("备注");
+        }
+
+        private static bool WordIsBoundarySignatureTable(XElement table)
+        {
+            return WordText(table).StartsWith("界址签章表",
+                StringComparison.Ordinal);
+        }
+
+        private static bool WordIsHouseTable(XElement table)
+        {
+            return WordText(table).StartsWith("房屋基本信息调查表",
+                StringComparison.Ordinal);
+        }
+
+        private static bool WordIsAuditTable(XElement table)
+        {
+            return WordText(table).StartsWith("调查审核表",
+                StringComparison.Ordinal);
         }
 
         private static string NewTemporaryDirectory(string name)

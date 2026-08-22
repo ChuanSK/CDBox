@@ -12,6 +12,11 @@ namespace CDBox.RealEstate.UI
     {
         public static string Export(ParcelSurveyRecord record)
         {
+            return ExportExcel(record);
+        }
+
+        public static string ExportExcel(ParcelSurveyRecord record)
+        {
             record = record ?? new ParcelSurveyRecord();
             record.Normalize();
             var dialog = new SaveFileDialog
@@ -22,6 +27,32 @@ namespace CDBox.RealEstate.UI
                 AddExtension = true,
                 FileName = ParcelSurveyExcelExporter.DefaultExportFileName
             };
+            SetInitialDirectory(dialog);
+            if (dialog.ShowDialog() != true) return string.Empty;
+            ParcelSurveyExcelExporter.Export(dialog.FileName, record);
+            return dialog.FileName;
+        }
+
+        public static string ExportWord(ParcelSurveyRecord record)
+        {
+            record = record ?? new ParcelSurveyRecord();
+            record.Normalize();
+            var dialog = new SaveFileDialog
+            {
+                Title = "导出地籍调查表",
+                Filter = "Word 文档 (*.docx)|*.docx",
+                DefaultExt = ".docx",
+                AddExtension = true,
+                FileName = ParcelSurveyWordExporter.DefaultExportFileName
+            };
+            SetInitialDirectory(dialog);
+            if (dialog.ShowDialog() != true) return string.Empty;
+            ParcelSurveyWordExporter.Export(dialog.FileName, record);
+            return dialog.FileName;
+        }
+
+        private static void SetInitialDirectory(SaveFileDialog dialog)
+        {
             Document document = AcadApp.DocumentManager.MdiActiveDocument;
             try
             {
@@ -32,9 +63,6 @@ namespace CDBox.RealEstate.UI
                     dialog.InitialDirectory = directory;
             }
             catch { }
-            if (dialog.ShowDialog() != true) return string.Empty;
-            ParcelSurveyExcelExporter.Export(dialog.FileName, record);
-            return dialog.FileName;
         }
     }
 }
