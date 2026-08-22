@@ -236,6 +236,7 @@ namespace CDBox.RealEstate.Models
         {
             if (segment == null) return "界址点";
             string category = (segment.LineCategory ?? string.Empty).Trim();
+            if (category == "围墙") return "围墙脚";
             return category == "界址线" || string.IsNullOrWhiteSpace(category)
                 ? "界址点" : LineLocation(segment);
         }

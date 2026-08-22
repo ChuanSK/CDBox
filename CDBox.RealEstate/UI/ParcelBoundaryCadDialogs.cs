@@ -102,24 +102,6 @@ namespace CDBox.RealEstate.UI
             return name.Length > 0;
         }
 
-        public static bool TryGetParcelName(string current, out string name)
-        {
-            name = (current ?? string.Empty).Trim();
-            var dialog = new BoundaryFloatingDialog("重命名宗地",
-                "区域或权属线只作为宗地的绑定与选择依据。", 430);
-            TextBox input = dialog.AddText("宗地名 *", name,
-                "例如 张三、北侧宗地");
-            dialog.AcceptText = "确定";
-            dialog.Validate = delegate
-            {
-                return string.IsNullOrWhiteSpace(input.Text)
-                    ? "宗地名不能为空。" : string.Empty;
-            };
-            if (!dialog.ShowForAutoCad()) return false;
-            name = (input.Text ?? string.Empty).Trim();
-            return name.Length > 0;
-        }
-
         public static ParcelBoundarySegmentRecord EditSegment(
             ParcelBoundaryRangeSelection range,
             ParcelBoundarySegmentRecord existing)
@@ -175,7 +157,8 @@ namespace CDBox.RealEstate.UI
             var dialog = new BoundaryFloatingDialog("填写界址签章组信息",
                 "起点 " + range.StartPointNumber + " · 中间点 "
                 + ParcelBoundaryPointNumberFormatter.FormatSignatureMiddle(
-                    range.MiddlePointNumbers) + " · 终点 " + range.EndPointNumber,
+                    range.MiddlePointNumbers) + " · 终点 "
+                + range.EndPointNumber + "；保存后可继续选择下一段，Esc 退出。",
                 520);
             TextBox owner = dialog.AddText("相邻宗地权利人",
                 First(existing.NeighborOwner, segment.NeighborOwner), string.Empty);
@@ -197,7 +180,7 @@ namespace CDBox.RealEstate.UI
             CheckBox paperBlank = dialog.AddCheck("保留空白供纸质签章",
                 existing.PreservePaperSignatureBlank
                     || string.IsNullOrWhiteSpace(existing.SignatureStatus));
-            dialog.AcceptText = "填入签章组";
+            dialog.AcceptText = "保存并继续选择";
             if (!dialog.ShowForAutoCad()) return null;
             return new ParcelBoundarySignatureGroupRecord
             {

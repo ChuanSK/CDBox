@@ -111,32 +111,43 @@ namespace CDBox.RealEstate.Services
         {
             IList<ParcelSurveyRecord> records = RecordsForCurrentDocument();
             if (records.Count == 0) return null;
-            ParcelBoundRangeSelection selected =
-                _cad.SelectBoundaryRangeAcrossParcels(records, true);
-            if (selected == null) return null;
-            ParcelSurveyRecord record = records.FirstOrDefault(x =>
-                string.Equals(x.Id, selected.RecordId,
-                    StringComparison.OrdinalIgnoreCase));
-            if (record == null) return null;
-            ParcelBoundarySignatureGroupRecord existing = record.Boundary
-                .SignatureGroups.FirstOrDefault(x => SameRange(
-                    x.StartPointNumber, x.EndPointNumber,
-                    selected.Range.StartPointNumber,
-                    selected.Range.EndPointNumber));
-            ParcelBoundarySegmentRecord segment = record.Boundary.Segments
-                .FirstOrDefault(x => SameRange(x.StartPointNumber,
-                    x.EndPointNumber, selected.Range.StartPointNumber,
-                    selected.Range.EndPointNumber));
-            ParcelBoundarySignatureGroupRecord group =
-                ParcelBoundaryCadDialogs.EditSignature(selected.Range,
-                    existing, segment,
-                    record.Field("rights.ownerName").TextValue);
-            if (group == null) return null;
-            record.Boundary.SignatureGroups.RemoveAll(x => SameRange(x,
-                group));
-            record.Boundary.SignatureGroups.Add(group);
-            ParcelBoundaryDescriptionGenerator.Apply(record, false);
-            return _store.Save(record);
+            ParcelSurveyRecord last = null;
+            int applied = 0;
+            while (true)
+            {
+                ParcelBoundRangeSelection selected =
+                    _cad.SelectBoundaryRangeAcrossParcels(records, true);
+                if (selected == null) break;
+                ParcelSurveyRecord record = records.FirstOrDefault(x =>
+                    string.Equals(x.Id, selected.RecordId,
+                        StringComparison.OrdinalIgnoreCase));
+                if (record == null) continue;
+                ParcelBoundarySignatureGroupRecord existing = record.Boundary
+                    .SignatureGroups.FirstOrDefault(x => SameRange(
+                        x.StartPointNumber, x.EndPointNumber,
+                        selected.Range.StartPointNumber,
+                        selected.Range.EndPointNumber));
+                ParcelBoundarySegmentRecord segment = record.Boundary.Segments
+                    .FirstOrDefault(x => SameRange(x.StartPointNumber,
+                        x.EndPointNumber, selected.Range.StartPointNumber,
+                        selected.Range.EndPointNumber));
+                ParcelBoundarySignatureGroupRecord group =
+                    ParcelBoundaryCadDialogs.EditSignature(selected.Range,
+                        existing, segment,
+                        record.Field("rights.ownerName").TextValue);
+                if (group == null) break;
+                record.Boundary.SignatureGroups.RemoveAll(x => SameRange(x,
+                    group));
+                record.Boundary.SignatureGroups.Add(group);
+                ParcelBoundaryDescriptionGenerator.Apply(record, false);
+                last = _store.Save(record);
+                applied++;
+            }
+            if (applied > 0)
+                Notify("已向对应宗地填入 " + applied
+                    + " 组邻宗信息；连续选择已结束。",
+                    CDBoxNotificationLevel.Success);
+            return last;
         }
 
         private IList<ParcelSurveyRecord> RecordsForCurrentDocument()

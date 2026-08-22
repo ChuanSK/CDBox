@@ -304,6 +304,30 @@ namespace CDBox.RealEstate.Cad
                 segment, representative);
         }
 
+        public IList<ParcelBoundarySignatureGroupRecord>
+            SelectSignatureGroupsContinuously(ParcelSurveyRecord record)
+        {
+            record = record ?? new ParcelSurveyRecord();
+            record.Normalize();
+            int applied = 0;
+            while (true)
+            {
+                ParcelBoundarySignatureGroupRecord group =
+                    SelectSignatureGroup(record);
+                if (group == null) break;
+                record.Boundary.SignatureGroups.RemoveAll(x => SameRange(
+                    x.StartPointNumber, x.EndPointNumber,
+                    group.StartPointNumber, group.EndPointNumber));
+                record.Boundary.SignatureGroups.Add(group);
+                applied++;
+            }
+            if (applied > 0)
+                Notify("本轮已填入 " + applied
+                    + " 组邻宗信息；连续选择已结束。",
+                    CDBoxNotificationLevel.Success);
+            return record.Boundary.SignatureGroups;
+        }
+
         public static ParcelBoundaryRangeSelection BuildRange(
             IList<ParcelBoundaryPointRecord> points, int startIndex,
             int endIndex)

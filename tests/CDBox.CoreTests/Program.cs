@@ -2334,7 +2334,7 @@ namespace CDBox.CoreTests
             Tuple<string, string, string>[] priorityCases =
             {
                 Tuple.Create("门墩", "外", "门墩脚"),
-                Tuple.Create("围墙", "中", "围墙中线"),
+                Tuple.Create("围墙", "中", "围墙脚"),
                 Tuple.Create("墙壁", "外", "外墙脚"),
                 Tuple.Create("铁丝网", "中", "铁丝网中心线"),
                 Tuple.Create("道路", "外", "道路边线"),
@@ -2352,6 +2352,18 @@ namespace CDBox.CoreTests
                     priorityCases[i].Item3,
                     "界址点位实体优先级应为门墩、围墙、墙壁、铁丝网、道路、田埂、沟渠、界址点");
             }
+            priorityRecord.Boundary.Segments = new List<
+                ParcelBoundarySegmentRecord>
+            {
+                BoundarySegment("J1", "J2", "墙壁", "外", string.Empty),
+                BoundarySegment("J1", "J2", "围墙", "外", string.Empty)
+            };
+            ParcelBoundaryDescriptionGenerator.Apply(priorityRecord, true);
+            Contains(priorityRecord.Boundary.Points[0].Description, "围墙脚",
+                "围墙与墙壁共有点应采用高权重的围墙脚");
+            False(priorityRecord.Boundary.Points[0].Description.IndexOf(
+                    "外墙脚", StringComparison.Ordinal) >= 0,
+                "围墙不得沿用墙壁的外墙脚点位名称");
 
             foreach (string key in new[] { "parcel.northBoundary",
                 "parcel.eastBoundary", "parcel.southBoundary",
@@ -2370,6 +2382,9 @@ namespace CDBox.CoreTests
                 "界址页应提供带预览的连续界址段选取入口");
             Contains(html, ">填写邻宗信息</button>",
                 "签章组应提供同套起终点选取入口");
+            Contains(html,
+                "draft.Boundary.SignatureGroups=clone(data||[])",
+                "连续填写邻宗信息结束后应整体保留本轮签章组结果");
             Contains(html, "CDBoxParcelCadInteractionFinished",
                 "页面应接收 CAD 外部浮窗完成结果并恢复编辑器");
             Contains(html, "重新生成说明与四至",
@@ -2391,6 +2406,13 @@ namespace CDBox.CoreTests
                 "CAD 图纸交互结束后应自动恢复编辑器");
             Contains(html, "localStorage.setItem(viewKey",
                 "编辑器应持久记忆页签、滚动位置和文本框尺寸");
+            Contains(html, "showRenameDialog()",
+                "重命名宗地应在编辑器内部打开输入浮窗");
+            Contains(html, "ParcelName:name",
+                "编辑器内重命名应把新宗地名直接提交给页面路由");
+            Contains(html,
+                "if(action==='rename'){showRenameDialog();return;}",
+                "重命名宗地不得最小化编辑器进入 CAD 外部浮窗");
             Equal("/", ParcelBoundaryPointNumberFormatter
                     .FormatSignatureMiddle(string.Empty),
                 "签章组无中间点时应明确输出斜杠");
