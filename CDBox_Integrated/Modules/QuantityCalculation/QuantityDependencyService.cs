@@ -220,12 +220,26 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void RecalculateAverageDepth(QuantityPipeAttributes attrs)
         {
-            double start = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
-            double end = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
-            if (start > 0 && end > 0) attrs.AverageDepth = RoundForEditor((start + end) / 2.0);
-            else if (start > 0) attrs.AverageDepth = RoundForEditor(start);
-            else if (end > 0) attrs.AverageDepth = RoundForEditor(end);
-            else attrs.AverageDepth = 0.0;
+            attrs.AverageDepth = CalculateAverageDepthForEditor(
+                attrs.StartDepth, attrs.EndDepth);
+        }
+
+        /// <summary>
+        /// 属性编辑器按界面可见的两位端点深度计算平均值。
+        /// 端点实际值仍原样保存；仅派生平均深度采用十进制四舍五入，
+        /// 避免 0.80 与 0.75 一类值受二进制浮点尾差影响显示为 0.77。
+        /// </summary>
+        public static double CalculateAverageDepthForEditor(double startDepth,
+            double endDepth)
+        {
+            decimal start = RoundDecimalForEditor(startDepth);
+            decimal end = RoundDecimalForEditor(endDepth);
+            if (start > 0m && end > 0m)
+                return (double)Math.Round((start + end) / 2m, 2,
+                    MidpointRounding.AwayFromZero);
+            if (start > 0m) return (double)start;
+            if (end > 0m) return (double)end;
+            return 0.0;
         }
 
         private static double CalculateEndpointDepth(QuantityPipeAttributes well, double pipeCushion, double fallback)
@@ -343,8 +357,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static double RoundForEditor(double value)
         {
-            if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
-            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+            return (double)RoundDecimalForEditor(value);
+        }
+
+        private static decimal RoundDecimalForEditor(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return 0m;
+            return Math.Round(Convert.ToDecimal(value), 2,
+                MidpointRounding.AwayFromZero);
         }
     }
 }
