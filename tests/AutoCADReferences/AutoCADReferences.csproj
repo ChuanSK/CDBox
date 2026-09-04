@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Autodesk-published AutoCAD 2023 API references, used only by CI. -->
+    <PackageReference Include="AutoCAD.NET" Version="24.2.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
