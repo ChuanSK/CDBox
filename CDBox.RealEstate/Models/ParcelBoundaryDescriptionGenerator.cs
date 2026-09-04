@@ -89,7 +89,7 @@ namespace CDBox.RealEstate.Models
                 if (!overwriteManual && point.Status == ParcelFieldStatus.Manual
                     && !string.IsNullOrWhiteSpace(point.Description)) continue;
                 ParcelBoundarySegmentRecord segment = FindSegment(point,
-                    segments);
+                    points, segments);
                 point.Description = (point.PointNumber ?? string.Empty)
                     + "位于本宗地" + Compass(point, centerX, centerY)
                     + "方向" + PointLocation(segment);
@@ -127,7 +127,7 @@ namespace CDBox.RealEstate.Models
             {
                 string direction = Compass(point, centerX, centerY);
                 ParcelBoundarySegmentRecord segment = FindSegment(point,
-                    segments);
+                    points, segments);
                 string location = PointLocation(segment);
                 string key = direction + "|" + location;
                 PointDescriptionGroup last = groups.LastOrDefault();
@@ -182,32 +182,109 @@ namespace CDBox.RealEstate.Models
             IList<ParcelBoundarySegmentRecord> segments,
             decimal centerX, decimal centerY)
         {
-            var grouped = new Dictionary<string, List<string>>
+            var grouped = new Dictionary<string, List<BoundaryPart>>
             {
-                { "北", new List<string>() },
-                { "东", new List<string>() },
-                { "南", new List<string>() },
-                { "西", new List<string>() }
+                { "北", new List<BoundaryPart>() },
+                { "东", new List<BoundaryPart>() },
+                { "南", new List<BoundaryPart>() },
+                { "西", new List<BoundaryPart>() }
             };
             foreach (ParcelBoundarySegmentRecord segment in segments)
             {
                 List<ParcelBoundaryPointRecord> path = SegmentPoints(points,
                     segment);
-                decimal x = path.Where(p => p.X.HasValue)
-                    .Select(p => p.X.Value).DefaultIfEmpty(centerX).Average();
-                decimal y = path.Where(p => p.Y.HasValue)
-                    .Select(p => p.Y.Value).DefaultIfEmpty(centerY).Average();
-                string cardinal = Cardinal(y - centerY, x - centerX);
-                string text = (segment.StartPointNumber ?? string.Empty)
-                    + "-" + (segment.EndPointNumber ?? string.Empty)
-                    + " 至本宗地" + LineLocation(segment);
-                string neighbor = Neighbor(segment);
-                if (!string.IsNullOrWhiteSpace(neighbor))
-                    text += "，接" + neighbor;
-                grouped[cardinal].Add(text);
+                AddDirectionalBoundaryParts(grouped, path, segment,
+                    centerX, centerY);
             }
-            return grouped.ToDictionary(x => x.Key, x => x.Value.Count == 0
-                ? string.Empty : string.Join("，", x.Value) + "；");
+            return grouped.ToDictionary(x => x.Key,
+                x => FormatBoundaryParts(x.Value));
+        }
+
+        private static void AddDirectionalBoundaryParts(
+            IDictionary<string, List<BoundaryPart>> grouped,
+            IList<ParcelBoundaryPointRecord> path,
+            ParcelBoundarySegmentRecord segment,
+            decimal centerX, decimal centerY)
+        {
+            List<ParcelBoundaryPointRecord> sourcePath = (path
+                ?? new List<ParcelBoundaryPointRecord>())
+                .Where(x => x != null)
+                .ToList();
+            List<ParcelBoundaryPointRecord> validPath = sourcePath.Where(x =>
+                x.X.HasValue && x.Y.HasValue).ToList();
+            if (sourcePath.Count < 2 || validPath.Count != sourcePath.Count)
+            {
+                decimal x = validPath.Select(p => p.X.Value)
+                    .DefaultIfEmpty(centerX).Average();
+                decimal y = validPath.Select(p => p.Y.Value)
+                    .DefaultIfEmpty(centerY).Average();
+                AddBoundaryPart(grouped, Cardinal(y - centerY,
+                    x - centerX), segment.StartPointNumber,
+                    segment.EndPointNumber, segment);
+                return;
+            }
+
+            int runStart = 0;
+            string cardinal = EdgeCardinal(validPath[0], validPath[1],
+                centerX, centerY);
+            for (int i = 1; i < validPath.Count - 1; i++)
+            {
+                string nextCardinal = EdgeCardinal(validPath[i],
+                    validPath[i + 1], centerX, centerY);
+                if (string.Equals(cardinal, nextCardinal,
+                    StringComparison.Ordinal)) continue;
+                AddBoundaryPart(grouped, cardinal,
+                    validPath[runStart].PointNumber,
+                    validPath[i].PointNumber, segment);
+                runStart = i;
+                cardinal = nextCardinal;
+            }
+            AddBoundaryPart(grouped, cardinal,
+                validPath[runStart].PointNumber,
+                validPath[validPath.Count - 1].PointNumber, segment);
+        }
+
+        private static string EdgeCardinal(ParcelBoundaryPointRecord start,
+            ParcelBoundaryPointRecord end, decimal centerX, decimal centerY)
+        {
+            decimal middleX = (start.X.Value + end.X.Value) / 2m;
+            decimal middleY = (start.Y.Value + end.Y.Value) / 2m;
+            return Cardinal(middleY - centerY, middleX - centerX);
+        }
+
+        private static void AddBoundaryPart(
+            IDictionary<string, List<BoundaryPart>> grouped,
+            string cardinal, string startPointNumber,
+            string endPointNumber, ParcelBoundarySegmentRecord segment)
+        {
+            List<BoundaryPart> parts;
+            if (!grouped.TryGetValue(cardinal, out parts)) return;
+            parts.Add(new BoundaryPart
+            {
+                Text = (startPointNumber ?? string.Empty) + "-"
+                    + (endPointNumber ?? string.Empty) + " 至本宗地"
+                    + LineLocation(segment),
+                Neighbor = Neighbor(segment)
+            });
+        }
+
+        private static string FormatBoundaryParts(IList<BoundaryPart> parts)
+        {
+            if (parts == null || parts.Count == 0) return string.Empty;
+            var text = new List<string>();
+            for (int i = 0; i < parts.Count; i++)
+            {
+                BoundaryPart current = parts[i];
+                string item = current.Text ?? string.Empty;
+                string neighbor = current.Neighbor ?? string.Empty;
+                bool neighborRunEnds = !string.IsNullOrWhiteSpace(neighbor)
+                    && (i == parts.Count - 1 || !string.Equals(neighbor,
+                        parts[i + 1].Neighbor ?? string.Empty,
+                        StringComparison.OrdinalIgnoreCase));
+                if (neighborRunEnds) item += "，接" + neighbor;
+                text.Add(item);
+            }
+            return string.Join("，", text) + "；";
         }
 
         private static string LineLocation(ParcelBoundarySegmentRecord segment)
@@ -248,7 +325,8 @@ namespace CDBox.RealEstate.Models
             if (!string.IsNullOrWhiteSpace(owner))
             {
                 if (ContainsAny(owner, "道", "巷", "路", "沟", "渠",
-                    "河", "塘", "山", "空地")) return owner;
+                    "河", "塘", "山", "空地", "住宅", "房屋"))
+                    return owner;
                 return owner + "用地";
             }
             return string.IsNullOrWhiteSpace(code)
@@ -257,13 +335,12 @@ namespace CDBox.RealEstate.Models
 
         private static ParcelBoundarySegmentRecord FindSegment(
             ParcelBoundaryPointRecord point,
+            IList<ParcelBoundaryPointRecord> points,
             IEnumerable<ParcelBoundarySegmentRecord> segments)
         {
             string number = point == null ? string.Empty : point.PointNumber;
-            return segments.Where(x => Same(x.StartPointNumber, number)
-                    || Same(x.EndPointNumber, number)
-                    || MiddleNumbers(x.MiddlePointNumbers).Any(y =>
-                        Same(y, number)))
+            return segments.Where(x => SegmentPoints(points, x).Any(y =>
+                    Same(y.PointNumber, number)))
                 .OrderByDescending(EntityPriority)
                 .FirstOrDefault();
         }
@@ -289,7 +366,9 @@ namespace CDBox.RealEstate.Models
             ParcelBoundarySegmentRecord segment)
         {
             var numbers = new List<string> { segment.StartPointNumber };
-            numbers.AddRange(MiddleNumbers(segment.MiddlePointNumbers));
+            numbers.AddRange(ParcelBoundaryPointNumberFormatter.ExpandMiddle(
+                segment.MiddlePointNumbers, points.Select(x =>
+                    x == null ? string.Empty : x.PointNumber)));
             numbers.Add(segment.EndPointNumber);
             return numbers.Select(x => FindPoint(points, x))
                 .Where(x => x != null).ToList();
@@ -369,16 +448,10 @@ namespace CDBox.RealEstate.Models
             return dy >= 0 ? "北" : "南";
         }
 
-        private static IEnumerable<string> MiddleNumbers(string value)
-        {
-            return (value ?? string.Empty).Split(new[] { '、', ',', '，',
-                ';', '；', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim());
-        }
-
         private static string NormalizeMiddle(string value)
         {
-            return string.Join("、", MiddleNumbers(value));
+            return ParcelBoundaryPointNumberFormatter
+                .FormatSegmentMiddle(value);
         }
 
         private static string PointRange(IList<string> points)
@@ -426,6 +499,18 @@ namespace CDBox.RealEstate.Models
                 Direction = string.Empty;
                 Location = string.Empty;
                 PointNumbers = new List<string>();
+            }
+        }
+
+        private sealed class BoundaryPart
+        {
+            public string Text { get; set; }
+            public string Neighbor { get; set; }
+
+            public BoundaryPart()
+            {
+                Text = string.Empty;
+                Neighbor = string.Empty;
             }
         }
     }

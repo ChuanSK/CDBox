@@ -121,7 +121,8 @@ namespace CDBox.RealEstate.Models
         public void Normalize()
         {
             StartPointNumber = StartPointNumber ?? string.Empty;
-            MiddlePointNumbers = MiddlePointNumbers ?? string.Empty;
+            MiddlePointNumbers = ParcelBoundaryPointNumberFormatter
+                .FormatSegmentMiddle(MiddlePointNumbers);
             EndPointNumber = EndPointNumber ?? string.Empty;
             LineCategory = LineCategory ?? string.Empty;
             LinePosition = LinePosition ?? string.Empty;
@@ -206,6 +207,8 @@ namespace CDBox.RealEstate.Models
                 if (group != null) group.Normalize();
             Segments.RemoveAll(x => x == null);
             SignatureGroups.RemoveAll(x => x == null);
+            ParcelBoundaryNeighborSynchronizer.Apply(Points, Segments,
+                SignatureGroups);
         }
     }
 
@@ -248,6 +251,30 @@ namespace CDBox.RealEstate.Models
         public int TextOverflowCount { get; set; }
         public int AbnormalPaginationCount { get; set; }
         public bool FooterOrphanRisk { get; set; }
+        public Dictionary<string, int> TextAreaHeights { get; set; }
+
+        public ParcelLayoutDiagnostics()
+        {
+            TextAreaHeights = new Dictionary<string, int>(
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        public void Normalize()
+        {
+            var normalized = new Dictionary<string, int>(
+                StringComparer.OrdinalIgnoreCase);
+            if (TextAreaHeights != null)
+            {
+                foreach (KeyValuePair<string, int> item in TextAreaHeights)
+                {
+                    string key = (item.Key ?? string.Empty).Trim();
+                    if (key.Length == 0) continue;
+                    normalized[key] = Math.Max(56, Math.Min(1200,
+                        item.Value));
+                }
+            }
+            TextAreaHeights = normalized;
+        }
     }
 
     public sealed class ParcelSurveyRecord
@@ -317,6 +344,7 @@ namespace CDBox.RealEstate.Models
             Buildings.RemoveAll(x => x == null);
             foreach (ParcelBuildingRecord building in Buildings) building.Normalize();
             LayoutDiagnostics = LayoutDiagnostics ?? new ParcelLayoutDiagnostics();
+            LayoutDiagnostics.Normalize();
         }
 
         public ParcelSurveyFieldValue Field(string key)

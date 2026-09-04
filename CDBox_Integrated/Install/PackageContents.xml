@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage
   SchemaVersion="1.0"
-  AppVersion="4.1.1"
+  AppVersion="5.1.0"
   Name="CDBox"
   Description="CDBox 管线测绘辅助插件"
   Author="CDBox"
@@ -25,9 +25,6 @@
         <Command Global="CDCBL" Local="CDCBL" />
         <Command Global="CDBOXHIDE" Local="CDBOXHIDE" />
         <Command Global="CDSET" Local="CDSET" />
-        <Command Global="CDINSTALL" Local="CDINSTALL" />
-        <Command Global="CDUNINSTALL" Local="CDUNINSTALL" />
-        <Command Global="CDUPDATE" Local="CDUPDATE" />
         <Command Global="CDSELFTEST" Local="CDSELFTEST" />
         <Command Global="CDBZSET" Local="CDBZSET" />
         <Command Global="BZSZ" Local="BZSZ" />
@@ -42,7 +39,6 @@
         <Command Global="JDBZ" Local="JDBZ" />
         <Command Global="CDSEC" Local="CDSEC" />
         <Command Global="DM" Local="DM" />
-        <Command Global="DMLEGACY" Local="DMLEGACY" />
         <Command Global="PLDM" Local="PLDM" />
         <Command Global="SX" Local="SX" />
         <Command Global="SXQC" Local="SXQC" />

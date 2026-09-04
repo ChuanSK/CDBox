@@ -461,7 +461,7 @@ namespace TCPipeAutoDraw.UI
 
         private static void ShowSettings()
         {
-            using (var form = new CDBoxSettingsForm()) form.ShowDialog(new AcadMainWindow());
+            Studio.CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
         }
     }
 }

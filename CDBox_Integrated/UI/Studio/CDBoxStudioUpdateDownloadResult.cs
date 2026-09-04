@@ -16,8 +16,8 @@ namespace TCPipeAutoDraw.UI.Studio
             LatestVersion = string.Empty;
             VersionCode = 0;
             Channel = string.Empty;
-            PackageFileName = string.Empty;
-            PackageSizeBytes = 0;
+            InstallerFileName = string.Empty;
+            InstallerSizeBytes = 0;
             Sha256Expected = string.Empty;
             Sha256Actual = string.Empty;
             FilePath = string.Empty;
@@ -28,14 +28,13 @@ namespace TCPipeAutoDraw.UI.Studio
             InstallerPrepared = false;
             InstallerStarted = false;
             InstallerErrorMessage = string.Empty;
-            PendingUpdatePath = string.Empty;
-            UpdaterPath = string.Empty;
-            TargetBundlePath = string.Empty;
-            UpdaterLogPath = string.Empty;
-            LastUpdateResultPath = string.Empty;
             StartedAt = DateTime.Now;
             FinishedAt = DateTime.MinValue;
             Attempts = new List<CDBoxStudioUpdateDownloadAttempt>();
+            InstalledComponentIds = new string[0];
+            InstalledComponentNames = new string[0];
+            ComponentPlanText = string.Empty;
+            ComponentStateWarning = string.Empty;
         }
 
         public bool Success { get; set; }
@@ -45,8 +44,8 @@ namespace TCPipeAutoDraw.UI.Studio
         public string LatestVersion { get; set; }
         public int VersionCode { get; set; }
         public string Channel { get; set; }
-        public string PackageFileName { get; set; }
-        public long PackageSizeBytes { get; set; }
+        public string InstallerFileName { get; set; }
+        public long InstallerSizeBytes { get; set; }
         public string Sha256Expected { get; set; }
         public string Sha256Actual { get; set; }
         public string FilePath { get; set; }
@@ -57,21 +56,20 @@ namespace TCPipeAutoDraw.UI.Studio
         public bool InstallerPrepared { get; set; }
         public bool InstallerStarted { get; set; }
         public string InstallerErrorMessage { get; set; }
-        public string PendingUpdatePath { get; set; }
-        public string UpdaterPath { get; set; }
-        public string TargetBundlePath { get; set; }
-        public string UpdaterLogPath { get; set; }
-        public string LastUpdateResultPath { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime FinishedAt { get; set; }
         public List<CDBoxStudioUpdateDownloadAttempt> Attempts { get; private set; }
+        public string[] InstalledComponentIds { get; set; }
+        public string[] InstalledComponentNames { get; set; }
+        public string ComponentPlanText { get; set; }
+        public string ComponentStateWarning { get; set; }
 
-        public string PackageSizeText
+        public string InstallerSizeText
         {
             get
             {
-                if (PackageSizeBytes <= 0) return string.Empty;
-                double mb = PackageSizeBytes / 1024d / 1024d;
+                if (InstallerSizeBytes <= 0) return string.Empty;
+                double mb = InstallerSizeBytes / 1024d / 1024d;
                 return mb.ToString("0.##", CultureInfo.InvariantCulture) + " MB";
             }
         }
@@ -87,9 +85,9 @@ namespace TCPipeAutoDraw.UI.Studio
             Append(sb, "latestVersion", LatestVersion); sb.Append(',');
             Append(sb, "versionCode", VersionCode); sb.Append(',');
             Append(sb, "channel", Channel); sb.Append(',');
-            Append(sb, "packageFileName", PackageFileName); sb.Append(',');
-            Append(sb, "packageSizeBytes", PackageSizeBytes); sb.Append(',');
-            Append(sb, "packageSizeText", PackageSizeText); sb.Append(',');
+            Append(sb, "installerFileName", InstallerFileName); sb.Append(',');
+            Append(sb, "installerSizeBytes", InstallerSizeBytes); sb.Append(',');
+            Append(sb, "installerSizeText", InstallerSizeText); sb.Append(',');
             Append(sb, "sha256Expected", Sha256Expected); sb.Append(',');
             Append(sb, "sha256Actual", Sha256Actual); sb.Append(',');
             Append(sb, "filePath", FilePath); sb.Append(',');
@@ -100,13 +98,12 @@ namespace TCPipeAutoDraw.UI.Studio
             Append(sb, "installerPrepared", InstallerPrepared); sb.Append(',');
             Append(sb, "installerStarted", InstallerStarted); sb.Append(',');
             Append(sb, "installerErrorMessage", InstallerErrorMessage); sb.Append(',');
-            Append(sb, "pendingUpdatePath", PendingUpdatePath); sb.Append(',');
-            Append(sb, "updaterPath", UpdaterPath); sb.Append(',');
-            Append(sb, "targetBundlePath", TargetBundlePath); sb.Append(',');
-            Append(sb, "updaterLogPath", UpdaterLogPath); sb.Append(',');
-            Append(sb, "lastUpdateResultPath", LastUpdateResultPath); sb.Append(',');
             Append(sb, "startedAt", StartedAt.ToString("yyyy-MM-dd HH:mm:ss")); sb.Append(',');
             Append(sb, "finishedAt", FinishedAt == DateTime.MinValue ? string.Empty : FinishedAt.ToString("yyyy-MM-dd HH:mm:ss")); sb.Append(',');
+            Append(sb, "componentPlanText", ComponentPlanText); sb.Append(',');
+            Append(sb, "componentStateWarning", ComponentStateWarning); sb.Append(',');
+            AppendArray(sb, "installedComponentIds", InstalledComponentIds); sb.Append(',');
+            AppendArray(sb, "installedComponentNames", InstalledComponentNames); sb.Append(',');
             sb.Append("\"attempts\":[");
             for (int i = 0; i < Attempts.Count; i++)
             {
@@ -135,6 +132,20 @@ namespace TCPipeAutoDraw.UI.Studio
         private static void Append(StringBuilder sb, string name, long value)
         {
             sb.Append('"').Append(Escape(name)).Append("\":").Append(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendArray(StringBuilder sb, string name,
+            IEnumerable<string> values)
+        {
+            sb.Append('"').Append(Escape(name)).Append("\":[");
+            bool first = true;
+            foreach (string value in values ?? new string[0])
+            {
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append('"').Append(Escape(value ?? string.Empty)).Append('"');
+            }
+            sb.Append(']');
         }
 
         private static string Escape(string value)

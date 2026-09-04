@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using TCPipeAutoDraw.Core.Startup;
 using TCPipeAutoDraw.Core.Colors;
-using TCPipeAutoDraw.Modules.ExcelToCad;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
@@ -44,37 +42,37 @@ namespace TCPipeAutoDraw.UI.Studio
             html = html.Replace("{{LAYER_MANAGER_PAGE}}", BuildLayerManagerPage());
             html = html.Replace("{{QUANTITY_DASHBOARD_PAGE}}", BuildQuantityDashboardPage());
             html = html.Replace("{{QUANTITY_ATTRIBUTE_EDITOR_PAGE}}", CDBoxStudioQuantityAttributeEditorPage.BuildEmbeddedSection());
-            html = html.Replace("{{SECTION_DRAWING_PAGE}}", CDBoxStudioSectionDrawingPage.BuildEmbeddedSection());
-            html = html.Replace("{{EXCEL_TO_CAD_PAGE}}", BuildExcelToCadPage(settings));
+            html = html.Replace("{{SECTION_DRAWING_PAGE}}", "<section id=\"sectionDrawingPage\" style=\"display:none\"></section>");
+            html = html.Replace("{{EXCEL_TO_CAD_PAGE}}",
+                "<section id=\"excelToCadPage\" style=\"display:none\"></section>");
             html = html.Replace("{{FRAME_SETTINGS_PAGE}}",
-                CDBoxStudioFrameSettingsPage.BuildEmbeddedSection(settings));
+                "<section id=\"frameSettingsPage\" style=\"display:none\"></section>");
             html = html.Replace("{{SHORT_CODE_SETTINGS_PAGE}}",
-                CDBoxStudioShortCodeSettingsPage.BuildEmbeddedSection(settings));
+                "<section id=\"shortCodeSettingsPage\" style=\"display:none\"></section>");
             html = html.Replace("{{LONGITUDINAL_PROFILE_SETTINGS_PAGE}}",
-                CDBoxStudioLongitudinalProfileSettingsPage
-                    .BuildEmbeddedSection(settings));
+                "<section id=\"longitudinalProfileSettingsPage\" style=\"display:none\"></section>");
             html = html.Replace("{{RECOGNITION_RULES_PAGE}}", BuildRecognitionRulesPage());
             html = html.Replace("{{DEFAULT_PROFILES_PAGE}}", BuildDefaultProfilesPage());
             html = html.Replace("{{QUANTITY_DEFAULTS_STYLE}}", CDBoxStudioQuantityDefaultsPage.BuildStyles(false));
-            html = html.Replace("{{RECOGNITION_RULES_STYLE}}", CDBoxStudioRecognitionRulesPage.BuildStyles(false));
-            html = html.Replace("{{ANNOTATION_SETTINGS_STYLE}}", CDBoxStudioAnnotationSettingsPage.BuildStyles(false));
-            html = html.Replace("{{LAYER_MANAGER_STYLE}}", CDBoxStudioLayerManagerPage.BuildStyles(false));
+            html = html.Replace("{{RECOGNITION_RULES_STYLE}}", string.Empty);
+            html = html.Replace("{{ANNOTATION_SETTINGS_STYLE}}", string.Empty);
+            html = html.Replace("{{LAYER_MANAGER_STYLE}}", string.Empty);
             html = html.Replace("{{QUANTITY_DASHBOARD_STYLE}}", CDBoxStudioQuantityDashboardPage.BuildStyles(false));
             html = html.Replace("{{QUANTITY_ATTRIBUTE_EDITOR_STYLE}}", CDBoxStudioQuantityAttributeEditorPage.BuildStyles(false));
-            html = html.Replace("{{SECTION_DRAWING_STYLE}}", CDBoxStudioSectionDrawingPage.BuildStyles(false));
+            html = html.Replace("{{SECTION_DRAWING_STYLE}}", string.Empty);
             html = html.Replace("{{QUANTITY_DEFAULTS_SCRIPT}}", CDBoxStudioQuantityDefaultsPage.BuildEmbeddedBridgeScript());
-            html = html.Replace("{{ANNOTATION_SETTINGS_SCRIPT}}", CDBoxStudioAnnotationSettingsPage.BuildComponentScript());
-            html = html.Replace("{{LAYER_MANAGER_SCRIPT}}", CDBoxStudioLayerManagerPage.BuildComponentScript());
+            html = html.Replace("{{ANNOTATION_SETTINGS_SCRIPT}}", string.Empty);
+            html = html.Replace("{{LAYER_MANAGER_SCRIPT}}", string.Empty);
             html = html.Replace("{{QUANTITY_DASHBOARD_SCRIPT}}", CDBoxStudioQuantityDashboardPage.BuildComponentScript());
             html = html.Replace("{{QUANTITY_ATTRIBUTE_EDITOR_SCRIPT}}", CDBoxStudioQuantityAttributeEditorPage.BuildComponentScript());
-            html = html.Replace("{{SECTION_DRAWING_SCRIPT}}", CDBoxStudioSectionDrawingPage.BuildComponentScript());
-            html = html.Replace("{{RECOGNITION_RULES_SCRIPT}}", CDBoxStudioRecognitionRulesPage.BuildEmbeddedBridgeScript());
+            html = html.Replace("{{SECTION_DRAWING_SCRIPT}}", string.Empty);
+            html = html.Replace("{{RECOGNITION_RULES_SCRIPT}}", string.Empty);
             html = html.Replace("{{DEFAULT_PROFILES_JSON}}", CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadDefaults()));
             html = html.Replace("{{BUILTIN_DEFAULT_PROFILES_JSON}}", CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadBuiltInDefaults()));
             html = html.Replace("{{DEFAULT_PROFILES_PATH}}", Html(CDBoxStudioDefaultProfiles.DefaultsFilePath));
-            html = html.Replace("{{RECOGNITION_RULES_JSON}}", CDBoxStudioRecognitionRules.BuildRulesJson(CDBoxStudioRecognitionRules.LoadRules()));
-            html = html.Replace("{{DEFAULT_RECOGNITION_RULES_JSON}}", CDBoxStudioRecognitionRules.BuildRulesJson(CDBoxStudioRecognitionRules.LoadDefaultRules()));
-            html = html.Replace("{{RECOGNITION_RULES_PATH}}", Html(CDBoxStudioRecognitionRules.RulesFilePath));
+            html = html.Replace("{{RECOGNITION_RULES_JSON}}", "[]");
+            html = html.Replace("{{DEFAULT_RECOGNITION_RULES_JSON}}", "[]");
+            html = html.Replace("{{RECOGNITION_RULES_PATH}}", string.Empty);
             html = html.Replace("{{TOTAL}}", list.Count.ToString());
             html = html.Replace("{{ENABLED}}", list.Count(a => a.Enabled).ToString());
             html = html.Replace("{{RUNTIME}}", Html(string.IsNullOrWhiteSpace(runtimeVersion) ? "WebView2" : runtimeVersion));
@@ -150,7 +148,8 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static string BuildSettingsPage(CDBoxStudioSettings settings, string settingsFilePath)
         {
-            CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
+            CDBoxStudioComponentUpdatePlan componentPlan =
+                CDBoxStudioComponentUpdatePlan.Capture();
             var page = new StringBuilder();
             page.Append("<section id=\"settingsPage\" class=\"settings-page\" style=\"display:none\">");
             page.Append("<div class=\"settings-head\"><div><span class=\"kicker\">CDBox Studio</span><h2>CDBox设置</h2></div></div>");
@@ -165,10 +164,6 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("<article class=\"setting-card\"><h3>动画</h3><label class=\"switch\"><input id=\"animationsToggle\" type=\"checkbox\"");
             if (settings.AnimationsEnabled) page.Append(" checked");
             page.Append("/><span></span><em>启用页面 / 卡片动画</em></label></article>");
-
-            page.Append("<article class=\"setting-card\"><h3>启动设置</h3><label class=\"switch\"><input id=\"promptInstallToggle\" type=\"checkbox\"");
-            if (appSettings.PromptInstallOnLoad) page.Append(" checked");
-            page.Append("/><span></span><em>未安装时提示安装自动加载</em></label></article>");
 
             page.Append("<article class=\"setting-card wide\"><h3>悬浮球</h3><div class=\"hud-appearance\">");
             AppendSwitch(page, "floatingCenterEnabledToggle", "悬浮球", "启用悬浮球", settings.FloatingCenterEnabled);
@@ -201,14 +196,15 @@ namespace TCPipeAutoDraw.UI.Studio
             page.Append("/><span></span><em>双击打开标注浮窗和属性编辑器</em></label></div>");
             page.Append("</div><p class=\"hud-hint\">外观设置统一应用于标注、对象选择、通知和操作提示浮窗。透明度 0% 对应安全最低透明度，100% 为完全不透明；保存后立即应用。</p></article>");
 
-            page.Append("<article class=\"setting-card wide\"><div class=\"settings-subhead\"><h3>安装与本地更新</h3><strong>").Append(CDBoxInstaller.IsInstalled() ? "已安装" : "未安装").Append("</strong></div>");
-            page.Append("<div class=\"install-paths\"><label>CAD 目录<code>").Append(Html(CDBoxInstaller.GetCadDirectory())).Append("</code></label><label>安装目录<code>").Append(Html(CDBoxInstaller.GetInstallRoot())).Append("</code></label></div>");
-            page.Append("<div class=\"update-actions install-actions\"><button id=\"installPluginButton\" class=\"primary-btn\">安装/修复自动加载</button><button id=\"localUpdatePluginButton\" class=\"ghost-btn\">本地更新</button><button id=\"uninstallPluginButton\" class=\"danger-btn\">卸载自动加载</button><button id=\"openSettingsLogsButton\" class=\"ghost-btn\">打开日志目录</button></div></article>");
+            page.Append("<article class=\"setting-card wide\"><div class=\"settings-subhead\"><div><h3>安装与更新</h3><p class=\"hud-hint\">当前组件：").Append(Html(componentPlan.Summary)).Append("</p></div></div>");
+            if (!string.IsNullOrWhiteSpace(componentPlan.Warning))
+                page.Append("<p class=\"hud-hint\">").Append(Html(componentPlan.Warning)).Append("</p>");
+            page.Append("<div class=\"update-actions install-actions\"><button id=\"openSettingsLogsButton\" class=\"ghost-btn\">打开日志目录</button></div></article>");
 
             page.Append("<article class=\"setting-card\"><h3>配置文件</h3><code>").Append(Html(settingsFilePath ?? string.Empty)).Append("</code></article>");
 
-            page.Append("<article class=\"setting-card wide update-card\"><div class=\"settings-subhead\"><div><h3>插件联网更新</h3><p class=\"hud-hint\">启动时仅检查并提示新版本，不会自动下载或安装。</p></div><strong>当前 {{CURRENT_VERSION}}</strong></div>");
-            page.Append("<div class=\"update-actions\"><button id=\"checkUpdateButton\" class=\"primary-btn\">检查更新</button><button id=\"downloadUpdateButton\" class=\"ghost-btn\" disabled>下载、校验并准备安装</button></div>");
+            page.Append("<article class=\"setting-card wide update-card\"><div class=\"settings-subhead\"><div><h3>插件联网更新</h3><p class=\"hud-hint\">只下载并启动官方安装器。安装器会预选当前业务模块；更新时先完整卸载旧版本，再按所选模块安装新版本。模块增减和插件卸载也统一在安装器内完成。</p></div><strong>当前 {{CURRENT_VERSION}}</strong></div>");
+            page.Append("<div class=\"update-actions\"><button id=\"checkUpdateButton\" class=\"primary-btn\">检查更新</button><button id=\"downloadUpdateButton\" class=\"ghost-btn\" disabled>下载安装器</button></div>");
             page.Append("<div id=\"updateProgress\" class=\"update-progress idle\"><div><span></span></div><em>等待操作</em></div>");
             page.Append("<div id=\"updateResult\" class=\"update-result idle\"><strong>尚未检查更新</strong></div></article>");
             page.Append("</div>");
@@ -220,12 +216,12 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static string BuildLayerManagerPage()
         {
-            return CDBoxStudioLayerManagerPage.BuildEmbeddedSection();
+            return "<section id=\"layerManagerPage\" style=\"display:none\"></section>";
         }
 
         private static string BuildAnnotationSettingsPage()
         {
-            return CDBoxStudioAnnotationSettingsPage.BuildEmbeddedSection();
+            return "<section id=\"annotationSettingsPage\" style=\"display:none\"></section>";
         }
 
         private static string BuildQuantityDashboardPage()
@@ -240,24 +236,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static string BuildRecognitionRulesPage()
         {
-            return CDBoxStudioRecognitionRulesPage.BuildEmbeddedSection();
-        }
-
-        private static string BuildExcelToCadPage(CDBoxStudioSettings settings)
-        {
-            double textHeight = ExcelToCadCommandService.ResolveDefaultTextHeight();
-            Autodesk.AutoCAD.ApplicationServices.Document document = null;
-            try
-            {
-                document = Autodesk.AutoCAD.ApplicationServices.Application
-                    .DocumentManager.MdiActiveDocument;
-            }
-            catch
-            {
-            }
-            return CDBoxStudioExcelToCadPage.BuildEmbeddedSection(settings,
-                textHeight, ExcelToCadSettingsStore.Load(textHeight),
-                CDBoxStudioExcelToCadWindow.LoadLayerNames(document));
+            return "<section id=\"recognitionRulesPage\" style=\"display:none\"></section>";
         }
 
         private static void AppendThemeOption(StringBuilder page, string value, string title, string description, string current)
@@ -414,8 +393,8 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   function setActiveNavigation(name){document.querySelectorAll('[data-filter]').forEach(function(x){x.classList.toggle('active',(x.getAttribute('data-filter')||'')===name);});}
   function showHome(){hideStudioPages();homePage.style.display='block';}
   function showSettings(){hideStudioPages();settingsPage.style.display='block';active='CDBox设置';setActiveNavigation('CDBox设置');post('filter','CDBox设置');}
-  function initLayerManagerPage(){if(layerManagerEditor)return layerManagerEditor;layerManagerEditor=window.CDBoxLayerManagerPage.create({rootId:'layerManagerPage',post:post,toast:toast,standalone:false});return layerManagerEditor;}
-  function showLayerManager(){hideStudioPages();layerManagerPage.style.display='block';active='图层管理器';setActiveNavigation('图层管理器');initLayerManagerPage();post('layerManagerOpened','');post('filter','图层管理器');}
+  function initLayerManagerPage(){return null;}
+  function showLayerManager(){post('openLayerManagerWindow','');active='总览';showHome();}
   function initQuantityDashboardPage(){if(quantityDashboardEditor)return quantityDashboardEditor;quantityDashboardEditor=window.CDBoxQuantityDashboardPage.create({rootId:'quantityDashboardPage',post:post,toast:toast,standalone:false});return quantityDashboardEditor;}
   function showQuantityDashboard(){hideStudioPages();quantityDashboardPage.style.display='block';active='工程量';setActiveNavigation('工程量');initQuantityDashboardPage().open();post('quantityDashboardOpened','');post('filter','工程量');}
   function initQuantityAttributeEditor(){if(quantityAttributeEditor)return quantityAttributeEditor;quantityAttributeEditor=window.CDBoxQuantityAttributeEditorPage.create({rootId:'quantityAttributeEditorPage',post:post,toast:toast,standalone:false});return quantityAttributeEditor;}
@@ -431,45 +410,40 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   function initAnnotationSettingsPage(){if(annotationSettingsEditor)return annotationSettingsEditor;annotationSettingsEditor=window.CDBoxAnnotationSettingsPage.create({rootId:'annotationSettingsPage',post:post,toast:toast,standalone:false,initialSection:'surface',syncHash:true});return annotationSettingsEditor;}
   function showAnnotationSettings(section){hideStudioPages();annotationSettingsPage.style.display='block';active='标注设置';setActiveNavigation('标注设置');initAnnotationSettingsPage().open(section||'surface');post('annotationSettingsOpened',section||'surface');post('filter','标注设置');}
   function showDefaultProfiles(){hideStudioPages();defaultProfilesPage.style.display='block';active='属性默认表';setActiveNavigation('属性默认表');renderDefaultProfiles();post('filter','属性默认表');}
-  function showRecognitionRules(){hideStudioPages();recognitionRulesPage.style.display='block';active='属性识别表';setActiveNavigation('属性识别表');renderRules();post('filter','属性识别表');}
+  function showRecognitionRules(){post('openRecognitionWindow','');active='总览';showHome();}
   function apply(){if(active==='CDBox设置'){showSettings();return;}if(active==='图层管理器'){showLayerManager();return;}if(active==='工程量'){showQuantityDashboard();return;}if(active==='断面生成'){showSectionDrawing();return;}if(active==='纵断面设置'){showLongitudinalProfileSettings();return;}if(active==='图框设置'){showFrameSettings();return;}if(active==='标注设置'){showAnnotationSettings(annotationSettingsEditor?annotationSettingsEditor.section:'surface');return;}if(active==='属性默认表'){showDefaultProfiles();return;}if(active==='Excel 转 CAD'){showExcelToCad();return;}showHome();var q=(search.value||'').trim().toLowerCase();var visible=0;cards.forEach(function(card){var text=card.innerText.toLowerCase()+' '+(card.getAttribute('data-command')||'').toLowerCase();var show=!q||text.indexOf(q)>=0;card.style.display=show?'flex':'none';if(show)visible++;});document.querySelectorAll('[data-feature-group]').forEach(function(group){group.style.display=[].slice.call(group.querySelectorAll('[data-card]')).some(function(card){return card.style.display!=='none';})?'block':'none';});title.textContent='全部功能';empty.className=visible?'empty':'empty show';post('filter','总览');}
-  function withPageLeave(next){if(active==='标注设置'&&annotationSettingsEditor&&annotationSettingsEditor.isDirty()){annotationSettingsEditor.requestLeave(next);return;}if(active==='图层管理器'&&layerManagerEditor&&layerManagerEditor.isDirty()){layerManagerEditor.requestLeave(next);return;}next();}
+  function withPageLeave(next){if(active==='标注设置'&&annotationSettingsEditor&&annotationSettingsEditor.isDirty()){annotationSettingsEditor.requestLeave(next);return;}next();}
   var latestUpdateManifest=null;
   function hudFraction(id){return (Number((document.getElementById(id)||{}).value||0)/100).toFixed(2);}
   function hudOpacity(id){return (0.2+Number((document.getElementById(id)||{}).value||0)*0.008).toFixed(2);}
   function settingOn(id){return document.getElementById(id).checked?'1':'0';}
-  function buildSettingsPayload(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=settingOn('animationsToggle');var promptInstall=settingOn('promptInstallToggle');var glow=settingOn('hudGlowEnabled');var doubleClickOpen=settingOn('doubleClickOpenToggle');var colorOutput=(document.getElementById('colorOutputMode')||{}).value||'PreserveOriginalType';return 'theme='+encodeURIComponent(theme)+'&animations='+animations+'&promptInstall='+promptInstall+'&colorOutputMode='+encodeURIComponent(colorOutput)+'&hudNormalOpacity='+hudOpacity('hudNormalOpacity')+'&hudHoverOpacity='+hudOpacity('hudHoverOpacity')+'&hudGlowEnabled='+glow+'&hudGlowIntensity='+hudFraction('hudGlowIntensity')+'&doubleClickOpen='+doubleClickOpen+'&floatingCenterEnabled='+settingOn('floatingCenterEnabledToggle')+'&floatingCenterShowOnStartup='+settingOn('floatingCenterShowOnStartupToggle')+'&floatingCenterSnapToEdges='+settingOn('floatingCenterSnapToEdgesToggle')+'&floatingCenterAutoCloseSeconds='+encodeURIComponent(document.getElementById('floatingCenterAutoCloseSeconds').value||'5')+'&floatingCenterAutoCheckEnabled='+settingOn('floatingCenterAutoCheckEnabledToggle')+'&floatingCenterSafeAutoSyncEnabled='+settingOn('floatingCenterSafeAutoSyncEnabledToggle');}
+  function buildSettingsPayload(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=settingOn('animationsToggle');var glow=settingOn('hudGlowEnabled');var doubleClickOpen=settingOn('doubleClickOpenToggle');var colorOutput=(document.getElementById('colorOutputMode')||{}).value||'PreserveOriginalType';return 'theme='+encodeURIComponent(theme)+'&animations='+animations+'&colorOutputMode='+encodeURIComponent(colorOutput)+'&hudNormalOpacity='+hudOpacity('hudNormalOpacity')+'&hudHoverOpacity='+hudOpacity('hudHoverOpacity')+'&hudGlowEnabled='+glow+'&hudGlowIntensity='+hudFraction('hudGlowIntensity')+'&doubleClickOpen='+doubleClickOpen+'&floatingCenterEnabled='+settingOn('floatingCenterEnabledToggle')+'&floatingCenterShowOnStartup='+settingOn('floatingCenterShowOnStartupToggle')+'&floatingCenterSnapToEdges='+settingOn('floatingCenterSnapToEdgesToggle')+'&floatingCenterAutoCloseSeconds='+encodeURIComponent(document.getElementById('floatingCenterAutoCloseSeconds').value||'5')+'&floatingCenterAutoCheckEnabled='+settingOn('floatingCenterAutoCheckEnabledToggle')+'&floatingCenterSafeAutoSyncEnabled='+settingOn('floatingCenterSafeAutoSyncEnabledToggle');}
   function saveSettings(){var theme=(document.querySelector('input[name=studioTheme]:checked')||{}).value||'light';var animations=document.getElementById('animationsToggle').checked?'1':'0';document.body.setAttribute('data-theme',theme);document.body.classList.toggle('no-animations',animations!=='1');post('settings',buildSettingsPayload());}
   function setUpdateProgress(kind,text){var bar=document.getElementById('updateProgress');if(!bar)return;bar.className='update-progress '+(kind||'idle');var em=bar.querySelector('em');if(em)em.textContent=text||'等待操作';}
   window.CDBoxStudioUpdateProgress=function(data){data=data||{};var bar=document.getElementById('updateProgress');if(!bar)return;var percent=Math.max(0,Math.min(100,Number(data.percent||0)));bar.className='update-progress '+(data.kind||'progress');var span=bar.querySelector('span');if(span)span.style.width=percent+'%';var em=bar.querySelector('em');if(em)em.textContent=(data.message||'下载进度')+(percent>0?' · '+percent+'%':'');};
   function setDownloadButton(enabled){var btn=document.getElementById('downloadUpdateButton');if(btn)btn.disabled=!enabled;}
   function checkUpdate(){var box=document.getElementById('updateResult');latestUpdateManifest=null;setDownloadButton(false);setUpdateProgress('running','正在检查更新');if(box){box.className='update-result';box.innerHTML='<strong>正在检查更新...</strong><p>若网络连接失败将自动重试。</p>';}post('checkUpdate',buildSettingsPayload());}
-  function downloadUpdate(){var box=document.getElementById('updateResult');setDownloadButton(false);setUpdateProgress('running','正在下载、校验并准备独立更新器');if(box){box.className='update-result';box.innerHTML='<strong>正在下载、校验并准备安装...</strong><p>将按 update.json 中 package.urls 的顺序尝试下载，失败会自动切换下载源。校验通过后会启动独立更新器，请正常关闭 AutoCAD，更新器不会强制结束进程。</p>';}post('downloadUpdate',buildSettingsPayload());}
+  function downloadUpdate(){var box=document.getElementById('updateResult');setDownloadButton(false);setUpdateProgress('running','正在下载并校验安装器');if(box){box.className='update-result';box.innerHTML='<strong>正在下载并校验安装器...</strong><p>将从 update.json 中 installer.package.versionedUrl 下载不可变版本安装器；校验通过后会启动统一安装器。</p>';}post('downloadUpdate',buildSettingsPayload());}
   function htmlEscape(v){return String(v||'').replace(/[&<>""']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','""':'&quot;',""'"":'&#39;'}[c];});}
-  window.CDBoxStudioUpdateResult=function(data){var box=document.getElementById('updateResult');if(!box)return;data=data||{};var ok=!!data.success;latestUpdateManifest=ok?data:null;setDownloadButton(ok&&data.updateAvailable&&data.sources&&data.sources.length);setUpdateProgress(ok?'done':'error',ok?'检查完成':'检查失败');box.className='update-result '+(ok?(data.updateAvailable?'success':''):'error');if(!ok){box.innerHTML='<strong>检查更新失败</strong><p>请稍后重试或查看日志。</p><div class=""update-grid""><div class=""update-item""><span>当前版本</span><em>'+htmlEscape(data.currentVersion||'')+'</em></div></div>';return;}var title=data.updateAvailable?'发现新版本':'当前已是最新版本';var notes=data.notes?'<div class=""notes""><strong>更新说明</strong>'+htmlEscape(data.notes)+'</div>':'<div class=""notes""><strong>更新说明</strong>暂无更新说明。</div>';box.innerHTML='<strong>'+title+'</strong><p>'+htmlEscape(data.title||'')+'</p><div class=""update-grid""><div class=""update-item""><span>当前版本</span><em>'+htmlEscape(data.currentVersion||'')+'</em></div><div class=""update-item""><span>当前版本码</span><em>'+htmlEscape(data.currentVersionCode||'')+'</em></div><div class=""update-item""><span>最新版本</span><em>'+htmlEscape(data.latestVersion||'')+'</em></div><div class=""update-item""><span>最新版本码</span><em>'+htmlEscape(data.versionCode||'')+'</em></div><div class=""update-item""><span>发布日期</span><em>'+htmlEscape(data.releaseDate||'')+'</em></div><div class=""update-item""><span>强制更新</span><em>'+(data.mandatory?'是':'否')+'</em></div><div class=""update-item""><span>包大小</span><em>'+htmlEscape(data.packageSizeText||'未提供')+'</em></div><div class=""update-item""><span>包文件</span><em>'+htmlEscape(data.packageFileName||'')+'</em></div><div class=""update-item""><span>SHA256</span><em>'+htmlEscape(data.sha256||'')+'</em></div><div class=""update-item""><span>检查时间</span><em>'+htmlEscape(data.checkedAt||'')+'</em></div></div>'+notes+'<p class=""muted-path"">下一步可点击“下载、校验并准备安装”。校验通过后会生成 pending-update.json，并把 CDBoxUpdater.exe 复制到插件目录外启动。</p>';};
+  window.CDBoxStudioUpdateResult=function(data){var box=document.getElementById('updateResult');if(!box)return;data=data||{};var ok=!!data.success;var componentPlan=htmlEscape(data.componentPlanText||'未读取到当前组件组合');var componentWarning=data.componentStateWarning?'<p class=""muted-path"">组件状态提示：'+htmlEscape(data.componentStateWarning)+'</p>':'';latestUpdateManifest=ok?data:null;setDownloadButton(ok&&data.updateAvailable&&data.sources&&data.sources.length);setUpdateProgress(ok?'done':'error',ok?'检查完成':'检查失败');box.className='update-result '+(ok?(data.updateAvailable?'success':''):'error');if(!ok){box.innerHTML='<strong>检查更新失败</strong><p>'+htmlEscape(data.errorMessage||'请稍后重试或查看日志。')+'</p><div class=""update-grid""><div class=""update-item""><span>当前版本</span><em>'+htmlEscape(data.currentVersion||'')+'</em></div><div class=""update-item""><span>更新组件</span><em>'+componentPlan+'</em></div></div>'+componentWarning;return;}var title=data.updateAvailable?'发现新版本':'当前已是最新版本';var notes=data.notes?'<div class=""notes""><strong>更新说明</strong>'+htmlEscape(data.notes)+'</div>':'<div class=""notes""><strong>更新说明</strong>暂无更新说明。</div>';box.innerHTML='<strong>'+title+'</strong><p>'+htmlEscape(data.title||'')+'</p><div class=""update-grid""><div class=""update-item""><span>当前版本</span><em>'+htmlEscape(data.currentVersion||'')+'</em></div><div class=""update-item""><span>最新版本</span><em>'+htmlEscape(data.latestVersion||'')+'</em></div><div class=""update-item""><span>更新组件</span><em>'+componentPlan+'</em></div><div class=""update-item""><span>发布日期</span><em>'+htmlEscape(data.releaseDate||'')+'</em></div><div class=""update-item""><span>安装器大小</span><em>'+htmlEscape(data.installerSizeText||'未提供')+'</em></div><div class=""update-item""><span>安装器文件</span><em>'+htmlEscape(data.installerFileName||'')+'</em></div><div class=""update-item""><span>SHA256</span><em>'+htmlEscape(data.sha256||'')+'</em></div><div class=""update-item""><span>检查时间</span><em>'+htmlEscape(data.checkedAt||'')+'</em></div></div>'+notes+'<p class=""muted-path"">更新只下载官方 EXE 安装器。安装器会预选当前组件，实际应用时先完整卸载旧版本，再按所选模块安装新版本。</p>'+componentWarning;};
   window.CDBoxStudioDownloadResult=function(data){var box=document.getElementById('updateResult');if(!box)return;data=data||{};var ok=!!data.success&&!!data.verified;setUpdateProgress(ok?'done':'error',ok?'下载完成，SHA256 校验通过':'下载或校验失败');setDownloadButton(!!latestUpdateManifest&&!!latestUpdateManifest.updateAvailable);box.className='update-result '+(ok?'success':'error');var attempts='';if(data.attempts&&data.attempts.length){var successes=data.attempts.filter(function(a){return !!a.success;}).length;attempts='<div class=""update-attempts""><strong>下载尝试</strong><div class=""update-attempt '+(successes?'ok':'fail')+'""><b>共尝试 '+data.attempts.length+' 次，成功 '+successes+' 次</b></div></div>';}
-    var installReady=ok&&!!data.installerStarted;var installText=installReady?'更新器已启动，请正常关闭 AutoCAD。更新器会等待所有相关 AutoCAD 进程退出，不会强制结束。':(ok?'更新包校验通过，但更新器未启动：'+htmlEscape(data.installerErrorMessage||'请查看 Studio 日志') : '下载或校验失败，请稍后重试或查看日志。');box.innerHTML='<strong>'+(installReady?'更新已准备，等待关闭 AutoCAD':(ok?'更新包已下载并通过校验':'更新包下载 / 校验失败'))+'</strong><p>'+installText+'</p><div class=""update-grid""><div class=""update-item""><span>目标版本</span><em>'+htmlEscape(data.latestVersion||'')+'</em></div><div class=""update-item""><span>版本码</span><em>'+htmlEscape(data.versionCode||'')+'</em></div><div class=""update-item""><span>包文件</span><em>'+htmlEscape(data.packageFileName||'')+'</em></div><div class=""update-item""><span>包大小</span><em>'+htmlEscape(data.packageSizeText||'')+'</em></div><div class=""update-item""><span>保存路径</span><em>'+htmlEscape(data.filePath||'')+'</em></div><div class=""update-item""><span>目标 bundle</span><em>'+htmlEscape(data.targetBundlePath||'')+'</em></div><div class=""update-item""><span>pending-update.json</span><em>'+htmlEscape(data.pendingUpdatePath||'')+'</em></div><div class=""update-item""><span>更新器</span><em>'+htmlEscape(data.updaterPath||'')+'</em></div><div class=""update-item""><span>更新器日志</span><em>'+htmlEscape(data.updaterLogPath||'')+'</em></div><div class=""update-item""><span>安装结果</span><em>'+htmlEscape(data.lastUpdateResultPath||'')+'</em></div><div class=""update-item""><span>期望 SHA256</span><em>'+htmlEscape(data.sha256Expected||'')+'</em></div><div class=""update-item""><span>实际 SHA256</span><em>'+htmlEscape(data.sha256Actual||'')+'</em></div></div>'+attempts+'<p class=""muted-path"">'+(installReady?'关闭 AutoCAD 后，更新器将二次校验 SHA256、解压完整 CDBox.bundle、校验必要文件、备份旧 bundle 后替换；失败时自动回滚。用户 AppData 配置不会被覆盖。':'更新器命令：'+htmlEscape(data.installerCommand||''))+'</p>';};
+    var installReady=ok&&!!data.installerStarted;var componentPlan=htmlEscape(data.componentPlanText||'未读取到当前组件组合');var componentWarning=data.componentStateWarning?'<p class=""muted-path"">组件状态提示：'+htmlEscape(data.componentStateWarning)+'</p>':'';var installText=installReady?'统一安装器已启动。请关闭 AutoCAD，再在安装器中确认模块并应用更新。':(ok?'安装器校验通过，但未能启动：'+htmlEscape(data.installerErrorMessage||'请查看 Studio 日志') : '下载或校验失败：'+htmlEscape(data.errorMessage||'请稍后重试或查看日志。'));box.innerHTML='<strong>'+(installReady?'安装器已启动':(ok?'安装器已下载并通过校验':'安装器下载 / 校验失败'))+'</strong><p>'+installText+'</p><div class=""update-grid""><div class=""update-item""><span>目标版本</span><em>'+htmlEscape(data.latestVersion||'')+'</em></div><div class=""update-item""><span>预选组件</span><em>'+componentPlan+'</em></div><div class=""update-item""><span>安装器文件</span><em>'+htmlEscape(data.installerFileName||'')+'</em></div><div class=""update-item""><span>安装器大小</span><em>'+htmlEscape(data.installerSizeText||'')+'</em></div><div class=""update-item""><span>保存路径</span><em>'+htmlEscape(data.filePath||'')+'</em></div><div class=""update-item""><span>期望 SHA256</span><em>'+htmlEscape(data.sha256Expected||'')+'</em></div><div class=""update-item""><span>实际 SHA256</span><em>'+htmlEscape(data.sha256Actual||'')+'</em></div></div>'+attempts+'<p class=""muted-path"">'+(installReady?'安装器将先完整卸载旧版本，再按最终勾选的模块安装新版本。':'安装器命令：'+htmlEscape(data.installerCommand||''))+'</p>'+componentWarning;};
 
-  function runIdDirect(id){if(!id)return;if(id==='module:excel-to-cad'){showExcelToCad();return;}if(id==='__frameSettings'||id==='module:frame-settings'){showFrameSettings();return;}if(id==='__shortCodeSettings'||id==='module:short-code-settings'){showShortCodeSettings();return;}if(id==='module:longitudinal-profile-settings'){showLongitudinalProfileSettings();return;}if(id==='__openLogs'){post('openLogs','');return;}if(id==='__layerManager'){post('openLayerManagerWindow','');return;}if(id==='__quantityDashboard'){post('openQuantityDashboardWindow','');return;}if(id==='__quantityAttributeEditor'){post('openQuantityAttributeEditorWindow','{}');return;}if(id==='__sectionDrawing'){post('openSectionDrawingWindow','');return;}if(id==='__quantityFormalReport'){post('exportQuantityReport','{}');return;}if(id==='__settings'||id==='__checkUpdate'){post('openSettingsWindow','');return;}if(id==='__annotationSettings'){post('openAnnotationSettingsWindow','surface');return;}if(id==='__defaultProfiles'){post('openDefaultProfilesWindow','');return;}post('run',id);} function runId(id){if(!id)return;withPageLeave(function(){runIdDirect(id);});}
+  function runIdDirect(id){if(!id)return;if(id==='module:excel-to-cad'){post('run','module:excel-to-cad');return;}if(id==='__frameSettings'||id==='module:frame-settings'){post('run','module:frame-settings');return;}if(id==='__shortCodeSettings'||id==='module:short-code-settings'){post('run','cmd:CDJMSZ');return;}if(id==='module:longitudinal-profile-settings'){showLongitudinalProfileSettings();return;}if(id==='__openLogs'){post('openLogs','');return;}if(id==='__layerManager'){post('openLayerManagerWindow','');return;}if(id==='__quantityDashboard'){post('openQuantityDashboardWindow','');return;}if(id==='__quantityAttributeEditor'){post('openQuantityAttributeEditorWindow','{}');return;}if(id==='__sectionDrawing'){post('openSectionDrawingWindow','');return;}if(id==='__quantityFormalReport'){post('exportQuantityReport','{}');return;}if(id==='__settings'||id==='__checkUpdate'){post('openSettingsWindow','');return;}if(id==='__annotationSettings'){post('openAnnotationSettingsWindow','surface');return;}if(id==='__defaultProfiles'){post('openDefaultProfilesWindow','');return;}post('run',id);} function runId(id){if(!id)return;withPageLeave(function(){runIdDirect(id);});}
   function visibleCommandRows(){return cmdRows.filter(function(row){return row.style.display!=='none'&&!row.disabled;});}
   function updateSelection(delta){var rows=visibleCommandRows();if(!rows.length)return;selectedIndex=(selectedIndex+delta+rows.length)%rows.length;cmdRows.forEach(function(r){r.classList.remove('active');});rows[selectedIndex].classList.add('active');rows[selectedIndex].scrollIntoView({block:'nearest'});}
   function filterCommands(){var q=(cmdInput.value||'').trim().toLowerCase();var count=0;cmdRows.forEach(function(row){var hit=!q||(row.getAttribute('data-search')||row.innerText.toLowerCase()).indexOf(q)>=0;row.style.display=hit?'flex':'none';if(hit&&!row.disabled)count++;row.classList.remove('active');});selectedIndex=0;var rows=visibleCommandRows();if(rows.length)rows[0].classList.add('active');cmdEmpty.className=count?'cmd-empty':'cmd-empty show';}
   function openCommandPanel(){overlay.classList.add('show');overlay.setAttribute('aria-hidden','false');cmdInput.value='';filterCommands();setTimeout(function(){cmdInput.focus();},20);}
   function closeCommandPanel(){overlay.classList.remove('show');overlay.setAttribute('aria-hidden','true');}
 
-  function initRecognitionRulesPage(){
-    if(recognitionRulesEditor)return recognitionRulesEditor;
-    recognitionRulesEditor=window.CDBoxRecognitionRulesPage.create({rootId:'recognitionRulesPage',data:recognitionRulesData,defaultData:defaultRecognitionRulesData,toast:toast,post:post,standalone:false,autoOpenSearch:false});
-    return recognitionRulesEditor;
-  }
-  function renderRules(){initRecognitionRulesPage().render();}
+  function initRecognitionRulesPage(){return null;}
+  function renderRules(){}
 
   document.querySelectorAll('[data-filter]').forEach(function(btn){btn.addEventListener('click',function(){var target=btn.getAttribute('data-filter')||'总览';if(target===active){apply();return;}withPageLeave(function(){active=target;apply();});});});
   cards.forEach(function(card){var run=card.querySelector('[data-run-button]');if(run){run.addEventListener('click',function(){if(run.disabled)return;runId(card.getAttribute('data-id'));});}});
   cmdRows.forEach(function(row){row.addEventListener('click',function(){if(row.disabled)return;runId(row.getAttribute('data-id'));closeCommandPanel();});});
   document.querySelectorAll('input[name=studioTheme]').forEach(function(x){x.addEventListener('change',saveSettings);});
   document.getElementById('animationsToggle').addEventListener('change',saveSettings);
-  document.getElementById('promptInstallToggle').addEventListener('change',saveSettings);
   document.getElementById('hudGlowEnabled').addEventListener('change',saveSettings);
   document.getElementById('doubleClickOpenToggle').addEventListener('change',saveSettings);
   document.getElementById('colorOutputMode').addEventListener('change',saveSettings);
@@ -477,16 +451,12 @@ body[data-theme='dark']{--bg:#0f172a;--panel:#172033;--panel2:#111827;--muted:#9
   [['hudNormalOpacity','hudNormalOpacityValue'],['hudHoverOpacity','hudHoverOpacityValue'],['hudGlowIntensity','hudGlowIntensityValue']].forEach(function(pair){var input=document.getElementById(pair[0]),output=document.getElementById(pair[1]);input.addEventListener('input',function(){output.textContent=input.value+'%';});input.addEventListener('change',saveSettings);});
   document.getElementById('checkUpdateButton').addEventListener('click',checkUpdate);
   document.getElementById('downloadUpdateButton').addEventListener('click',downloadUpdate);
-  document.getElementById('installPluginButton').addEventListener('click',function(){post('installPlugin','');});
-  document.getElementById('localUpdatePluginButton').addEventListener('click',function(){post('localUpdatePlugin','');});
-  document.getElementById('uninstallPluginButton').addEventListener('click',function(){post('uninstallPlugin','');});
   document.getElementById('openSettingsLogsButton').addEventListener('click',function(){post('openLogs','');});
   document.getElementById('saveDefaultProfilesButton').addEventListener('click',saveDefaultProfiles);
   document.getElementById('restoreDefaultProfilesButton').addEventListener('click',restoreDefaultProfiles);
-  initRecognitionRulesPage();
   search.addEventListener('input',apply);cmdInput.addEventListener('input',filterCommands);document.getElementById('cmdButton').addEventListener('click',openCommandPanel);overlay.addEventListener('click',function(ev){if(ev.target===overlay)closeCommandPanel();});
   document.addEventListener('keydown',function(ev){if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'){ev.preventDefault();openCommandPanel();return;}if(!overlay.classList.contains('show'))return;if(ev.key==='Escape'){closeCommandPanel();return;}if(ev.key==='ArrowDown'){ev.preventDefault();updateSelection(1);return;}if(ev.key==='ArrowUp'){ev.preventDefault();updateSelection(-1);return;}if(ev.key==='Enter'){var rows=visibleCommandRows();if(rows[selectedIndex]){runId(rows[selectedIndex].getAttribute('data-id'));closeCommandPanel();}}});
-  renderDefaultProfiles();initRecognitionRulesPage();renderRules();apply();filterCommands();setTimeout(function(){post('ready','');},60);
+  renderDefaultProfiles();apply();filterCommands();setTimeout(function(){post('ready','');},60);
 })();
 </script>
 </body></html>";

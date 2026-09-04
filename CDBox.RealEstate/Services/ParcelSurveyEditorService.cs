@@ -12,6 +12,7 @@ namespace CDBox.RealEstate.Services
         private readonly ICDBoxPageService _pages;
         private readonly ParcelSurveyStore _store;
         private readonly ParcelBoundaryCadService _cad;
+        private readonly ParcelMapSheetCadService _mapSheets;
         private readonly ParcelSurveyCadScopeService _scopes;
         private readonly ParcelSurveyCadWorkflowService _workflow;
 
@@ -24,10 +25,11 @@ namespace CDBox.RealEstate.Services
             _store = new ParcelSurveyStore();
             _cad = new ParcelBoundaryCadService(prompts, notifications,
                 logger);
-            _scopes = new ParcelSurveyCadScopeService(prompts, notifications,
-                logger);
+            _mapSheets = new ParcelMapSheetCadService(notifications, logger);
+            _scopes = new ParcelSurveyCadScopeService(notifications);
             _workflow = new ParcelSurveyCadWorkflowService(_store, _cad,
-                _scopes, notifications);
+                _mapSheets, _scopes, notifications);
+            _workflow.EditorRefreshRequested += Open;
         }
 
         public void Open()
@@ -46,6 +48,11 @@ namespace CDBox.RealEstate.Services
         public void FillNeighborInformation()
         {
             _workflow.FillNeighborInformation();
+        }
+
+        public void FinishMapSheetRecognition()
+        {
+            _workflow.FinishMapSheetRecognition();
         }
     }
 }

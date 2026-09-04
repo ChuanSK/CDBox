@@ -4,13 +4,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
-using TCPipeAutoDraw.Modules.LayerManager;
-using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
+using System.Web.Script.Serialization;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
-using TCPipeAutoDraw.Modules.ExcelToCad;
 using TCPipeAutoDraw.Core.Startup;
+using TCPipeAutoDraw.Core.Modules;
 using TCPipeAutoDraw.UI;
 using TCPipeAutoDraw.UI.FloatingCenter;
+using CDBox.Shared.Wastewater.Cad;
 
 namespace TCPipeAutoDraw.UI.Studio
 {
@@ -20,7 +20,6 @@ namespace TCPipeAutoDraw.UI.Studio
         private readonly CDBoxStudioSettings _settings;
         private readonly Action<string> _scriptSink;
         private readonly CDBoxStudioUpdateRoutes _updateRoutes;
-        private readonly CDBoxStudioExcelToCadWindow _excelToCadRoutes;
 
         public CDBoxStudioCommandRouter(Dictionary<string, CDBoxStudioAction> actionsById, CDBoxStudioSettings settings)
             : this(actionsById, settings, null)
@@ -35,9 +34,6 @@ namespace TCPipeAutoDraw.UI.Studio
             _scriptSink = scriptSink;
             CDBoxStudioQuantityDashboardRoutes.Configure(_scriptSink);
             _updateRoutes = new CDBoxStudioUpdateRoutes(_settings, _scriptSink, ApplySettingsArgument);
-            _excelToCadRoutes = CDBoxStudioExcelToCadWindow.CreateEmbedded(
-                Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument,
-                ExcelToCadCommandService.ResolveDefaultTextHeight());
         }
 
         public CDBoxStudioRouteResult Route(CDBoxStudioRouteRequest request)
@@ -49,38 +45,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 return result;
             }
 
-            CDBoxStudioRouteResult excelToCadResult;
-            if (_excelToCadRoutes.TryRoute(request,
-                Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument,
-                out excelToCadResult)) return excelToCadResult;
-
             CDBoxStudioRouteResult quantityDashboardResult;
             if (CDBoxStudioQuantityDashboardRoutes.TryRoute(request, out quantityDashboardResult)) return quantityDashboardResult;
-
-            CDBoxStudioRouteResult quantityAttributeResult;
-            if (CDBoxStudioQuantityAttributeEditorRoutes.TryRoute(request, out quantityAttributeResult)) return quantityAttributeResult;
-
-            CDBoxStudioRouteResult sectionDrawingResult;
-            if (CDBoxStudioSectionDrawingRoutes.TryRoute(request, _scriptSink, out sectionDrawingResult)) return sectionDrawingResult;
-
-            CDBoxStudioRouteResult frameSettingsResult;
-            if (CDBoxStudioFrameSettingsRoutes.TryRoute(request,
-                out frameSettingsResult)) return frameSettingsResult;
-
-            CDBoxStudioRouteResult shortCodeSettingsResult;
-            if (CDBoxStudioShortCodeSettingsRoutes.TryRoute(request,
-                out shortCodeSettingsResult)) return shortCodeSettingsResult;
-
-            CDBoxStudioRouteResult longitudinalProfileSettingsResult;
-            if (CDBoxStudioLongitudinalProfileSettingsRoutes.TryRoute(
-                request, out longitudinalProfileSettingsResult))
-                return longitudinalProfileSettingsResult;
-
-            CDBoxStudioRouteResult layerManagerResult;
-            if (CDBoxStudioLayerManagerRoutes.TryRoute(request, false, out layerManagerResult)) return layerManagerResult;
-
-            CDBoxStudioRouteResult annotationResult;
-            if (CDBoxStudioAnnotationSettingsRoutes.TryRoute(request, false, out annotationResult)) return annotationResult;
 
             CDBoxStudioRouteResult updateResult;
             if (_updateRoutes.TryRoute(request, out updateResult)) return updateResult;
@@ -99,21 +65,6 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 case "settings":
                     return RouteSettings(request.Argument);
-
-                case "installplugin":
-                    return RouteInstallPlugin();
-
-                case "localupdateplugin":
-                    return RouteLocalUpdatePlugin();
-
-                case "uninstallplugin":
-                    return RouteUninstallPlugin();
-
-                case "saverecognitionrules":
-                    return RouteSaveRecognitionRules(request.Argument);
-
-                case "openlegacyrecognition":
-                    return RouteOpenLegacyRecognitionRules();
 
                 case "openrecognitionwindow":
                     return RouteOpenRecognitionWindow();
@@ -143,13 +94,10 @@ namespace TCPipeAutoDraw.UI.Studio
                     return RouteOpenFrameSettingsWindow();
 
                 case "openlongitudinalprofilesettingswindow":
-                    CDBoxStudioLongitudinalProfileSettingsWindow.ShowWindow(
-                        new AcadMainWindow());
+                    WastewaterModuleHost.ExecuteCommand(
+                        "wastewater-longitudinal-profile-settings");
                     result.ToastKind = "success";
                     return result;
-
-                case "layermanageropened":
-                    return RouteLayerManagerOpened();
 
                 case "openannotationsettingswindow":
                     return RouteOpenAnnotationSettingsWindow(request.Argument);
@@ -217,11 +165,10 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 ApplySettingsArgument(argument);
                 CDBoxStudioSettingsStore.Save(_settings);
-                PipeLengthAnnotationInteractionService.RefreshAppearance();
+                IWastewaterCadInteractionService interaction =
+                    WastewaterCadInteractionRegistry.Current;
+                if (interaction != null) interaction.RefreshAppearance();
                 FloatingCenterController.ApplySettings();
-                CDBoxAppSettings appSettings = CDBoxAppSettingsStore.Load();
-                appSettings.PromptInstallOnLoad = ReadBooleanArgument(argument, "promptinstall", appSettings.PromptInstallOnLoad);
-                CDBoxAppSettingsStore.Save(appSettings);
                 CDBoxStudioLogger.Info("保存 Studio 设置：Theme=" + _settings.Theme
                     + ", AnimationsEnabled=" + _settings.AnimationsEnabled
                     + ", AnnotationHudNormalOpacity=" + _settings.AnnotationHudNormalOpacity.ToString("0.##", CultureInfo.InvariantCulture)
@@ -347,109 +294,6 @@ namespace TCPipeAutoDraw.UI.Studio
                 || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool ReadBooleanArgument(string argument, string targetKey, bool fallback)
-        {
-            if (string.IsNullOrWhiteSpace(argument)) return fallback;
-            foreach (string part in argument.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                string[] kv = part.Split(new[] { '=' }, 2);
-                if (kv.Length == 0 || !string.Equals(kv[0].Trim(), targetKey, StringComparison.OrdinalIgnoreCase)) continue;
-                return kv.Length > 1 && IsTrue(DecodeArgumentValue(kv[1].Trim()));
-            }
-            return fallback;
-        }
-
-        private CDBoxStudioRouteResult RouteInstallPlugin()
-        {
-            CDBoxInstallResult install = CDBoxInstaller.InstallToCadDirectory();
-            CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
-            if (install.Success) app.InstalledPath = install.InstallRoot;
-            CDBoxAppSettingsStore.Save(app);
-            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = install.Success ? "success" : "error", ToastMessage = install.Message };
-        }
-
-        private CDBoxStudioRouteResult RouteLocalUpdatePlugin()
-        {
-            using (var dialog = new OpenFileDialog())
-            {
-                dialog.Title = "选择完整构建输出目录中的新版 CDBox.dll";
-                dialog.Filter = "CDBox.dll|CDBox.dll|DLL 文件 (*.dll)|*.dll|所有文件 (*.*)|*.*";
-                dialog.CheckFileExists = true;
-                if (dialog.ShowDialog(new AcadMainWindow()) != DialogResult.OK)
-                    return new CDBoxStudioRouteResult { Handled = true };
-
-                CDBoxInstallResult update;
-                Autodesk.AutoCAD.ApplicationServices.Document document =
-                    Autodesk.AutoCAD.ApplicationServices.Application
-                        .DocumentManager.MdiActiveDocument;
-                using (var progress = CDBoxProgressSession.Start(document,
-                    "本地更新准备", "正在检查并收集本地更新文件…",
-                    "LocalUpdate", "local-update-progress", false))
-                {
-                    update = CDBoxInstaller.ScheduleUpdateFromDll(
-                        dialog.FileName, progress.Report);
-                    if (update.Success)
-                        progress.Complete("本地更新已准备，请关闭 AutoCAD 完成安装。");
-                    else
-                        progress.Fail("本地更新准备失败。");
-                }
-                CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
-                if (update.Success) app.InstalledPath = update.InstallRoot;
-                CDBoxAppSettingsStore.Save(app);
-                string prompt = update.Success
-                    ? "本地更新包已完成校验，独立更新器已启动。\r\n\r\n请正常关闭 AutoCAD，更新器将在 CAD 完全退出后继续安装。"
-                    : update.Message;
-                CDBoxMessageBox.Show(new AcadMainWindow(), prompt,
-                    update.Success ? "本地更新已准备" : "本地更新失败",
-                    MessageBoxButtons.OK,
-                    update.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                return new CDBoxStudioRouteResult
-                {
-                    Handled = true,
-                    RefreshPage = false,
-                    ToastKind = update.Success ? "success" : "error",
-                    ToastMessage = update.Success ? "本地更新已准备，请关闭 AutoCAD 完成安装" : "本地更新准备失败"
-                };
-            }
-        }
-
-        private CDBoxStudioRouteResult RouteUninstallPlugin()
-        {
-            DialogResult confirm = CDBoxPromptDialog.ShowYesNo(new AcadMainWindow(), "卸载 CDBox", "确定卸载 CDBox 自动加载并删除安装目录吗？", "卸载", "取消", out _);
-            if (confirm != DialogResult.Yes) return new CDBoxStudioRouteResult { Handled = true };
-
-            CDBoxInstallResult uninstall = CDBoxInstaller.Uninstall();
-            CDBoxAppSettings app = CDBoxAppSettingsStore.Load();
-            app.InstalledPath = string.Empty;
-            CDBoxAppSettingsStore.Save(app);
-            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = true, ToastKind = uninstall.Success ? "success" : "warning", ToastMessage = uninstall.Message };
-        }
-
-
-        private CDBoxStudioRouteResult RouteSaveRecognitionRules(string payload)
-        {
-            var result = new CDBoxStudioRouteResult
-            {
-                Handled = true,
-                RefreshPage = false,
-                ToastKind = "success"
-            };
-
-            try
-            {
-                int count = CDBoxStudioRecognitionRules.SavePayload(payload);
-                result.ToastMessage = "属性识别表已保存：" + count + " 条规则";
-            }
-            catch (Exception ex)
-            {
-                result.ToastKind = "error";
-                result.ToastMessage = "属性识别表保存失败：" + ex.Message;
-                CDBoxStudioLogger.Error("Studio 保存属性识别表失败。", ex);
-            }
-
-            return result;
-        }
-
         private CDBoxStudioRouteResult RouteSaveDefaultProfiles(string payload)
         {
             var result = new CDBoxStudioRouteResult
@@ -539,7 +383,7 @@ namespace TCPipeAutoDraw.UI.Studio
 
             try
             {
-                CDBoxStudioRecognitionRulesWindow.ShowWindow(new AcadMainWindow());
+                BaseLayerManagerHost.OpenRecognitionRules();
                 result.ToastMessage = "已打开属性识别表独立窗口";
             }
             catch (Exception ex)
@@ -552,52 +396,12 @@ namespace TCPipeAutoDraw.UI.Studio
             return result;
         }
 
-        private CDBoxStudioRouteResult RouteOpenLegacyRecognitionRules()
-        {
-            var result = new CDBoxStudioRouteResult
-            {
-                Handled = true,
-                RefreshPage = true,
-                ToastKind = "success"
-            };
-
-            try
-            {
-                using (var form = new LayerRecognitionRulesForm(LayerManagerService.LoadRecognitionRules(), LayerManagerService.GetRecognitionRulesFilePath()))
-                {
-                    DialogResult dialogResult = form.ShowDialog(new AcadMainWindow());
-                    if (dialogResult == DialogResult.OK)
-                    {
-                        LayerManagerService.SaveRecognitionRules(form.Rules);
-                        result.ToastMessage = "旧版属性识别表已保存";
-                        CDBoxStudioLogger.Info("通过旧版窗口保存属性识别表。路径：" + LayerManagerService.GetRecognitionRulesFilePath());
-                    }
-                    else
-                    {
-                        result.RefreshPage = false;
-                        result.ToastKind = "info";
-                        result.ToastMessage = "已关闭旧版属性识别表";
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                result.RefreshPage = false;
-                result.ToastKind = "error";
-                result.ToastMessage = "旧版属性识别表打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开旧版属性识别表失败。", ex);
-            }
-
-            return result;
-        }
-
-
         private CDBoxStudioRouteResult RouteOpenLayerManagerWindow()
         {
             var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
             try
             {
-                CDBoxStudioLayerManagerWindow.ShowWindow(new AcadMainWindow());
+                BaseLayerManagerHost.OpenManager();
                 result.ToastMessage = "已打开图层管理器独立窗口";
             }
             catch (Exception ex)
@@ -631,7 +435,12 @@ namespace TCPipeAutoDraw.UI.Studio
             var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
             try
             {
-                CDBoxStudioQuantityAttributeEditorRequest request = CDBoxStudioQuantityAttributeEditorApi.Deserialize<CDBoxStudioQuantityAttributeEditorRequest>(payload) ?? new CDBoxStudioQuantityAttributeEditorRequest();
+                QuantityAttributeEditorOpenRequest request =
+                    string.IsNullOrWhiteSpace(payload)
+                    ? new QuantityAttributeEditorOpenRequest()
+                    : new JavaScriptSerializer().Deserialize<
+                        QuantityAttributeEditorOpenRequest>(payload)
+                        ?? new QuantityAttributeEditorOpenRequest();
                 Autodesk.AutoCAD.ApplicationServices.Document doc = QuantityDashboardService.ResolveDocument(request.documentId);
                 QuantityPipeSelectionInfo info = doc == null || string.IsNullOrWhiteSpace(request.handle) ? null : QuantityPipeAttributeService.ReadPipe(doc, ResolveHandle(doc, request.handle));
                 CDBoxStudioQuantityAttributeEditorWindow.ShowWindow(new AcadMainWindow(), info, request.documentId);
@@ -640,7 +449,7 @@ namespace TCPipeAutoDraw.UI.Studio
             catch (Exception ex)
             {
                 result.ToastKind = "error"; result.ToastMessage = "属性编辑器独立窗口打开失败：" + ex.Message;
-                CDBoxStudioLogger.Error("打开属性编辑器 4.1.1 独立窗口失败。", ex);
+                CDBoxStudioLogger.Error("打开属性编辑器 5.1.0 独立窗口失败。", ex);
             }
             return result;
         }
@@ -650,7 +459,8 @@ namespace TCPipeAutoDraw.UI.Studio
             var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
             try
             {
-                CDBoxStudioSectionDrawingWindow.ShowWindow(new AcadMainWindow());
+                WastewaterModuleHost.ExecuteCommand(
+                    "wastewater-section-drawing");
                 result.ToastMessage = "已打开断面图生成独立窗口";
             }
             catch (Exception ex)
@@ -671,7 +481,7 @@ namespace TCPipeAutoDraw.UI.Studio
             };
             try
             {
-                CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow());
+                CommonModuleHost.ExecuteCommand("frame-settings");
                 result.ToastMessage = "已打开图框设置独立窗口";
             }
             catch (Exception ex)
@@ -694,19 +504,6 @@ namespace TCPipeAutoDraw.UI.Studio
         public void Dispose()
         {
             CDBoxStudioQuantityDashboardRoutes.Unconfigure(_scriptSink);
-            if (_excelToCadRoutes != null) _excelToCadRoutes.Dispose();
-        }
-
-        private CDBoxStudioRouteResult RouteLayerManagerOpened()
-        {
-            const string actionId = "module:layer-manager";
-            CDBoxStudioAction action;
-            if (_actionsById.TryGetValue(actionId, out action) && action != null)
-            {
-            }
-
-            CDBoxStudioLogger.Info("打开图层管理器 WebView2 页面。");
-            return new CDBoxStudioRouteResult { Handled = true, RefreshPage = false };
         }
 
         private CDBoxStudioRouteResult RouteOpenAnnotationSettingsWindow(string section)
@@ -714,7 +511,8 @@ namespace TCPipeAutoDraw.UI.Studio
             var result = new CDBoxStudioRouteResult { Handled = true, ToastKind = "success" };
             try
             {
-                CDBoxStudioAnnotationSettingsWindow.ShowWindow(new AcadMainWindow(), section);
+                WastewaterModuleHost.ExecuteCommand(
+                    "wastewater-annotation-settings");
                 result.ToastMessage = "已打开标注设置独立窗口";
             }
             catch (Exception ex)

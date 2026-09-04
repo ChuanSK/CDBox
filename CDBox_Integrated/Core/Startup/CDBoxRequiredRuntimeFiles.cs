@@ -5,7 +5,6 @@ namespace CDBox.Shared
         public static readonly string[] ManagedDependencies =
         {
             "CDBox.Shared.dll",
-            "CDBox.RealEstate.dll",
             "Microsoft.Web.WebView2.Core.dll",
             "Microsoft.Web.WebView2.WinForms.dll",
             "NPOI.Core.dll",
@@ -30,7 +29,14 @@ namespace CDBox.Shared
             "ZString.dll"
         };
 
+        public static readonly string[] ComponentAssemblies =
+        {
+            "CDBox.Common.dll",
+            "CDBox.Wastewater.dll",
+            "CDBox.RealEstate.dll"
+        };
+
+        public const string ComponentManifestFileName = "components.json";
         public const string WebView2LoaderRelativePath = "runtimes\\win-x64\\native\\WebView2Loader.dll";
-        public const string UpdaterRelativePath = "Updater\\CDBoxUpdater.exe";
     }
 }

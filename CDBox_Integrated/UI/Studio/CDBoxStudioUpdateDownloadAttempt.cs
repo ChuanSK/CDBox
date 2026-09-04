@@ -11,7 +11,7 @@ namespace TCPipeAutoDraw.UI.Studio
             SourceName = string.Empty;
             SourceUrl = string.Empty;
             ErrorMessage = string.Empty;
-            PackagePath = string.Empty;
+            InstallerPath = string.Empty;
             Sha256Actual = string.Empty;
             StartedAt = DateTime.Now;
             FinishedAt = DateTime.MinValue;
@@ -24,7 +24,7 @@ namespace TCPipeAutoDraw.UI.Studio
         public string ErrorMessage { get; set; }
         public long BytesReceived { get; set; }
         public long BytesTotal { get; set; }
-        public string PackagePath { get; set; }
+        public string InstallerPath { get; set; }
         public string Sha256Actual { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime FinishedAt { get; set; }
@@ -40,7 +40,7 @@ namespace TCPipeAutoDraw.UI.Studio
             Append(sb, "errorMessage", ErrorMessage); sb.Append(',');
             Append(sb, "bytesReceived", BytesReceived); sb.Append(',');
             Append(sb, "bytesTotal", BytesTotal); sb.Append(',');
-            Append(sb, "packagePath", PackagePath); sb.Append(',');
+            Append(sb, "installerPath", InstallerPath); sb.Append(',');
             Append(sb, "sha256Actual", Sha256Actual); sb.Append(',');
             Append(sb, "startedAt", StartedAt.ToString("yyyy-MM-dd HH:mm:ss")); sb.Append(',');
             Append(sb, "finishedAt", FinishedAt == DateTime.MinValue ? string.Empty : FinishedAt.ToString("yyyy-MM-dd HH:mm:ss"));

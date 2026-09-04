@@ -34,7 +34,36 @@ namespace TCPipeAutoDraw.UI.Studio
                 result = RouteDownloadUpdate(request.Argument);
                 return true;
             }
+            if (name == "openinstaller")
+            {
+                result = RouteOpenInstaller(request.Argument);
+                return true;
+            }
             return false;
+        }
+
+        private CDBoxStudioRouteResult RouteOpenInstaller(string argument)
+        {
+            ApplyAndSaveSettings(argument);
+            if (!CDBoxStudioInstallerLauncher.ManagementInstallerExists)
+            {
+                CDBoxStudioRouteResult download = RouteDownloadUpdate(
+                    argument);
+                download.ToastMessage = "未找到本地安装器，正在下载官方安装器";
+                return download;
+            }
+            CDBoxStudioInstallerLaunchResult launch =
+                CDBoxStudioInstallerLauncher
+                    .PrepareAndLaunchManagementInstaller();
+            return new CDBoxStudioRouteResult
+            {
+                Handled = true,
+                RefreshPage = false,
+                ToastKind = launch.Started ? "success" : "error",
+                ToastMessage = launch.Started
+                    ? "安装器已打开，可增减模块或卸载插件"
+                    : "安装器打开失败：" + launch.ErrorMessage
+            };
         }
 
         private CDBoxStudioRouteResult RouteCheckUpdate(string argument)
@@ -104,7 +133,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 RefreshPage = false,
                 ToastKind = "info",
                 ToastMessage = "已开始下载、校验并准备安装更新",
-                ExecuteScript = "window.CDBoxStudioUpdateProgress && window.CDBoxStudioUpdateProgress({percent:0,message:'准备下载更新包并启动独立更新器',kind:'running'});"
+                ExecuteScript = "window.CDBoxStudioUpdateProgress && window.CDBoxStudioUpdateProgress({percent:0,message:'准备下载安装器',kind:'running'});"
             };
 
             try
@@ -113,7 +142,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (Interlocked.CompareExchange(ref _downloadRunning, 1, 0) != 0)
                 {
                     result.ToastKind = "warning";
-                    result.ToastMessage = "更新包下载正在进行，请稍候";
+                    result.ToastMessage = "安装器下载正在进行，请稍候";
                     return result;
                 }
 
@@ -130,7 +159,7 @@ namespace TCPipeAutoDraw.UI.Studio
                         if (download.Success && download.Verified && download.InstallerStarted)
                             PushScript("window.CDBoxStudioToast && window.CDBoxStudioToast('更新器已启动，请正常关闭 AutoCAD 以完成安装','success');");
                         else if (download.Success && download.Verified)
-                            PushScript("window.CDBoxStudioToast && window.CDBoxStudioToast('更新包校验通过，但更新器未启动，请查看 Studio 日志','warning');");
+                            PushScript("window.CDBoxStudioToast && window.CDBoxStudioToast('安装器校验通过，但未能启动，请查看 Studio 日志','warning');");
                     }
                     catch (Exception ex)
                     {
@@ -150,7 +179,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioUpdateDownloadResult download = NewFailedDownloadResult(_settings, ex);
                 result.ExecuteScript = "window.CDBoxStudioDownloadResult && window.CDBoxStudioDownloadResult(" + download.ToJson() + ");";
                 result.ToastKind = "error";
-                result.ToastMessage = "更新包下载失败：" + ex.Message;
+                result.ToastMessage = "安装器下载失败：" + ex.Message;
                 CDBoxStudioLogger.Error("Studio 下载更新路由失败。", ex);
             }
             return result;
@@ -183,6 +212,8 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static CDBoxStudioUpdateResult NewFailedCheckResult(CDBoxStudioSettings settings, Exception ex)
         {
+            CDBoxStudioComponentUpdatePlan plan =
+                CDBoxStudioComponentUpdatePlan.Capture();
             return new CDBoxStudioUpdateResult
             {
                 Success = false,
@@ -192,12 +223,18 @@ namespace TCPipeAutoDraw.UI.Studio
                 LatestVersion = string.Empty,
                 Channel = settings == null ? CDBoxStudioUpdateService.DefaultChannel : settings.UpdateChannel,
                 SourceName = CDBoxStudioUpdateService.DefaultUpdateSourceName,
-                SourceUrl = CDBoxStudioUpdateService.DefaultUpdateSourceUrl
+                SourceUrl = CDBoxStudioUpdateService.DefaultUpdateSourceUrl,
+                InstalledComponentIds = plan.SelectedComponentIds,
+                InstalledComponentNames = plan.SelectedComponentNames,
+                ComponentPlanText = plan.Summary,
+                ComponentStateWarning = plan.Warning
             };
         }
 
         private static CDBoxStudioUpdateDownloadResult NewFailedDownloadResult(CDBoxStudioSettings settings, Exception ex)
         {
+            CDBoxStudioComponentUpdatePlan plan =
+                CDBoxStudioComponentUpdatePlan.Capture();
             return new CDBoxStudioUpdateDownloadResult
             {
                 Success = false,
@@ -205,7 +242,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 ErrorMessage = ex == null ? string.Empty : ex.Message,
                 CurrentVersion = CDBoxStudioUpdateService.CurrentVersion,
                 CurrentVersionCode = CDBoxStudioUpdateService.CurrentVersionCode,
-                Channel = settings == null ? CDBoxStudioUpdateService.DefaultChannel : settings.UpdateChannel
+                Channel = settings == null ? CDBoxStudioUpdateService.DefaultChannel : settings.UpdateChannel,
+                InstalledComponentIds = plan.SelectedComponentIds,
+                InstalledComponentNames = plan.SelectedComponentNames,
+                ComponentPlanText = plan.Summary,
+                ComponentStateWarning = plan.Warning
             };
         }
 

@@ -10,9 +10,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
-using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Core.Cad;
-using TCPipeAutoDraw.Modules.AnnotationHud;
 using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
@@ -179,9 +177,9 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 session.BeforeObjectIds = SnapshotCurrentSpaceEntityIds(doc);
                 try { doc.Database.ObjectAppended += CassDatabase_ObjectAppended; } catch { }
 
-                CDBoxNotificationService.Notify("表面积标注",
-                    "已选择边界，正在调用 CASS surfacearea 计算；完成后将自动进入引线和注记位置选择。边界图层："
-                    + boundaryLayer, CDBoxNotificationKind.Information);
+                doc.Editor.WriteHudMessage("\n[表面积标注] 已选择边界，正在调用 CASS surfacearea 计算；"
+                    + "完成后将自动进入引线和注记位置选择。边界图层："
+                    + boundaryLayer);
 
                 RunCassSurfaceAreaCommandSynchronously(doc, per.ObjectId, options.BoundaryInterval, boundaryHandle);
 
@@ -692,7 +690,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
 
-                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                    SurfaceAreaAnnotationMetadataService.Attach(db, tr,
                         result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
 
                     tr.Commit();
@@ -824,7 +822,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         result.LeaderObjectId = DrawLeaderByUnderline(db, tr, pprStart.Value, layout.UnderlineStart, layout.UnderlineEnd, annotationLayer, attachment);
                     }
 
-                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                    SurfaceAreaAnnotationMetadataService.Attach(db, tr,
                         result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
 
                     tr.Commit();
@@ -1160,7 +1158,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                         result.LeaderObjectId = DrawLeader(db, tr, leaderStartPoint, result.AnnotationObjectId, options.TextHeight, annotationLayer, attachment);
                     }
 
-                    SimpleAnnotationObjectService.AttachSurfaceMetadata(db, tr,
+                    SurfaceAreaAnnotationMetadataService.Attach(db, tr,
                         result.BoundaryObjectId, result.AnnotationObjectId, result.LeaderObjectId);
 
                     tr.Commit();
@@ -2694,15 +2692,6 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
                 CircumRadius2 = dx * dx + dy * dy;
                 HasCircumcircle = true;
             }
-        }
-    }
-
-    public sealed class SurfaceAreaCassCommandBridge
-    {
-        [CommandMethod("TCBMJ_CASS_FINISH", CommandFlags.Modal)]
-        public void FinishCassSurfaceAreaAnnotation()
-        {
-            SurfaceAreaAnnotationService.FinishPendingCassCommandAnnotation();
         }
     }
 

@@ -85,6 +85,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioRuntimeInfo runtime = CDBoxStudioRuntime.Detect();
                 if (runtime == null || !runtime.Available)
                 {
+                    runtime = await CDBoxStudioRuntimeInstaller
+                        .EnsureAvailableWithPromptAsync(this, runtime);
+                }
+                if (runtime == null || !runtime.Available)
+                {
                     string reason = runtime == null ? "未知错误" : runtime.ErrorMessage;
                     throw new InvalidOperationException(string.IsNullOrWhiteSpace(reason) ? "未检测到 Microsoft Edge WebView2 Runtime。" : reason);
                 }
@@ -92,7 +97,9 @@ namespace TCPipeAutoDraw.UI.Studio
                 _runtimeVersion = runtime.Version;
                 CDBoxStudioLogger.Info("WebView2 Runtime 可用。版本：" + _runtimeVersion);
 
-                await _webView.EnsureCoreWebView2Async(null);
+                CoreWebView2Environment environment = await
+                    CDBoxStudioRuntime.GetEnvironmentAsync();
+                await _webView.EnsureCoreWebView2Async(environment);
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
                 _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
@@ -275,7 +282,9 @@ namespace TCPipeAutoDraw.UI.Studio
             body.Padding = new Padding(0, 18, 0, 0);
             body.Text = "CDBox Studio 需要 Microsoft Edge WebView2 Runtime。\r\n\r\n"
                 + "当前 WebView2 初始化失败，经典 CDBOX、侧边栏和所有旧功能不受影响。\r\n\r\n"
-                + "建议：安装或修复 Microsoft Edge WebView2 Runtime 后，重新打开 CDSTUDIO。\r\n\r\n"
+                + "CDBox 已改用当前用户可写的数据目录：\r\n"
+                + CDBoxStudioWebViewProfile.PreferredUserDataFolder
+                + "\r\n\r\n若仍失败，请关闭 AutoCAD，确认当前用户可写入该目录后重新打开。\r\n\r\n"
                 + "错误信息：" + (ex == null ? "未知错误" : ex.Message) + "\r\n\r\n"
                 + "Studio 日志：" + CDBoxStudioLogger.LogFilePath;
 

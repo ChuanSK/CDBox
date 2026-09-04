@@ -50,8 +50,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 true,
                 delegate
                 {
-                    CDBoxStudioLongitudinalProfileSettingsWindow
-                        .ShowWindow(new AcadMainWindow());
+                    WastewaterModuleHost.ExecuteCommand(
+                        "wastewater-longitudinal-profile-settings");
                 }));
             AddCommand(actions, "cmd:SXMRB", "属性默认表", "管线属性", string.Empty, "SXMRB", string.Empty);
             AddCommand(actions, "cmd:SXQC", "属性清除", "管线属性", string.Empty, "SXQC", string.Empty);
@@ -61,35 +61,17 @@ namespace TCPipeAutoDraw.UI.Studio
                 "WSGCGB", "WSGCGB");
             AddCommand(actions, "cmd:TCFRAMELAYOUT", "裁图区域布框", "图框工具", string.Empty, "TCFRAMELAYOUT", string.Empty);
             AddCommand(actions, "cmd:TCFRAMEPLACE", "直接布置图框", "图框工具", string.Empty, "TCFRAMEPLACE", string.Empty);
-            actions.Add(new CDBoxStudioAction(
-                "module:frame-settings",
-                "图框设置",
+            AddCommand(actions, "module:frame-settings", "图框设置",
                 "图框工具",
                 "管理自定义图框模板、裁图留白、指北针、比例标注和布框间距。",
-                "TCFRAMESET",
-                "TCFRAMESET",
-                CDBoxStudioActionKind.Module,
-                true,
-                true,
-                delegate { CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow()); }));
+                "TCFRAMESET", "TCFRAMESET");
             AddCommand(actions, "cmd:CDJMSB", "简码识别", "测绘工具",
                 "读取带简码的 CASS DAT/TXT/CSV 坐标文件并自动连线。",
                 "CDJMSB", "CDJMSB");
-            actions.Add(new CDBoxStudioAction(
-                "module:short-code-settings",
-                "简码识别设置",
+            AddCommand(actions, "cmd:CDJMSZ", "简码识别设置",
                 "测绘工具",
                 "设置简码关系符号、开头与结尾相邻点连接和自动闭合。",
-                "CDJMSZ",
-                "CDJMSZ",
-                CDBoxStudioActionKind.Module,
-                true,
-                true,
-                delegate
-                {
-                    CDBoxStudioShortCodeSettingsWindow.ShowWindow(
-                        new AcadMainWindow());
-                }));
+                "CDJMSZ", "CDJMSZ");
             AddCommand(actions, "cmd:CDSET", "CDBox设置", "系统", string.Empty, "CDSET", string.Empty);
 
             return actions;
@@ -121,7 +103,6 @@ namespace TCPipeAutoDraw.UI.Studio
                 case "layer-manager":
                     return "图层管理器";
                 case "annotation-settings":
-                case "surface-area-annotation":
                 case "pipe-length-annotation":
                 case "node-annotation":
                     return "标注";

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/schemas/update.schema.json",
+  "title": "CDBox Release Manifest V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "channel", "generatedAt", "release", "installer"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 2 },
+    "channel": { "type": "string", "enum": ["stable", "preview"] },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "title", "publishedAt", "summary", "releaseNotesUrl"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "summary": { "type": "string", "minLength": 1 },
+        "releaseNotesUrl": { "type": "string", "format": "uri", "pattern": "^https://" }
+      }
+    },
+    "installer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "downloadUrl", "package"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "downloadUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "package": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fileName", "versionedUrl", "sizeBytes", "sha256"],
+          "properties": {
+            "fileName": { "type": "string", "minLength": 1, "pattern": "\\.exe$" },
+            "versionedUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+            "sizeBytes": { "type": "integer", "minimum": 1 },
+            "sha256": { "type": "string", "pattern": "^[A-F0-9]{64}$" }
+          }
+        }
+      }
+    }
+  }
+}

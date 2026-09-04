@@ -10,6 +10,7 @@ using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using TCPipeAutoDraw.Core.Colors;
+using TCPipeAutoDraw.Modules.LayerManager;
 
 namespace TCPipeAutoDraw.Modules.LayerManager
 {
@@ -82,7 +83,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                         IsDependent = layer.IsDependent,
                         IsPlottable = layer.IsPlottable,
                         ColorIndex = layer.Color == null ? (short)7 : layer.Color.ColorIndex,
-                        Color = CDBoxColorService.FromCadColor(layer.Color),
+                        Color = LayerColorService.FromCadColor(layer.Color),
                         Linetype = lineTypeName,
                         ObjectCount = count,
                         ParentGroup = metadata.ParentGroup,
@@ -509,7 +510,7 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 LayerTable table = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
                 if (!table.Has(layerName)) throw new InvalidOperationException("图层不存在：" + layerName);
                 LayerTableRecord layer = (LayerTableRecord)tr.GetObject(table[layerName], OpenMode.ForRead);
-                return CDBoxColorService.FromCadColor(layer.Color);
+                return LayerColorService.FromCadColor(layer.Color);
             }
         }
 
@@ -525,8 +526,8 @@ namespace TCPipeAutoDraw.Modules.LayerManager
                 if (!table.Has(layerName)) throw new InvalidOperationException("图层不存在：" + layerName);
                 LayerTableRecord layer = (LayerTableRecord)tr.GetObject(table[layerName], OpenMode.ForWrite);
                 if (layer.IsDependent) throw new InvalidOperationException("外部参照依赖图层不可修改颜色。");
-                CDBoxColor original = CDBoxColorService.FromCadColor(layer.Color);
-                layer.Color = CDBoxColorService.ToCadColor(CDBoxColorService.PrepareForWrite(color, original));
+                CDBoxColor original = LayerColorService.FromCadColor(layer.Color);
+                layer.Color = LayerColorService.ToCadColor(LayerColorService.PrepareForWrite(color, original));
                 tr.Commit();
             }
             output.SuccessCount = 1;

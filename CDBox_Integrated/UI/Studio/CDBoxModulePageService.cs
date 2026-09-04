@@ -12,9 +12,16 @@ namespace TCPipeAutoDraw.UI.Studio
     /// </summary>
     internal sealed class CDBoxModulePageService : ICDBoxPageService
     {
+        private readonly string _category;
         private readonly Dictionary<string, CDBoxStudioWebPageForm> _pages =
             new Dictionary<string, CDBoxStudioWebPageForm>(
                 StringComparer.OrdinalIgnoreCase);
+
+        public CDBoxModulePageService(string category = null)
+        {
+            _category = string.IsNullOrWhiteSpace(category)
+                ? "业务模块" : category.Trim();
+        }
 
         public void Show(CDBoxPageDefinition page)
         {
@@ -30,12 +37,13 @@ namespace TCPipeAutoDraw.UI.Studio
                 return;
             }
 
-            var form = new CDBoxStudioWebPageForm(
+            CDBoxStudioWebPageForm form = null;
+            form = new CDBoxStudioWebPageForm(
                 page.Title,
                 page.HtmlFactory,
                 delegate(CDBoxStudioRouteRequest request)
                 {
-                    return Route(page, request);
+                    return Route(page, request, form, _category);
                 },
                 page.Id);
             form.Width = PositiveOrDefault(page.Width, 1180);
@@ -43,6 +51,10 @@ namespace TCPipeAutoDraw.UI.Studio
             form.MinimumSize = new Size(
                 PositiveOrDefault(page.MinimumWidth, 900),
                 PositiveOrDefault(page.MinimumHeight, 620));
+            form.ConfigureTitleBarAction(page.TitleBarActionText,
+                page.TitleBarActionToolTip, page.TitleBarActionScript,
+                page.TitleBarActionHoverScript,
+                page.TitleBarActionLeaveScript);
             _pages[page.Id] = form;
             form.FormClosed += delegate
             {
@@ -52,6 +64,17 @@ namespace TCPipeAutoDraw.UI.Studio
                     _pages.Remove(page.Id);
             };
             form.Show(new AcadMainWindow());
+        }
+
+        public bool TryExecuteScript(string pageId, string script)
+        {
+            if (string.IsNullOrWhiteSpace(pageId)
+                || string.IsNullOrWhiteSpace(script)) return false;
+            CDBoxStudioWebPageForm page;
+            if (!_pages.TryGetValue(pageId.Trim(), out page)
+                || page == null || page.IsDisposed) return false;
+            page.TryExecutePageScript(script);
+            return true;
         }
 
         public void CloseAll()
@@ -74,7 +97,9 @@ namespace TCPipeAutoDraw.UI.Studio
 
         private static CDBoxStudioRouteResult Route(
             CDBoxPageDefinition page,
-            CDBoxStudioRouteRequest request)
+            CDBoxStudioRouteRequest request,
+            CDBoxStudioWebPageForm form,
+            string category)
         {
             try
             {
@@ -86,15 +111,58 @@ namespace TCPipeAutoDraw.UI.Studio
                 if (result == null)
                     return new CDBoxStudioRouteResult { Handled = false };
 
-                return new CDBoxStudioRouteResult
-                {
-                    Handled = result.Handled,
-                    RefreshPage = result.RefreshPage,
-                    ToastMessage = result.ToastMessage,
-                    ToastKind = result.ToastKind,
-                    WindowTitleSuffix = result.WindowTitleSuffix,
-                    ExecuteScript = result.ExecuteScript
-                };
+                var mapped = new CDBoxStudioRouteResult();
+                CopyResult(result, mapped);
+                Action actionToRun = result.ActionToRun;
+                Func<CDBoxPageRouteResult> interaction =
+                    result.InteractionToRun;
+                bool restorePageAfterAction = interaction != null
+                    || result.RestorePageAfterAction;
+                CDBoxStudioAction action = actionToRun == null
+                    && interaction == null
+                    ? null
+                    : new CDBoxStudioAction(
+                        "module-page:" + page.Id,
+                        page.Title,
+                        category,
+                        string.Empty,
+                        string.Empty,
+                        string.Empty,
+                        CDBoxStudioActionKind.Module,
+                        true,
+                        true,
+                        delegate
+                        {
+                            bool visible = form != null && !form.IsDisposed
+                                && form.Visible;
+                            if (visible) form.Hide();
+                            try
+                            {
+                                if (interaction != null)
+                                {
+                                    CDBoxPageRouteResult completed =
+                                        interaction();
+                                    if (completed != null)
+                                        CopyResult(completed, mapped);
+                                }
+                                else actionToRun();
+                            }
+                            finally
+                            {
+                                if (restorePageAfterAction && visible
+                                    && form != null
+                                    && !form.IsDisposed)
+                                {
+                                    form.Show();
+                                    form.WindowState =
+                                        FormWindowState.Normal;
+                                    form.Activate();
+                                }
+                            }
+                        });
+
+                mapped.ActionToRun = action;
+                return mapped;
             }
             catch (Exception ex)
             {
@@ -107,6 +175,18 @@ namespace TCPipeAutoDraw.UI.Studio
                     ToastMessage = "页面操作失败：" + ex.Message
                 };
             }
+        }
+
+        private static void CopyResult(CDBoxPageRouteResult source,
+            CDBoxStudioRouteResult target)
+        {
+            if (source == null || target == null) return;
+            target.Handled = source.Handled;
+            target.RefreshPage = source.RefreshPage;
+            target.ToastMessage = source.ToastMessage;
+            target.ToastKind = source.ToastKind;
+            target.WindowTitleSuffix = source.WindowTitleSuffix;
+            target.ExecuteScript = source.ExecuteScript;
         }
 
         private static int PositiveOrDefault(int value, int fallback)

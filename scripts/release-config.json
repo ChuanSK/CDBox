@@ -1,0 +1,16 @@
+{
+  "channels": {
+    "stable": {
+      "channel": "stable",
+      "updateBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/releases/stable/",
+      "downloadBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/",
+      "websiteBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/"
+    },
+    "preview": {
+      "channel": "preview",
+      "updateBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/releases/preview/",
+      "downloadBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/",
+      "websiteBaseUrl": "https://cdbox-release-cdbox-d9gsv9fvj6a1aed69.webapps.tcloudbase.com/"
+    }
+  }
+}

@@ -9,8 +9,7 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
 using TCPipeAutoDraw.Modules.LayerManager;
-using TCPipeAutoDraw.Modules.AnnotationHud;
-using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
+using CDBox.Shared.Wastewater.Cad;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
@@ -52,13 +51,13 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
     }
 
     /// <summary>
-    /// 属性读写服务。
-    /// 统一支持主管、支管、节点/检查井；使用对象 ExtensionDictionary + Xrecord 保存。
+    /// 工程量属性 CAD 编排兼容层。
+    /// 统一支持主管、支管、节点/检查井的识别和连接关系；实际 Xrecord
+    /// 读写由污水模块通过 IQuantityAttributeCadStore 注册提供。
     /// </summary>
     public static class QuantityPipeAttributeService
     {
         public const string PipeAttributeXrecordName = "CDBoxQuantityPipeAttributes";
-        private const string PipeAttributeIndexDictionaryName = "CDBoxQuantityAttributeIndex";
 
         public static event EventHandler<QuantityAttributesChangedEventArgs>
             AttributesChanged;
@@ -332,70 +331,35 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         internal static bool TryReadSavedAttributes(Database db, Transaction tr,
             ObjectId objectId, out QuantityPipeAttributes attributes)
         {
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
             attributes = null;
-            if (db == null || tr == null || objectId.IsNull) return false;
-            try
+            if (store == null) return false;
+            bool found = store.TryReadSavedAttributes(db, tr, objectId,
+                out attributes);
+            if (!found || attributes == null) return false;
+            if (!attributes.IsSpecialObject
+                && QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
             {
-                Entity entity = tr.GetObject(objectId, OpenMode.ForRead, false) as Entity;
-                if (entity == null || !HasPipeAttributes(entity, tr)) return false;
-                attributes = ReadPipeAttributes(entity, tr);
-                if (attributes != null && !attributes.IsSpecialObject
-                    && QuantityPipeAttributes.IsNodeKind(
-                        attributes.ObjectKind)
-                    && !IsWellParentLayer(db, tr, entity))
+                Entity entity = tr.GetObject(objectId, OpenMode.ForRead,
+                    false) as Entity;
+                if (entity == null || !IsWellParentLayer(db, tr, entity))
                 {
                     attributes = null;
                     return false;
                 }
-                return attributes != null;
             }
-            catch { return false; }
+            return true;
         }
 
         internal static List<string> RepairClonedAttributeObjects(Database db,
             Transaction tr, IDictionary<ObjectId, ObjectId> cloneMap)
         {
-            var changedNodeHandles = new List<string>();
-            if (db == null || tr == null || cloneMap == null) return changedNodeHandles;
-            foreach (KeyValuePair<ObjectId, ObjectId> pair in cloneMap)
-            {
-                if (pair.Value.IsNull) continue;
-                Entity clone;
-                try { clone = tr.GetObject(pair.Value, OpenMode.ForRead, false) as Entity; }
-                catch { continue; }
-                if (clone == null) continue;
-
-                QuantityPipeAttributes attributes = HasPipeAttributes(clone, tr)
-                    ? ReadPipeAttributes(clone, tr)
-                    : null;
-                bool originalInDestination = false;
-                try
-                {
-                    originalInDestination = !pair.Key.IsNull && pair.Key.Database == db;
-                }
-                catch { }
-                if (attributes == null && originalInDestination)
-                {
-                    try
-                    {
-                        Entity original = tr.GetObject(pair.Key, OpenMode.ForRead, false) as Entity;
-                        if (original != null && HasPipeAttributes(original, tr))
-                            attributes = ReadPipeAttributes(original, tr);
-                    }
-                    catch { }
-                }
-                if (attributes == null) continue;
-
-                try
-                {
-                    if (!clone.IsWriteEnabled) clone.UpgradeOpen();
-                    WritePipeAttributes(clone, tr, attributes.Clone());
-                }
-                catch { continue; }
-                if (QuantityPipeAttributes.IsNodeKind(attributes.ObjectKind))
-                    changedNodeHandles.Add(clone.Handle.ToString());
-            }
-            return changedNodeHandles;
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            return store == null ? new List<string>()
+                : store.RepairClonedAttributeObjects(db, tr, cloneMap)
+                    .ToList();
         }
 
         public static QuantityPipeWriteResult WritePipeAttributes(Document doc, ObjectId objectId, QuantityPipeAttributes attributes)
@@ -478,8 +442,12 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 List<string> scoped = QuantityDashboardRegionService
                     .FilterHandlesToSavedScope(doc, sourceHandles);
                 if (scoped.Count > 0)
-                    SimpleAnnotationObjectService
-                        .RefreshNodeAnnotationsForSourceHandles(doc, scoped);
+                {
+                    IWastewaterCadInteractionService interaction =
+                        WastewaterCadInteractionRegistry.Current;
+                    if (interaction != null)
+                        interaction.RefreshNodeAnnotations(doc, scoped);
+                }
             }
             catch { }
         }
@@ -498,8 +466,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 List<string> scoped = QuantityDashboardRegionService
                     .FilterHandlesToSavedScope(doc, sourceHandles);
                 if (scoped.Count == 0) return;
-                PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
-                    doc, scoped, string.Empty);
+                IWastewaterCadInteractionService interaction =
+                    WastewaterCadInteractionRegistry.Current;
+                if (interaction != null)
+                    interaction.RefreshPipeAnnotations(doc, scoped);
             }
             catch
             {
@@ -566,8 +536,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     connected.EndDepth = 0.0;
                     connected.StartInvertElevation = 0.0;
                     connected.EndInvertElevation = 0.0;
+                    // 当前操作只修改一个节点。过去这里会对每条主管再次遍历
+                    // 整个空间中的全部节点，井保存因此退化为 管线数×对象数。
+                    // 只用本次变化的节点执行同一套连接识别，结果一致且为线性扫描。
                     TryFillConnectedNodeInfo(db, tr, entity, pipeCurve,
-                        connected, true);
+                        connected, true, new[] { nodeObjectId });
 
                     bool changed = false;
                     if (!string.IsNullOrWhiteSpace(connected.StartNode)
@@ -1579,29 +1552,14 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static HashSet<string> ReadPipeAttributeKeySet(Entity entity, Transaction tr)
         {
-            HashSet<string> keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (entity == null || tr == null) return keys;
-
-            try
-            {
-                Xrecord record = GetPipeAttributeRecord(entity, tr);
-                if (record == null || record.Data == null) return keys;
-
-                foreach (TypedValue value in record.Data)
-                {
-                    if (value.Value == null) continue;
-                    string text = value.Value.ToString();
-                    int index = text.IndexOf('=');
-                    if (index <= 0) continue;
-                    string key = text.Substring(0, index).Trim();
-                    if (key.Length > 0) keys.Add(key);
-                }
-            }
-            catch
-            {
-            }
-
-            return keys;
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            if (store == null)
+                return new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+            return new HashSet<string>(
+                store.ReadAttributeKeys(entity, tr),
+                StringComparer.OrdinalIgnoreCase);
         }
 
         private static string FingerprintAttributes(QuantityPipeAttributes a)
@@ -1636,106 +1594,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     + " " + (meta.Material ?? string.Empty);
             }
 
-            string inferredKind = InferObjectKind(sourceText, entity);
-            if (overwrite || string.IsNullOrWhiteSpace(attrs.ObjectKind)) attrs.ObjectKind = inferredKind;
-
-            string diameter = InferDiameter(sourceText);
-            if (!string.IsNullOrWhiteSpace(diameter) && (overwrite || string.IsNullOrWhiteSpace(attrs.Diameter)))
-            {
-                attrs.Diameter = diameter;
-            }
-
-            string wellSpec = InferWellSpec(sourceText);
-            // 图层中明确写出的井径属于对象识别结果，应覆盖默认表中的占位规格。
-            // 否则“700铸铁井盖”会被默认的 φ500 挡住，连带导致开挖尺寸仍为 1.3 m。
-            if (!string.IsNullOrWhiteSpace(wellSpec)
-                && (overwrite || string.IsNullOrWhiteSpace(attrs.WellSpec)
-                    || QuantityPipeAttributes.IsNodeKind(inferredKind)))
-            {
-                attrs.WellSpec = wellSpec;
-            }
-
-            if ((overwrite || string.IsNullOrWhiteSpace(attrs.Material)) && ContainsAny(sourceText, "HDPE", "高密度", "波纹"))
-            {
-                attrs.Material = "钢带增强高密度聚乙烯螺旋波纹管(HDPE)";
-            }
-            else if ((overwrite || string.IsNullOrWhiteSpace(attrs.Material)) && ContainsAny(sourceText, "PVC", "UPVC"))
-            {
-                attrs.Material = "PVC管";
-            }
-
-            string explicitBranchType = string.Empty;
-            if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
-            {
-                explicitBranchType = InferExplicitBranchType(sourceText);
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "人工开挖";
-                if (!string.IsNullOrWhiteSpace(explicitBranchType)) attrs.BranchType = explicitBranchType;
-                else if (overwrite || string.IsNullOrWhiteSpace(attrs.BranchType)) attrs.BranchType = InferBranchType(sourceText);
-                attrs.BranchIncludeInCalculation = ShouldIncludeBranch(attrs.BranchType, sourceText);
-                if (overwrite || attrs.BranchDepth <= 0) attrs.BranchDepth = attrs.BranchDepth > 0 ? attrs.BranchDepth : 0.6;
-            }
-            else if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind))
-            {
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.WellType)) attrs.WellType = InferWellType(sourceText);
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.WellMaterialType)) attrs.WellMaterialType = InferWellMaterialType(sourceText);
-                if (overwrite || attrs.SiltWellDeductDepth500 <= 0) attrs.SiltWellDeductDepth500 = 0.20;
-                if (overwrite || attrs.SiltWellDeductDepth700 <= 0) attrs.SiltWellDeductDepth700 = 0.50;
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.WellCoverMaterial)) attrs.WellCoverMaterial = "铸铁井盖";
-                if (overwrite || attrs.ExcavationLength <= 0 || attrs.ExcavationWidth <= 0)
-                {
-                    double size = ContainsAny(attrs.WellSpec, "700") ? 1.5 : 1.3;
-                    attrs.ExcavationLength = size;
-                    attrs.ExcavationWidth = size;
-                }
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.CoverPlate)) attrs.CoverPlate = ContainsAny(attrs.WellSpec, "700") ? "1600承压盖板" : "1200承压盖板";
-            }
-            else
-            {
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.ExcavationType)) attrs.ExcavationType = "机械开挖";
-            }
-
-            double outer = InferOuterDiameter(attrs.Diameter);
-            if (outer > 0 && (overwrite || attrs.PipeOuterDiameter <= 0)) attrs.PipeOuterDiameter = outer;
-
-            if (overwrite || attrs.TrenchWidth <= 0)
-            {
-                attrs.TrenchWidth = InferTrenchWidth(attrs.Diameter, attrs.TrenchWidth);
-            }
-
-            if (overwrite || attrs.RoadThickness < 0)
-            {
-                attrs.RoadThickness = InferRoadThickness(sourceText, attrs.RoadThickness);
-            }
-            else if (attrs.RoadThickness <= 0 && !ContainsAny(sourceText, "绿化", "原土", "无路面"))
-            {
-                attrs.RoadThickness = InferRoadThickness(sourceText, attrs.RoadThickness);
-            }
-
-            if (overwrite || attrs.SandCushionThickness <= 0) attrs.SandCushionThickness = QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind) ? 0.10 : 0.15;
-            if (overwrite || attrs.GravelCushionThickness <= 0) attrs.GravelCushionThickness = 0.10;
-            if (overwrite || attrs.C25RestoreThickness <= 0) attrs.C25RestoreThickness = QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind) ? 0.30 : 0.25;
-
-            if (QuantityPipeAttributes.IsBranchKind(attrs.ObjectKind))
-            {
-                bool hasExplicitBranchTag = !string.IsNullOrWhiteSpace(explicitBranchType);
-                bool forceSpecialBranchStructure = ShouldForceSpecialBranchStructure(explicitBranchType);
-
-                // “按默认表重填”应以用户在 SXMRB 中保存的默认表为准。
-                // 图层标签为“砼恢复”时只用于识别支管类型，不再覆盖用户自定义的结构层；
-                // 仅“并埋 / 明管 / 原土回填”这类具有固定结构规则的支管类型，仍按标签强制调整结构层。
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillType) || forceSpecialBranchStructure) attrs.BackfillType = InferBranchBackfillType(attrs.BranchType, sourceText);
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillStructure) || forceSpecialBranchStructure) attrs.BackfillStructure = BuildDefaultBackfillStructure(attrs);
-                ApplyNoStructureThicknessRules(attrs);
-            }
-            else
-            {
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillType)) attrs.BackfillType = ContainsAny(sourceText, "原土") ? "原土回填" : "中粗砂回填";
-                if (overwrite || string.IsNullOrWhiteSpace(attrs.BackfillStructure)) attrs.BackfillStructure = BuildDefaultBackfillStructure(attrs);
-            }
-
-            if (overwrite || attrs.Enabled == false) attrs.Enabled = true;
-            if (QuantityPipeAttributes.IsNodeKind(attrs.ObjectKind)) attrs.DeductPipeVolume = false;
-            else attrs.DeductPipeVolume = true;
+            QuantityAttributeEngineRegistry.GetRequired()
+                .ApplySmartDefaults(attrs, sourceText, overwrite);
         }
 
         private static void ApplyLayerMetadata(Database db, Transaction tr, Entity entity, QuantityPipeAttributes attrs)
@@ -1859,6 +1719,47 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             }
         }
 
+        private static bool HasPipeAttributes(Entity entity, Transaction tr)
+        {
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            return store != null && store.HasAttributes(entity, tr);
+        }
+
+        private static bool HasPipeAttributeKey(Entity entity, Transaction tr,
+            string keyName)
+        {
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            return store != null && store.HasAttributeKey(entity, tr,
+                keyName);
+        }
+
+        private static bool RemovePipeAttributes(Entity entity,
+            Transaction tr)
+        {
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            return store != null && store.RemoveAttributes(entity, tr);
+        }
+
+        private static QuantityPipeAttributes ReadPipeAttributes(Entity entity,
+            Transaction tr)
+        {
+            IQuantityAttributeCadStore store =
+                QuantityAttributeCadStoreRegistry.GetOrDefault();
+            return store == null ? QuantityPipeAttributes.Default.Clone()
+                : store.ReadAttributes(entity, tr);
+        }
+
+        private static void WritePipeAttributes(Entity entity, Transaction tr,
+            QuantityPipeAttributes attributes)
+        {
+            QuantityAttributeCadStoreRegistry.GetRequired()
+                .WriteAttributes(entity, tr, attributes);
+        }
+
+#if CDBOX_LEGACY_QUANTITY_ATTRIBUTE_STORE
         private static bool HasPipeAttributes(Entity entity, Transaction tr)
         {
             return GetPipeAttributeRecord(entity, tr) != null;
@@ -2185,6 +2086,8 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             else if (string.Equals(key, "DeductPipeVolume", StringComparison.OrdinalIgnoreCase)) attrs.DeductPipeVolume = QuantityPipeAttributes.ParseBool(val, attrs.DeductPipeVolume);
             else if (string.Equals(key, "Remark", StringComparison.OrdinalIgnoreCase)) attrs.Remark = val;
         }
+
+#endif
 
         private static double GetCurveLength(Curve curve)
         {
@@ -2815,16 +2718,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double startExcavationDepth = attrs.StartDepth > 0 ? attrs.StartDepth : 0.0;
             double endExcavationDepth = attrs.EndDepth > 0 ? attrs.EndDepth : 0.0;
 
-            if (startExcavationDepth > 0 && endExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor((startExcavationDepth + endExcavationDepth) / 2.0);
-            else if (startExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor(startExcavationDepth);
-            else if (endExcavationDepth > 0) attrs.AverageDepth = RoundForAttributeEditor(endExcavationDepth);
-            else attrs.AverageDepth = 0.0;
-        }
-
-        private static double RoundForAttributeEditor(double value)
-        {
-            if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
-            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+            attrs.AverageDepth = QuantityDependencyService
+                .CalculateAverageDepthForEditor(startExcavationDepth,
+                    endExcavationDepth);
         }
 
         private static double CalculatePipeEndpointDepthFromNode(QuantityPipeAttributes pipeAttrs, QuantityPipeAttributes nodeAttrs)

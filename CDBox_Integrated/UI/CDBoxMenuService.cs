@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using System.IO;
+using CDBox.Shared.Components;
 using Autodesk.AutoCAD.ApplicationServices;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -18,13 +20,14 @@ namespace TCPipeAutoDraw.UI
     /// </summary>
     internal static class CDBoxMenuService
     {
-        private const string TopMenuName = "污水管线";
+        private const string ToolboxMenuName = "超重氢工具箱";
+        private const string WastewaterMenuName = "污水管线";
         private const string RealEstateMenuName = "不动产";
         private static readonly string[] KnownMenuNames =
         {
-            TopMenuName,
+            ToolboxMenuName,
+            WastewaterMenuName,
             RealEstateMenuName,
-            "超重氢工具箱",
             "CDBox 不动产"
         };
         private const string EmptyText = "暂无功能";
@@ -62,51 +65,35 @@ namespace TCPipeAutoDraw.UI
                 // 先从菜单栏摘下旧入口，避免重建过程中显示旧对象。
                 RemoveTopMenusFromMenuBar(acad);
 
-                object topMenu = FindOrMigratePopupMenu(popupMenus,
-                    TopMenuName, "超重氢工具箱");
+                string componentDirectory = Path.GetDirectoryName(
+                    Assembly.GetExecutingAssembly().Location)
+                    ?? AppDomain.CurrentDomain.BaseDirectory;
+                bool commonInstalled = CDBoxComponentBundle
+                    .IsInstalledFromContentsDirectory(componentDirectory,
+                        CDBoxComponentIds.Common);
+                bool wastewaterInstalled = CDBoxComponentBundle
+                    .IsInstalledFromContentsDirectory(componentDirectory,
+                        CDBoxComponentIds.Wastewater);
+                bool realEstateInstalled = CDBoxComponentBundle
+                    .IsInstalledFromContentsDirectory(componentDirectory,
+                        CDBoxComponentIds.RealEstate);
+                object toolboxMenu = PreparePopupMenu(popupMenus,
+                    ToolboxMenuName, true, null);
+                object wastewaterMenu = PreparePopupMenu(popupMenus,
+                    WastewaterMenuName, wastewaterInstalled, null);
+                object realEstateMenu = PreparePopupMenu(popupMenus,
+                    RealEstateMenuName, realEstateInstalled,
+                    "CDBox 不动产");
+                if (toolboxMenu == null) return;
 
-                if (topMenu == null) return;
-
-                // 核心：不要继续追加到旧菜单，必须先清空旧项。
-                bool cleared = ClearPopupMenuItems(topMenu);
-                if (!cleared && GetCount(topMenu) > 0)
+                BuildToolboxMenu(toolboxMenu, commonInstalled);
+                InsertMenuInMenuBar(acad, toolboxMenu);
+                if (wastewaterInstalled && wastewaterMenu != null)
                 {
-                    // 如果旧对象仍无法清空，改名隔离后重新 Add 一个干净菜单。
-                    // 有些 CASS 环境禁止删除主菜单对象，但允许改名；若改名失败，则保留诊断信息，不继续追加造成更乱的结构。
-                    TryInvoke(topMenu, "RemoveFromMenuBar");
-                    bool renamed = TryRenameMenu(topMenu, "_CDBox_OldMenu_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
-                    if (renamed)
-                    {
-                        topMenu = Invoke(popupMenus, "Add", TopMenuName);
-                        if (topMenu == null) return;
-                        ClearPopupMenuItems(topMenu);
-                    }
-                    else
-                    {
-                        return;
-                    }
+                    BuildWastewaterMenu(wastewaterMenu);
+                    InsertMenuInMenuBar(acad, wastewaterMenu);
                 }
-
-                object realEstateMenu = FindOrMigratePopupMenu(popupMenus,
-                    RealEstateMenuName, "CDBox 不动产");
-                if (realEstateMenu != null
-                    && !ClearPopupMenuItems(realEstateMenu)
-                    && GetCount(realEstateMenu) > 0)
-                {
-                    TryInvoke(realEstateMenu, "RemoveFromMenuBar");
-                    bool renamed = TryRenameMenu(realEstateMenu,
-                        "_CDBox_OldRealEstateMenu_"
-                        + DateTime.Now.ToString("yyyyMMddHHmmss"));
-                    realEstateMenu = renamed
-                        ? Invoke(popupMenus, "Add", RealEstateMenuName)
-                        : null;
-                    if (realEstateMenu != null)
-                        ClearPopupMenuItems(realEstateMenu);
-                }
-
-                BuildMenu(topMenu);
-                InsertMenuInMenuBar(acad, topMenu);
-                if (realEstateMenu != null)
+                if (realEstateInstalled && realEstateMenu != null)
                 {
                     BuildRealEstateMenu(realEstateMenu);
                     InsertMenuInMenuBar(acad, realEstateMenu);
@@ -281,6 +268,39 @@ namespace TCPipeAutoDraw.UI
             return found.Count > 0 ? found[0] : null;
         }
 
+        private static object PreparePopupMenu(object popupMenus,
+            string menuName, bool enabled, string legacyName)
+        {
+            object menu = FindPopupMenu(popupMenus, menuName);
+            if (menu == null && enabled
+                && !string.IsNullOrWhiteSpace(legacyName))
+            {
+                object legacy = FindPopupMenu(popupMenus, legacyName);
+                if (legacy != null && TryRenameMenu(legacy, menuName))
+                    menu = legacy;
+            }
+            if (!enabled)
+            {
+                if (menu != null)
+                {
+                    TryInvoke(menu, "RemoveFromMenuBar");
+                    ClearPopupMenuItems(menu);
+                }
+                return null;
+            }
+            if (menu == null) menu = Invoke(popupMenus, "Add", menuName);
+            if (menu == null) return null;
+            if (ClearPopupMenuItems(menu) || GetCount(menu) <= 0)
+                return menu;
+
+            TryInvoke(menu, "RemoveFromMenuBar");
+            if (!TryRenameMenu(menu, "_CDBox_Old_" + menuName + "_"
+                + DateTime.Now.ToString("yyyyMMddHHmmss"))) return null;
+            menu = Invoke(popupMenus, "Add", menuName);
+            if (menu != null) ClearPopupMenuItems(menu);
+            return menu;
+        }
+
         private static object FindOrMigratePopupMenu(object popupMenus,
             string targetName, string legacyName)
         {
@@ -393,25 +413,49 @@ namespace TCPipeAutoDraw.UI
             return false;
         }
 
-        private static void BuildMenu(object topMenu)
+        private static void BuildToolboxMenu(object topMenu,
+            bool commonInstalled)
         {
-            object survey = AddSubMenu(topMenu, "测绘工具",
-                "CDBox_Survey");
-            AddCommandItem(survey, "简码识别", "CDJMSB");
-            AddCommandItem(survey, "简码识别设置", "CDJMSZ");
+            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
+
+            if (commonInstalled)
+            {
+                object survey = AddSubMenu(topMenu, "⌖ 测绘工具",
+                    "CDBox_Survey");
+                AddCommandItem(survey, "▣ 简码识别", "CDJMSB");
+                AddCommandItem(survey, "⚙ 简码识别设置", "CDJMSZ");
+
+                object frame = AddSubMenu(topMenu, "▣ 图框工具",
+                    "CDBox_Frame");
+                AddCommandItem(frame, "＋ 添加图框模版", "TCFRAMEADD");
+                AddCommandItem(frame, "▱ 布置裁图区域", "TCFRAMECUT");
+                AddCommandItem(frame, "▦ 裁图区域布框", "TCFRAMELAYOUT");
+                AddCommandItem(frame, "□ 直接布置图框", "TCFRAMEPLACE");
+                AddCommandItem(frame, "⚙ 图框设置", "TCFRAMESET");
+
+                object table = AddSubMenu(topMenu, "▤ 表格工具",
+                    "CDBox_Table");
+                AddCommandItem(table, "▦ Excel 转 CAD 表格", "CDEXCEL");
+            }
+
             AddSeparator(topMenu);
+            AddCommandItem(topMenu, "⚙ CDBox设置", "CDSET");
+            AddSeparator(topMenu);
+            AddCommandItem(topMenu, "ⓘ 关于超重氢工具箱", "CDABOUT");
+        }
+
+        private static void BuildWastewaterMenu(object topMenu)
+        {
 
             // ActiveX PopupMenu 在不同 AutoCAD/CASS 版本中没有稳定的位图图标接口，
             // 使用菜单字体可直接显示的单色符号作为兼容图标。
             object annotation = AddSubMenu(topMenu, "✎ 标注", "CDBox_Annotation");
-            AddCommandItem(annotation, "▱ 表面积标注", "CDSURF");
             AddCommandItem(annotation, "⌁ 管线长度标注", "CDLEN");
             AddCommandItem(annotation, "◇ 节点标注", "CDNODE");
+            AddCommandItem(annotation, "▱ 表面积标注", "CDSURF");
             AddSeparator(annotation);
             AddCommandItem(annotation, "⚙ 标注设置", "CDBZSET");
             AddSeparator(topMenu);
-
-            AddCommandItem(topMenu, "▦ 图层管理器", "CDLAYER");
 
             object section = AddSubMenu(topMenu, "◫ 断面", "CDBox_Section");
             AddCommandItem(section, "▧ 断面图生成", "CDSEC");
@@ -431,19 +475,10 @@ namespace TCPipeAutoDraw.UI
             AddCommandItem(quantity, "▣ 工程量看板", "CDQBOARD");
             AddCommandItem(quantity, "▤ 工程量表格生成", "GCL");
 
-            object frame = AddSubMenu(topMenu, "▣ 图框工具", "CDBox_Frame");
-            AddCommandItem(frame, "＋ 添加图框模版", "TCFRAMEADD");
-            AddCommandItem(frame, "▱ 布置裁图区域", "TCFRAMECUT");
-            AddCommandItem(frame, "▦ 裁图区域布框", "TCFRAMELAYOUT");
-            AddCommandItem(frame, "□ 直接布置图框", "TCFRAMEPLACE");
-            AddCommandItem(frame, "⚙ 图框设置", "TCFRAMESET");
-
             object table = AddSubMenu(topMenu, "▤ 表格工具", "CDBox_Table");
-            AddCommandItem(table, "▦ Excel 转 CAD 表格", "CDEXCEL");
             AddCommandItem(table, "▦ 污水管成果表", "WSGCGB");
             AddSeparator(topMenu);
 
-            AddCommandItem(topMenu, "▦ CDBox 工作台", "CDSTUDIO");
             AddCommandItem(topMenu, "⚙ CDBox设置", "CDSET");
             AddSeparator(topMenu);
             AddCommandItem(topMenu, "ⓘ 关于超重氢工具箱", "CDABOUT");

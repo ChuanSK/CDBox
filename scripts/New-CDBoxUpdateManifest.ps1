@@ -1,99 +1,85 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PackagePath,
-
+    [string]$InstallerPath,
     [Parameter(Mandatory = $true)]
-    [string]$LatestVersion,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateRange(1, [int]::MaxValue)]
-    [int]$VersionCode,
-
+    [string]$ReleaseVersion,
+    [string]$InstallerVersion = '',
     [Parameter(Mandatory = $true)]
     [string]$Title,
-
-    [string]$ReleaseDate = (Get-Date -Format 'yyyy-MM-dd'),
-    [string[]]$Notes = @(),
-    [bool]$Mandatory = $false,
-    [string]$Channel = 'studio-preview',
-    [string]$SourceConfigPath = '',
-    [string]$OutputPath = ''
+    [Parameter(Mandatory = $true)]
+    [string]$Summary,
+    [ValidateSet('stable', 'preview')]
+    [string]$Channel = 'preview',
+    [string]$PublishedAt = '',
+    [string]$ReleaseConfigPath = '',
+    [string]$SchemaPath = '',
+    [string]$OutputPath = '',
+    [string]$Configuration = 'Release'
 )
 
 $ErrorActionPreference = 'Stop'
-if ([string]::IsNullOrWhiteSpace($SourceConfigPath)) {
-    $SourceConfigPath = Join-Path $PSScriptRoot 'update-sources.json'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if ([string]::IsNullOrWhiteSpace($InstallerVersion)) {
+    $InstallerVersion = $ReleaseVersion
+}
+if ([string]::IsNullOrWhiteSpace($PublishedAt)) {
+    $PublishedAt = [DateTimeOffset]::Now.ToString('yyyy-MM-ddTHH:mm:sszzz')
+}
+if ([string]::IsNullOrWhiteSpace($ReleaseConfigPath)) {
+    $ReleaseConfigPath = Join-Path $PSScriptRoot 'release-config.json'
+}
+if ([string]::IsNullOrWhiteSpace($SchemaPath)) {
+    $SchemaPath = Join-Path $PSScriptRoot 'update.schema.json'
 }
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'update.json'
+    $OutputPath = Join-Path $repoRoot "artifacts\releases\$Channel\update.json"
 }
 
-$package = Get-Item -LiteralPath $PackagePath
-if ($package.Extension -ne '.zip') {
-    throw "The update package must be a ZIP file: $($package.FullName)"
+$installer = Get-Item -LiteralPath $InstallerPath
+if ($installer.Extension -ne '.exe' -or $installer.Length -le 0) {
+    throw "The release artifact must be a non-empty EXE installer: $($installer.FullName)"
 }
 
-if (-not (Test-Path -LiteralPath $SourceConfigPath)) {
-    throw "The update source configuration does not exist: $SourceConfigPath"
+$toolProject = Join-Path $repoRoot 'CDBox.ReleaseTool\CDBox.ReleaseTool.csproj'
+& dotnet build $toolProject --configuration $Configuration --verbosity quiet
+if ($LASTEXITCODE -ne 0) {
+    throw "Release Manifest tool build failed with exit code $LASTEXITCODE."
+}
+$toolAssembly = Join-Path $repoRoot "CDBox.ReleaseTool\bin\$Configuration\net8.0\CDBox.ReleaseTool.dll"
+if (-not (Test-Path -LiteralPath $toolAssembly)) {
+    throw "Release Manifest tool was not found: $toolAssembly"
 }
 
-$sourceTemplates = Get-Content -Raw -Encoding UTF8 -LiteralPath $SourceConfigPath | ConvertFrom-Json
-if ($null -eq $sourceTemplates -or @($sourceTemplates).Count -eq 0) {
-    throw "The update source configuration cannot be empty: $SourceConfigPath"
+$toolOutput = & dotnet $toolAssembly generate `
+    --installer $installer.FullName `
+    --release-version $ReleaseVersion `
+    --installer-version $InstallerVersion `
+    --title $Title `
+    --summary $Summary `
+    --channel $Channel `
+    --published-at $PublishedAt `
+    --config ([IO.Path]::GetFullPath($ReleaseConfigPath)) `
+    --schema ([IO.Path]::GetFullPath($SchemaPath)) `
+    --output ([IO.Path]::GetFullPath($OutputPath))
+if ($LASTEXITCODE -ne 0) {
+    throw "Release Manifest generation failed with exit code $LASTEXITCODE."
 }
 
-$urls = foreach ($source in @($sourceTemplates)) {
-    $name = [string]$source.name
-    $template = [string]$source.urlTemplate
-    if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($template)) {
-        throw 'Each update source must contain name and urlTemplate.'
-    }
-
-    $url = $template.Replace('{latestVersion}', $LatestVersion).Replace('{fileName}', $package.Name)
-    $uri = $null
-    if (-not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne 'https') {
-        throw "An update source must be a valid HTTPS URL: $url"
-    }
-
-    $urlFileName = [Uri]::UnescapeDataString([IO.Path]::GetFileName($uri.AbsolutePath))
-    if (-not [string]::Equals($urlFileName, $package.Name, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "The URL file name does not match the package: URL=$urlFileName, Package=$($package.Name)"
-    }
-
-    [ordered]@{ name = $name; url = $url }
+$resultLine = @($toolOutput) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Last 1
+if ([string]::IsNullOrWhiteSpace($resultLine)) {
+    throw 'Release Manifest tool returned no result.'
 }
-
-$hash = (Get-FileHash -LiteralPath $package.FullName -Algorithm SHA256).Hash.ToUpperInvariant()
-$manifest = [ordered]@{
-    channel = $Channel
-    latestVersion = $LatestVersion
-    versionCode = $VersionCode
-    title = $Title
-    releaseDate = $ReleaseDate
-    mandatory = $Mandatory
-    package = [ordered]@{
-        fileName = $package.Name
-        size = $package.Length
-        sha256 = $hash
-        urls = @($urls)
-    }
-    notes = @($Notes)
-}
-
-$fullOutputPath = [IO.Path]::GetFullPath($OutputPath)
-$outputDirectory = Split-Path $fullOutputPath -Parent
-if (-not (Test-Path -LiteralPath $outputDirectory)) {
-    New-Item -ItemType Directory -Path $outputDirectory | Out-Null
-}
-
-$json = $manifest | ConvertTo-Json -Depth 8
-[IO.File]::WriteAllText($fullOutputPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+$result = $resultLine | ConvertFrom-Json
 
 [pscustomobject]@{
-    ManifestPath = $fullOutputPath
-    PackagePath = $package.FullName
-    PackageSize = $package.Length
-    Sha256 = $hash
-    SourceCount = @($urls).Count
+    ManifestPath = [string]$result.manifestPath
+    ManifestUrl = [string]$result.manifestUrl
+    InstallerPath = [string]$result.installerPath
+    InstallerSize = [long]$result.installerSize
+    InstallerSha256 = [string]$result.installerSha256
+    LatestUrl = [string]$result.latestUrl
+    VersionedUrl = [string]$result.versionedUrl
+    Channel = [string]$result.channel
+    ValidationStatus = [string]$result.validationStatus
 }

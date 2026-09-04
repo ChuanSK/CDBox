@@ -115,8 +115,6 @@ namespace CDBox.RealEstate.UI
             ComboBox position = dialog.AddCombo("界址线位置 *",
                 LinePositions, existing.LinePosition == "待确认"
                     ? string.Empty : existing.LinePosition);
-            TextBox neighborCode = dialog.AddText("相邻宗地代码",
-                existing.NeighborParcelCode, string.Empty);
             TextBox neighborOwner = dialog.AddText("相邻权利人或地物",
                 existing.NeighborOwner, "例如 李老七、2 米巷道");
             TextBox description = dialog.AddTextArea("段说明",
@@ -138,7 +136,10 @@ namespace CDBox.RealEstate.UI
                 Direction = range.Direction,
                 LineCategory = category.SelectedItem as string ?? string.Empty,
                 LinePosition = position.SelectedItem as string ?? string.Empty,
-                NeighborParcelCode = (neighborCode.Text ?? string.Empty).Trim(),
+                // 界址段录入不再维护邻宗代码；历史/导入数据保留在
+                // 业务模型中，后续签章分组仍可按自己的字段处理。
+                NeighborParcelCode = existing.NeighborParcelCode
+                    ?? string.Empty,
                 NeighborOwner = (neighborOwner.Text ?? string.Empty).Trim(),
                 Description = (description.Text ?? string.Empty).Trim(),
                 Status = ParcelFieldStatus.Manual,
@@ -171,8 +172,7 @@ namespace CDBox.RealEstate.UI
                 First(existing.ParcelRepresentative, parcelRepresentative),
                 string.Empty);
             TextBox date = dialog.AddText("指界日期",
-                First(existing.ConfirmationDate,
-                    DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                existing.ConfirmationDate,
                 "yyyy-MM-dd");
             ComboBox status = dialog.AddCombo("签章状态",
                 new[] { "待签章", "已签章", "无需签章" },
@@ -315,24 +315,22 @@ namespace CDBox.RealEstate.UI
                 footer.Children.Add(cancel);
                 _accept = ActionButton("确定", true);
                 _accept.Margin = new Thickness(8, 0, 0, 0);
-                _accept.Click += delegate
-                {
-                    string message = Validate == null
-                        ? string.Empty : Validate() ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(message))
-                    {
-                        _error.Text = message;
-                        _error.Visibility = Visibility.Visible;
-                        return;
-                    }
-                    DialogResult = true;
-                };
+                _accept.Click += delegate { AcceptDialog(); };
                 footer.Children.Add(_accept);
                 root.Children.Add(footer);
                 PreviewKeyDown += delegate(object sender, KeyEventArgs e)
                 {
-                    if (e.Key != Key.Escape) return;
-                    DialogResult = false;
+                    if (e.Key == Key.Escape)
+                    {
+                        DialogResult = false;
+                        e.Handled = true;
+                        return;
+                    }
+                    if (e.Key != Key.Enter
+                        || Keyboard.Modifiers != ModifierKeys.None) return;
+                    TextBox source = e.OriginalSource as TextBox;
+                    if (source != null && source.AcceptsReturn) return;
+                    AcceptDialog();
                     e.Handled = true;
                 };
             }
@@ -341,6 +339,19 @@ namespace CDBox.RealEstate.UI
             public string AcceptText
             {
                 set { _accept.Content = value ?? "确定"; }
+            }
+
+            private void AcceptDialog()
+            {
+                string message = Validate == null
+                    ? string.Empty : Validate() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    _error.Text = message;
+                    _error.Visibility = Visibility.Visible;
+                    return;
+                }
+                DialogResult = true;
             }
 
             public TextBox AddText(string label, string value,

@@ -15,26 +15,32 @@ namespace CDBox.RealEstate.Services
     {
         private readonly ParcelSurveyStore _store;
         private readonly ParcelBoundaryCadService _cad;
+        private readonly ParcelMapSheetCadService _mapSheets;
         private readonly ParcelSurveyCadScopeService _scopes;
         private readonly ICDBoxNotificationService _notifications;
 
         public ParcelSurveyCadWorkflowService(ParcelSurveyStore store,
-            ParcelBoundaryCadService cad, ParcelSurveyCadScopeService scopes,
+            ParcelBoundaryCadService cad, ParcelMapSheetCadService mapSheets,
+            ParcelSurveyCadScopeService scopes,
             ICDBoxNotificationService notifications)
         {
             _store = store ?? throw new ArgumentNullException("store");
             _cad = cad ?? throw new ArgumentNullException("cad");
+            _mapSheets = mapSheets
+                ?? throw new ArgumentNullException("mapSheets");
             _scopes = scopes ?? throw new ArgumentNullException("scopes");
             _notifications = notifications
                 ?? throw new ArgumentNullException("notifications");
         }
 
-        public ParcelSurveyRecord SelectParcel()
+        public event Action EditorRefreshRequested;
+
+        public bool IsMapSheetRecognitionPending
         {
-            return SelectParcel(null);
+            get { return _mapSheets.IsPending; }
         }
 
-        public ParcelSurveyRecord SelectParcel(ParcelSurveyRecord boundRegion)
+        public ParcelSurveyRecord SelectParcel()
         {
             Document document = AcadApp.DocumentManager.MdiActiveDocument;
             if (document == null)
@@ -50,27 +56,65 @@ namespace CDBox.RealEstate.Services
                 document);
             string documentName = ParcelSurveyCadScopeService.GetDocumentName(
                 document);
-            bool attachRegion = boundRegion != null
-                && string.Equals(boundRegion.ScopeType, "region",
-                    StringComparison.OrdinalIgnoreCase)
-                && string.Equals(boundRegion.DocumentId, documentId,
-                    StringComparison.OrdinalIgnoreCase);
-            ParcelSurveyRecord record = attachRegion ? boundRegion
-                : _store.CreateOrSelectParcel(documentId, documentName,
+            ParcelSurveyRecord record;
+            try
+            {
+                record = _store.CreateOrSelectParcel(documentId, documentName,
                     selection.OwnerName, selection.SourceObjectHandle);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Notify(ex.Message, CDBoxNotificationLevel.Warning);
+                return null;
+            }
             ParcelBoundaryRecognitionApplicator.Apply(record, selection);
             record.ParcelName = selection.OwnerName.Trim();
-            if (attachRegion)
-            {
-                record.RegionName = record.ParcelName;
-                _scopes.RenameRegion(record.RegionId, record.ParcelName);
-            }
             ParcelBoundaryDescriptionGenerator.Apply(record, false);
             _store.Save(record);
             Notify("已保存独立宗地“" + record.ParcelName + "”（图元 "
                 + record.Boundary.SourceObjectHandle + "）。",
                 CDBoxNotificationLevel.Success);
+            RecognizeMapSheet(record, false);
             return record;
+        }
+
+        public bool RecognizeMapSheet(ParcelSurveyRecord record,
+            bool refreshEditorAfterMapSheet)
+        {
+            if (record == null) return false;
+            record.Normalize();
+            _store.Save(record);
+            return _mapSheets.Start(record, delegate(
+                ParcelMapSheetRecognitionResult result)
+            {
+                if (result != null && result.Success)
+                {
+                    ParcelSurveyFieldValue field = record.Field(
+                        "parcel.mapSheetNumber");
+                    field.TextValue = result.MapSheetNumber;
+                    field.NumericValue = null;
+                    field.Status = ParcelFieldStatus.Automatic;
+                    field.Confirmed = true;
+                    _store.Save(record);
+                    Notify(result.Message, CDBoxNotificationLevel.Success);
+                }
+                else
+                {
+                    Notify(result == null
+                            ? "图幅号识别未返回结果。" : result.Message,
+                        CDBoxNotificationLevel.Warning);
+                }
+                if (refreshEditorAfterMapSheet)
+                {
+                    Action handler = EditorRefreshRequested;
+                    if (handler != null) handler();
+                }
+            });
+        }
+
+        public void FinishMapSheetRecognition()
+        {
+            _mapSheets.FinishPending();
         }
 
         public ParcelSurveyRecord FillBoundarySegments()

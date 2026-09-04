@@ -18,10 +18,21 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
         private static bool _started;
         private static bool _dirty;
         private static bool _liveEnabled = true;
+        private static int _changeTrackingSuppressionDepth;
         private static readonly HashSet<string> DirtyHandles =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static event EventHandler<QuantityDashboardDirtyEventArgs> DirtyMarked;
+
+        /// <summary>
+        /// 临时忽略只生成辅助图形、不会改变工程量的数据写入。
+        /// 仅由明确知道其输出不参与污水工程量的业务命令使用。
+        /// </summary>
+        public static IDisposable SuspendChangeTracking()
+        {
+            _changeTrackingSuppressionDepth++;
+            return new ChangeTrackingSuppression();
+        }
 
         public static void Configure(Action<string> scriptSink)
         {
@@ -130,12 +141,27 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
 
         private static void OnObjectChanged(object sender, ObjectEventArgs e)
         {
+            if (_changeTrackingSuppressionDepth > 0) return;
             if (RememberHandle(e == null ? null : e.DBObject)) _dirty = true;
         }
 
         private static void OnObjectErased(object sender, ObjectErasedEventArgs e)
         {
+            if (_changeTrackingSuppressionDepth > 0) return;
             if (RememberHandle(e == null ? null : e.DBObject)) _dirty = true;
+        }
+
+        private sealed class ChangeTrackingSuppression : IDisposable
+        {
+            private bool _disposed;
+
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                if (_changeTrackingSuppressionDepth > 0)
+                    _changeTrackingSuppressionDepth--;
+            }
         }
 
         private static bool RememberHandle(DBObject value)

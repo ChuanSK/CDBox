@@ -10,5 +10,7 @@ namespace CDBox.RealEstate.Commands
         public const string SelectParcel = "CDRESELECTPARCEL";
         public const string FillBoundarySegments = "CDREFILLSEGMENT";
         public const string FillNeighborInformation = "CDREFILLNEIGHBOR";
+        public const string FinishMapSheetRecognition =
+            "CDREMAPSHEETFINISH";
     }
 }

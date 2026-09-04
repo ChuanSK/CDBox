@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageReference Include="NPOI" Version="2.8.0" />
     <ProjectReference Include="..\..\CDBox.Shared\CDBox.Shared.csproj" />
+    <ProjectReference Include="..\..\CDBox.Common\CDBox.Common.csproj" />
+    <ProjectReference Include="..\..\CDBox.Wastewater\CDBox.Wastewater.csproj" />
     <ProjectReference Include="..\..\CDBox.RealEstate\CDBox.RealEstate.csproj" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
@@ -37,56 +39,30 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\四张检查表.xls</TargetPath>
     </Content>
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityPipeAttributes.cs" Link="Source\QuantityPipeAttributes.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityNodeRecognitionPolicy.cs" Link="Source\QuantityNodeRecognitionPolicy.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerModels.cs" Link="Source\LayerModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerRecognitionEngine.cs" Link="Source\LayerRecognitionEngine.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityCalculationReportModels.cs" Link="Source\QuantityCalculationReportModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardModels.cs" Link="Source\QuantityDashboardModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardExportService.cs" Link="Source\QuantityDashboardExportService.cs" />
+    <Compile Include="..\..\CDBox_Integrated\Modules\LayerManager\LayerRecognitionRulesStore.cs" Link="Source\BaseLayerManager\LayerRecognitionRulesStore.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\LayerManagerPage.cs" Link="Source\BaseLayerManager\LayerManagerPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\LayerRecognitionRulesPage.cs" Link="Source\BaseLayerManager\LayerRecognitionRulesPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\LayerManagerCommandService.cs" Link="Source\BaseLayerManager\LayerManagerCommandService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDependencyService.cs" Link="Source\QuantityDependencyService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\SectionDrawing\SectionDrawingModels.cs" Link="Source\SectionDrawingModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\FrameLayout\FrameLayoutSettings.cs" Link="Source\FrameLayoutSettings.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\FrameLayout\FrameCutRegionMath.cs" Link="Source\FrameCutRegionMath.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionSettings.cs" Link="Source\ShortCodeRecognitionSettings.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\ShortCodeRecognition\ShortCodeRecognitionParser.cs" Link="Source\ShortCodeRecognitionParser.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileModels.cs" Link="Source\LongitudinalProfileModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileLayout.cs" Link="Source\LongitudinalProfileLayout.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\LongitudinalProfile\LongitudinalProfileSettings.cs" Link="Source\LongitudinalProfileSettings.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\WastewaterResultTable\WastewaterResultTableModels.cs" Link="Source\WastewaterResultTableModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationTextComposer.cs" Link="Source\PipeLengthAnnotationTextComposer.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\PipeLengthAnnotation\PipeLengthAnnotationCloneSafetyPolicy.cs" Link="Source\PipeLengthAnnotationCloneSafetyPolicy.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\NodeAnnotation\NodeAnnotationTextComposer.cs" Link="Source\NodeAnnotationTextComposer.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableModels.cs" Link="Source\ExcelToCad\ExcelTableModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\ExcelToCad\ExcelTableReader.cs" Link="Source\ExcelToCad\ExcelTableReader.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityDashboardClassification.cs" Link="Source\QuantityDashboardClassification.cs" />
+    <Compile Include="..\..\CDBox.Wastewater\Cad\Annotation\PipeLengthAnnotationCloneSafetyPolicy.cs" Link="Source\PipeLengthAnnotationCloneSafetyPolicy.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSource.cs" Link="Source\CDBoxStudioUpdateSource.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSourceCatalog.cs" Link="Source\CDBoxStudioUpdateSourceCatalog.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioAnnotationSettingsPage.cs" Link="Source\CDBoxStudioAnnotationSettingsPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxReleaseVersionComparer.cs" Link="Source\CDBoxReleaseVersionComparer.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioWebViewProfile.cs" Link="Source\CDBoxStudioWebViewProfile.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioColorPickerPage.cs" Link="Source\CDBoxStudioColorPickerPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioExcelToCadPage.cs" Link="Source\CDBoxStudioExcelToCadPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDashboardPage.cs" Link="Source\CDBoxStudioQuantityDashboardPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityAttributeEditorPage.cs" Link="Source\CDBoxStudioQuantityAttributeEditorPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLayerManagerPage.cs" Link="Source\CDBoxStudioLayerManagerPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioShortCodeSettingsPage.cs" Link="Source\CDBoxStudioShortCodeSettingsPage.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
+    <Compile Include="..\..\CDBox.Wastewater\UI\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
+    <Compile Include="..\..\CDBox.Wastewater\UI\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDefaultsPage.cs" Link="Source\CDBoxStudioQuantityDefaultsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\RealEstateMenuLayout.cs" Link="Source\RealEstateMenuLayout.cs" />
-    <Compile Include="..\..\CDBoxUpdater\BundleInstallException.cs" Link="Source\Updater\BundleInstallException.cs" />
-    <Compile Include="..\..\CDBoxUpdater\BundleInstallOutcome.cs" Link="Source\Updater\BundleInstallOutcome.cs" />
-    <Compile Include="..\..\CDBoxUpdater\BundleInstaller.cs" Link="Source\Updater\BundleInstaller.cs" />
-    <Compile Include="..\..\CDBoxUpdater\PendingUpdateManifest.cs" Link="Source\Updater\PendingUpdateManifest.cs" />
-    <Compile Include="..\..\CDBoxUpdater\UpdaterLogger.cs" Link="Source\Updater\UpdaterLogger.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxRequiredRuntimeFiles.cs" Link="Source\CDBoxRequiredRuntimeFiles.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxAppSettings.cs" Link="Source\CDBoxAppSettings.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxUpdateSourceValidator.cs" Link="Source\CDBoxUpdateSourceValidator.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColor.cs" Link="Source\CDBoxColor.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorConverter.cs" Link="Source\CDBoxColorConverter.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxStandardColorService.cs" Link="Source\CDBoxStandardColorService.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Colors\CDBoxColorOutputResolver.cs" Link="Source\CDBoxColorOutputResolver.cs" />
+    <Compile Include="..\..\CDBoxInstaller\InstallerModels.cs" Link="Source\Installer\InstallerModels.cs" />
+    <Compile Include="..\..\CDBoxInstaller\InstallerPlanning.cs" Link="Source\Installer\InstallerPlanning.cs" />
+    <Compile Include="..\..\CDBoxInstaller\CadDetectionService.cs" Link="Source\Installer\CadDetectionService.cs" />
+    <Compile Include="..\..\CDBoxInstaller\PrerequisiteService.cs" Link="Source\Installer\PrerequisiteService.cs" />
+    <Compile Include="..\..\CDBoxInstaller\InstallerPayload.cs" Link="Source\Installer\InstallerPayload.cs" />
+    <Compile Include="..\..\CDBoxInstaller\BundleInstallService.cs" Link="Source\Installer\BundleInstallService.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterModels.cs" Link="Source\FloatingCenter\FloatingCenterModels.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingMessageStore.cs" Link="Source\FloatingCenter\FloatingMessageStore.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingCenterService.cs" Link="Source\FloatingCenter\FloatingCenterService.cs" />
@@ -96,12 +72,5 @@
     <Compile Include="..\..\CDBox_Integrated\Core\FloatingCenter\FloatingLegacyRoutingPolicy.cs" Link="Source\FloatingCenter\FloatingLegacyRoutingPolicy.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Business\CDBoxBusinessModeService.cs" Link="Source\Business\CDBoxBusinessModeService.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\FloatingCenter\FloatingCenterPresentation.cs" Link="Source\FloatingCenter\FloatingCenterPresentation.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckModels.cs" Link="Source\Check\DrawingCheckModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckRuleEvaluator.cs" Link="Source\Check\DrawingCheckRuleEvaluator.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckClassification.cs" Link="Source\Check\DrawingCheckClassification.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckManager.cs" Link="Source\Check\DrawingCheckManager.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Check\DrawingCheckIgnoreStore.cs" Link="Source\Check\DrawingCheckIgnoreStore.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Sync\SyncModels.cs" Link="Source\Sync\SyncModels.cs" />
-    <Compile Include="..\..\CDBox_Integrated\Core\Sync\SyncManager.cs" Link="Source\Sync\SyncManager.cs" />
   </ItemGroup>
 </Project>

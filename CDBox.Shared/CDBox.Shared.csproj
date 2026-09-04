@@ -5,4 +5,8 @@
     <RootNamespace>CDBox.Shared</RootNamespace>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
 </Project>

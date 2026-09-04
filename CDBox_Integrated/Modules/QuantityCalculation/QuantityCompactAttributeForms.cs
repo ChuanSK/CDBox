@@ -831,20 +831,16 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             double startExcavationDepth = GetNumber("StartDepth", 0.0);
             double endExcavationDepth = GetNumber("EndDepth", 0.0);
 
-            if (startExcavationDepth > 0 && endExcavationDepth > 0) return (startExcavationDepth + endExcavationDepth) / 2.0;
-            if (startExcavationDepth > 0) return startExcavationDepth;
-            if (endExcavationDepth > 0) return endExcavationDepth;
-            return 0.0;
+            return QuantityDependencyService.CalculateAverageDepthForEditor(
+                startExcavationDepth, endExcavationDepth);
         }
 
         private static double ResolveAverageDepthForDisplay(QuantityPipeAttributes attrs)
         {
             if (attrs == null) return 0.0;
             if (attrs.AverageDepth > 0) return attrs.AverageDepth;
-            if (attrs.StartDepth > 0 && attrs.EndDepth > 0) return (attrs.StartDepth + attrs.EndDepth) / 2.0;
-            if (attrs.StartDepth > 0) return attrs.StartDepth;
-            if (attrs.EndDepth > 0) return attrs.EndDepth;
-            return 0.0;
+            return QuantityDependencyService.CalculateAverageDepthForEditor(
+                attrs.StartDepth, attrs.EndDepth);
         }
 
         private void RecalculateMainPipeDerivedValuesFromDepthChange()
@@ -963,7 +959,9 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 if (averageDepth > 0) return averageDepth;
                 double startDepth = GetNumber("StartDepth", 0.0);
                 double endDepth = GetNumber("EndDepth", 0.0);
-                if (startDepth > 0 && endDepth > 0) return (startDepth + endDepth) / 2.0;
+                if (startDepth > 0 || endDepth > 0)
+                    return QuantityDependencyService
+                        .CalculateAverageDepthForEditor(startDepth, endDepth);
             }
             else if (QuantityPipeAttributes.IsBranchKind(_kind))
             {

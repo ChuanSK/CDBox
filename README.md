@@ -1,6 +1,6 @@
 # CDBox Studio Preview
 
-CDBox 是面向 AutoCAD 2023 / CASS11 的 x64 .NET Framework 4.8 插件。主程序集提供经典工具箱、停靠侧栏和 WebView2 Studio，`CDBoxUpdater` 是等待 AutoCAD 退出后替换 `CDBox.bundle` 的独立更新器。
+CDBox 是面向 AutoCAD / CASS 的 x64 .NET Framework 4.8 插件。主程序集提供经典工具箱、停靠侧栏和 WebView2 Studio；统一安装器负责首次安装、版本更新、业务模块增减和完整卸载。
 
 ## 开发环境
 
@@ -28,7 +28,7 @@ dotnet build CDBox.sln -c Debug --no-restore
 成功后主要产物位于：
 
 - `bin\Debug\net48\CDBox.dll`
-- `bin\Debug\net48\Updater\CDBoxUpdater.exe`
+- `CDBoxInstaller\bin\Debug\net48\CDBox安装器.exe`（开发构建不含正式内嵌载荷）
 - `bin\Debug\net48\Templates\工程量计算表模板.xls`
 
 不要把 AutoCAD 的 `AcMgd.dll`、`AcDbMgd.dll`、`AcCoreMgd.dll` 复制到发布目录；项目引用已设置为 `Private=false`，运行时由 AutoCAD 宿主提供。
@@ -43,7 +43,7 @@ dotnet run --project tests\CDBox.CoreTests\CDBox.CoreTests.csproj -c Debug
 
 任一断言失败时进程返回非零退出码，适合放入后续 CI。涉及 AutoCAD Database、Editor、WebView2 或 CASS 的流程仍需宿主内集成测试和人工回归。
 
-仓库已配置 `.github/workflows/core-verification.yml`：每次 push、Pull Request 或手动触发时，使用 Windows runner 构建独立更新器并运行 Release 核心测试。该流程不需要安装 AutoCAD；宿主相关验证仍按下述脚本和人工回归清单执行。
+仓库已配置 `.github/workflows/core-verification.yml`：每次 push、Pull Request 或手动触发时，使用 Windows runner 构建统一安装器并运行 Release 核心测试。该流程不需要安装 AutoCAD；宿主相关验证仍按下述脚本和人工回归清单执行。
 
 AutoCAD 2023 Core Console 宿主冒烟测试：
 
@@ -61,17 +61,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-CDBoxIntera
 
 该脚本会打开复制后的示例图纸、加载插件并执行 `CDSTUDIO`，AutoCAD 保持打开以供人工检查。
 
-## 生成发布包
+## 生成发行安装器
 
-发布脚本会构建 Release、暂存 `CDBox.bundle`、生成 ZIP，并根据实际文件自动写入大小和 SHA256：
+后续发布统一以 [`CDBox 发布渠道与 update.json 调整方案`](开发文档/CDBox%20发布渠道与%20update.json%20调整方案.md) 为准；旧发布说明如有冲突，以该方案和本节 V2 流程为准。
+
+发布脚本会构建 Release、把完整 `CDBox.bundle` 作为安装器内部载荷，并根据最终 EXE 自动写入大小和 SHA-256，生成 Release Manifest V2：
 
 ```powershell
-.\scripts\New-CDBoxRelease.ps1 -Notes "完成插件更新系统","新增工程量动态看板"
+.\scripts\New-CDBoxRelease.ps1 -Channel preview -Summary "CDBox 5.1.0 预发行版本。"
 ```
 
-Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一定义在 `CDBox.csproj`。产物默认写入 `artifacts`。下载源模板位于 `scripts\update-sources.json`；正式发布前必须确认各平台的 release/tag 规则与模板一致。脚本会拒绝下载 URL 末尾文件名与实际 ZIP 不一致的清单。
+版本身份、版本码、标题、安装器文件名、AutoCAD AppVersion 和默认更新通道统一定义在 `CDBox.csproj`。发布渠道域名配置位于 `scripts\release-config.json`，正式数据契约位于 `scripts\update.schema.json`。生成器使用强类型模型，自动读取安装器文件名和大小、计算 SHA-256，并校验 Schema V2、网站字段契约、HTTPS 官方域名和统一 URL 规则；任何校验失败都会中止发布。
 
-若旧版“选择 CDBox.dll 更新”曾导致安装目录只剩主 DLL，请先关闭全部 AutoCAD 进程，再以管理员 PowerShell 运行 `scripts\Repair-CDBoxLegacyUpdate.ps1`。脚本从完整 Release 输出恢复依赖，替换前备份现有 `CDBox.bundle`，失败时自动回滚。
+默认产物结构如下：
+
+- `artifacts\installer\5.1.0\CDBoxInstaller-5.1.0.exe`：客户端更新使用的不可变版本安装器；
+- `artifacts\installer\latest\CDBoxInstaller.exe`：官网“立即下载”使用的 Latest 安装器；
+- `artifacts\releases\preview\update.json`：Preview 唯一发布清单；
+- `artifacts\schemas\update.schema.json`：随发布保存的清单结构定义。
+
+腾讯云静态托管/CDN 是正式发行源。发布时必须先上传并验证版本安装器，再更新 Latest 安装器，最后上传 `update.json`；Manifest 是发布开关，不得先于安装器公开。GitHub、Gitee 和 GitCode 只用于源码、历史归档、灾备或旧客户端兼容，不再作为新客户端的默认下载源。Stable 与 Preview 使用独立清单，发布时通过 `-Channel stable` 或 `-Channel preview` 明确选择。
+
+仓库根目录和 `CDBox发布` 中既有的 4.1.1 `update.json` 暂时保留为旧客户端兼容清单，不再由新生成器覆盖。5.1.0 及后续正式清单只从上述 V2 流程生成。发布脚本会将所选通道传入插件构建，并拒绝发布版本号或通道不一致的旧构建产物。
+
+只验证 Manifest 生成与契约时可运行：
+
+```powershell
+.\tests\Test-ReleaseManifest.ps1
+```
 
 ## 本地加载
 
@@ -97,8 +114,8 @@ Preview 版本身份、版本码、标题、包名和 AutoCAD AppVersion 统一�
 - 模块注册：`CDBox_Integrated\Core\Modules\TCModuleRegistry.cs`
 - Studio 宿主和路由：`CDBox_Integrated\UI\Studio`
 - 业务模块：`CDBox_Integrated\Modules`
-- 安装逻辑：`CDBox_Integrated\Core\Startup`
-- 独立更新器：`CDBoxUpdater`
+- 安装、更新、模块管理与卸载：`CDBoxInstaller`
+- CAD 内网络检查及安装器启动：`CDBox_Integrated\UI\Studio`
 
 ## 数据位置
 

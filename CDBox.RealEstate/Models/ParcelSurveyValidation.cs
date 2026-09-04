@@ -163,7 +163,7 @@ namespace CDBox.RealEstate.Models
                     || !pointNumbers.Contains(segment.EndPointNumber ?? string.Empty))
                     Add(result, "segment-point", "error", name + "引用了不存在的界址点。", string.Empty);
                 foreach (string middle in SplitPointNumbers(
-                    segment.MiddlePointNumbers))
+                    segment.MiddlePointNumbers, record.Boundary.Points))
                     if (!pointNumbers.Contains(middle))
                         Add(result, "segment-middle-point", "error",
                             name + "引用了不存在的中间界址点“" + middle
@@ -311,11 +311,12 @@ namespace CDBox.RealEstate.Models
                 (right ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
-        private static IEnumerable<string> SplitPointNumbers(string value)
+        private static IEnumerable<string> SplitPointNumbers(string value,
+            IEnumerable<ParcelBoundaryPointRecord> points)
         {
-            return (value ?? string.Empty).Split(new[] { '、', ',', '，',
-                ';', '；', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim()).Where(x => x.Length > 0);
+            return ParcelBoundaryPointNumberFormatter.ExpandMiddle(value,
+                (points ?? Enumerable.Empty<ParcelBoundaryPointRecord>())
+                    .Where(x => x != null).Select(x => x.PointNumber));
         }
 
         private static void Add(ParcelSurveyValidationResult result,

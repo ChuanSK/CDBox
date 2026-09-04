@@ -1,28 +1,25 @@
-using System;
 using System.Collections.Generic;
 
 namespace TCPipeAutoDraw.Modules.QuantityCalculation
 {
+    /// <summary>
+    /// 旧报表计算调用点兼容门面。实际算法位于 Wastewater 模块。
+    /// </summary>
     internal static class QuantityEngineeringMath
     {
-        public static double CalculatePipeRemainingBackfillHeight(double totalDepth, IEnumerable<QuantityStructureLayer> layers)
+        public static double CalculatePipeRemainingBackfillHeight(
+            double totalDepth, IEnumerable<QuantityStructureLayer> layers)
         {
-            double occupiedHeight = 0.0;
-            if (layers != null)
-            {
-                foreach (QuantityStructureLayer layer in layers)
-                {
-                    if (layer == null) continue;
-                    if (QuantityStructureLayer.IsSandBackfill(layer) || QuantityStructureLayer.IsOriginalSoilBackfill(layer)) continue;
-                    occupiedHeight += layer.Height;
-                }
-            }
-            return Math.Max(totalDepth - occupiedHeight, 0.0);
+            return QuantityAttributeEngineRegistry.GetRequired()
+                .CalculatePipeRemainingBackfillHeight(totalDepth, layers);
         }
 
-        public static double CalculateEarthworkOut(double roadWaste, double excavation, double reusableOriginalSoil)
+        public static double CalculateEarthworkOut(double roadWaste,
+            double excavation, double reusableOriginalSoil)
         {
-            return Math.Max(roadWaste + excavation - reusableOriginalSoil, 0.0);
+            return QuantityAttributeEngineRegistry.GetRequired()
+                .CalculateEarthworkOut(roadWaste, excavation,
+                    reusableOriginalSoil);
         }
     }
 }

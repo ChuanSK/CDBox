@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Reflection;
+using CDBox.Shared.Components;
 
 namespace TCPipeAutoDraw.Core.Business
 {
@@ -43,7 +45,7 @@ namespace TCPipeAutoDraw.Core.Business
             lock (Gate)
             {
                 if (_initialized) return;
-                _mode = Parse(ReadPersisted());
+                _mode = NormalizeAvailable(Parse(ReadPersisted()));
                 _initialized = true;
             }
         }
@@ -52,6 +54,7 @@ namespace TCPipeAutoDraw.Core.Business
         {
             if (!Enum.IsDefined(typeof(CDBoxBusinessMode), mode))
                 mode = CDBoxBusinessMode.Wastewater;
+            mode = NormalizeAvailable(mode);
             bool changed;
             lock (Gate)
             {
@@ -75,8 +78,20 @@ namespace TCPipeAutoDraw.Core.Business
 
         public static void Toggle()
         {
-            SetMode(IsWastewater ? CDBoxBusinessMode.RealEstate
-                : CDBoxBusinessMode.Wastewater);
+            CDBoxBusinessMode next = IsWastewater
+                ? CDBoxBusinessMode.RealEstate
+                : CDBoxBusinessMode.Wastewater;
+            SetMode(NormalizeAvailable(next));
+        }
+
+        public static bool IsAvailable(CDBoxBusinessMode mode)
+        {
+            if (mode != CDBoxBusinessMode.RealEstate) return true;
+            string directory = Path.GetDirectoryName(
+                Assembly.GetExecutingAssembly().Location)
+                ?? AppDomain.CurrentDomain.BaseDirectory;
+            return CDBoxComponentBundle.IsInstalledFromContentsDirectory(
+                directory, CDBoxComponentIds.RealEstate);
         }
 
         public static string DisplayName(CDBoxBusinessMode mode)
@@ -93,6 +108,12 @@ namespace TCPipeAutoDraw.Core.Business
                     "不动产", StringComparison.OrdinalIgnoreCase)
                 ? CDBoxBusinessMode.RealEstate
                 : CDBoxBusinessMode.Wastewater;
+        }
+
+        private static CDBoxBusinessMode NormalizeAvailable(
+            CDBoxBusinessMode mode)
+        {
+            return IsAvailable(mode) ? mode : CDBoxBusinessMode.Wastewater;
         }
 
         private static string ReadPersisted()

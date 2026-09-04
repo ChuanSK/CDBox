@@ -4,13 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Settings;
-using CDBox.RealEstate.UI;
 using CDBox.Shared.Services;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -18,20 +14,15 @@ namespace CDBox.RealEstate.Cad
 {
     public sealed class ParcelSurveyCadScopeService
     {
-        public const string RegionLayerName = "CDBox-地籍调查区域";
         public const string RegionRegAppName = "CDBoxParcelSurveyRegion";
 
-        private readonly ICDBoxPromptService _prompts;
         private readonly ICDBoxNotificationService _notifications;
-        private readonly ICDBoxLogger _logger;
 
-        public ParcelSurveyCadScopeService(ICDBoxPromptService prompts,
-            ICDBoxNotificationService notifications, ICDBoxLogger logger)
+        public ParcelSurveyCadScopeService(
+            ICDBoxNotificationService notifications)
         {
-            _prompts = prompts ?? throw new ArgumentNullException("prompts");
             _notifications = notifications
                 ?? throw new ArgumentNullException("notifications");
-            _logger = logger ?? throw new ArgumentNullException("logger");
         }
 
         public ParcelSurveyScopeContext CurrentContext(ParcelSurveyStore store)
@@ -105,143 +96,6 @@ namespace CDBox.RealEstate.Cad
             context.ParcelName = selected.ParcelName;
             context.BindingValid = selected.BoundaryValid;
             return context;
-        }
-
-        public ParcelSurveyRegionInfo CreateRectangleRegion()
-        {
-            Document document = CurrentDocument();
-            if (document == null) return null;
-            try
-            {
-                PromptPointResult first;
-                using (_prompts.Begin("新建地籍区域",
-                    "指定地籍调查区域的第一个角点；按 Esc 取消。"))
-                    first = document.Editor.GetPoint("\n ");
-                if (first.Status != PromptStatus.OK) return null;
-                PromptPointResult second;
-                using (_prompts.Begin("新建地籍区域",
-                    "指定区域的对角点；按 Esc 取消。"))
-                    second = document.Editor.GetCorner(new PromptCornerOptions(
-                        "\n ", first.Value));
-                if (second.Status != PromptStatus.OK) return null;
-                string name;
-                string fallback = "宗地区域 " + DateTime.Now.ToString(
-                    "HHmmss", CultureInfo.InvariantCulture);
-                if (!ParcelBoundaryCadDialogs.TryGetRegionName(
-                    "新建地籍调查区域", fallback, out name)) return null;
-
-                string regionId = Guid.NewGuid().ToString("N");
-                string createdAt = DateTime.Now.ToString("o",
-                    CultureInfo.InvariantCulture);
-                ObjectId created = ObjectId.Null;
-                using (document.LockDocument())
-                using (Transaction transaction = document.Database
-                    .TransactionManager.StartTransaction())
-                {
-                    EnsureLayer(document.Database, transaction);
-                    EnsureRegApp(document.Database, transaction);
-                    Point3d a = first.Value;
-                    Point3d b = second.Value;
-                    var polyline = new Polyline(4);
-                    polyline.SetDatabaseDefaults(document.Database);
-                    polyline.Layer = RegionLayerName;
-                    polyline.AddVertexAt(0, new Point2d(a.X, a.Y), 0, 0, 0);
-                    polyline.AddVertexAt(1, new Point2d(b.X, a.Y), 0, 0, 0);
-                    polyline.AddVertexAt(2, new Point2d(b.X, b.Y), 0, 0, 0);
-                    polyline.AddVertexAt(3, new Point2d(a.X, b.Y), 0, 0, 0);
-                    polyline.Closed = true;
-                    WriteRegion(polyline, regionId, name, createdAt, true);
-                    BlockTableRecord space = (BlockTableRecord)transaction
-                        .GetObject(document.Database.CurrentSpaceId,
-                            OpenMode.ForWrite);
-                    created = space.AppendEntity(polyline);
-                    transaction.AddNewlyCreatedDBObject(polyline, true);
-                    transaction.Commit();
-                }
-                Notify("已新建地籍调查区域“" + name + "”。",
-                    CDBoxNotificationLevel.Success);
-                return ReadRegion(document, created);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("新建地籍调查区域失败。", ex);
-                Notify("新建地籍调查区域失败：" + ex.Message,
-                    CDBoxNotificationLevel.Error);
-                return null;
-            }
-        }
-
-        public ParcelSurveyRegionInfo BindExistingRegion()
-        {
-            Document document = CurrentDocument();
-            if (document == null) return null;
-            try
-            {
-                var options = new PromptEntityOptions("\n ");
-                options.SetRejectMessage("\n请选择闭合二维多段线。\n");
-                options.AddAllowedClass(typeof(Polyline), true);
-                PromptEntityResult selected;
-                using (_prompts.Begin("选择地籍区域",
-                    "选择已有闭合多段线作为地籍调查区域；按 Esc 取消。"))
-                    selected = document.Editor.GetEntity(options);
-                if (selected.Status != PromptStatus.OK) return null;
-                string name;
-                string fallback = "宗地区域 " + DateTime.Now.ToString(
-                    "HHmmss", CultureInfo.InvariantCulture);
-                if (!ParcelBoundaryCadDialogs.TryGetRegionName(
-                    "命名地籍调查区域", fallback, out name)) return null;
-
-                string regionId = Guid.NewGuid().ToString("N");
-                string createdAt = DateTime.Now.ToString("o",
-                    CultureInfo.InvariantCulture);
-                using (document.LockDocument())
-                using (Transaction transaction = document.Database
-                    .TransactionManager.StartTransaction())
-                {
-                    Polyline polyline = transaction.GetObject(selected.ObjectId,
-                        OpenMode.ForWrite, false) as Polyline;
-                    if (polyline == null || !polyline.Closed
-                        || polyline.NumberOfVertices < 3)
-                        throw new InvalidOperationException(
-                            "区域边界必须闭合且至少包含三个顶点。");
-                    EnsureRegApp(document.Database, transaction);
-                    WriteRegion(polyline, regionId, name, createdAt, false);
-                    transaction.Commit();
-                }
-                Notify("已绑定地籍调查区域“" + name + "”。",
-                    CDBoxNotificationLevel.Success);
-                return FindRegion(document, regionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("绑定地籍调查区域失败。", ex);
-                Notify("绑定地籍调查区域失败：" + ex.Message,
-                    CDBoxNotificationLevel.Error);
-                return null;
-            }
-        }
-
-        public ParcelSurveyRegionInfo RenameRegion(string regionId)
-        {
-            Document document = CurrentDocument();
-            ParcelSurveyRegionInfo existing = FindRegion(document, regionId);
-            if (existing == null) throw new InvalidOperationException(
-                "未找到地籍调查区域。");
-            string name;
-            if (!ParcelBoundaryCadDialogs.TryGetRegionName("重命名地籍区域",
-                existing.RegionName, out name)) return null;
-            ObjectId id = FindRegionObjectId(document, regionId);
-            using (document.LockDocument())
-            using (Transaction transaction = document.Database
-                .TransactionManager.StartTransaction())
-            {
-                Polyline polyline = transaction.GetObject(id,
-                    OpenMode.ForWrite, false) as Polyline;
-                WriteRegion(polyline, existing.RegionId, name,
-                    existing.CreatedAt, existing.OwnedBoundary);
-                transaction.Commit();
-            }
-            return FindRegion(document, regionId);
         }
 
         public ParcelSurveyRegionInfo RenameRegion(string regionId,
@@ -383,21 +237,6 @@ namespace CDBox.RealEstate.Cad
             return ObjectId.Null;
         }
 
-        private ParcelSurveyRegionInfo ReadRegion(Document document,
-            ObjectId id)
-        {
-            if (document == null || id.IsNull) return null;
-            using (Transaction transaction = document.Database
-                .TransactionManager.StartOpenCloseTransaction())
-            {
-                Polyline polyline = transaction.GetObject(id,
-                    OpenMode.ForRead, false) as Polyline;
-                ParcelSurveyRegionInfo info = ReadRegion(polyline);
-                transaction.Commit();
-                return info;
-            }
-        }
-
         private static ParcelSurveyRegionInfo ReadRegion(Polyline polyline)
         {
             if (polyline == null) return null;
@@ -447,41 +286,6 @@ namespace CDBox.RealEstate.Cad
             if (polyline == null) return;
             polyline.XData = new ResultBuffer(new TypedValue(
                 (int)DxfCode.ExtendedDataRegAppName, RegionRegAppName));
-        }
-
-        private static void EnsureRegApp(Database database,
-            Transaction transaction)
-        {
-            RegAppTable table = (RegAppTable)transaction.GetObject(
-                database.RegAppTableId, OpenMode.ForRead);
-            if (table.Has(RegionRegAppName)) return;
-            table.UpgradeOpen();
-            var record = new RegAppTableRecord { Name = RegionRegAppName };
-            table.Add(record);
-            transaction.AddNewlyCreatedDBObject(record, true);
-        }
-
-        private static void EnsureLayer(Database database,
-            Transaction transaction)
-        {
-            LayerTable table = (LayerTable)transaction.GetObject(
-                database.LayerTableId, OpenMode.ForRead);
-            LayerTableRecord layer;
-            if (table.Has(RegionLayerName))
-            {
-                layer = transaction.GetObject(table[RegionLayerName],
-                    OpenMode.ForWrite, false) as LayerTableRecord;
-            }
-            else
-            {
-                table.UpgradeOpen();
-                layer = new LayerTableRecord { Name = RegionLayerName };
-                table.Add(layer);
-                transaction.AddNewlyCreatedDBObject(layer, true);
-            }
-            if (layer == null) return;
-            layer.IsPlottable = false;
-            layer.Color = Color.FromColorIndex(ColorMethod.ByAci, 8);
         }
 
         private void Notify(string message, CDBoxNotificationLevel level)

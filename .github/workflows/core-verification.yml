@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   core-tests:
-    name: Updater build and core tests
+    name: Installer build and core tests
     runs-on: windows-2022
     timeout-minutes: 10
 
@@ -30,11 +30,16 @@ jobs:
       - name: Restore independent projects
         shell: pwsh
         run: |
-          dotnet restore CDBoxUpdater/CDBoxUpdater.csproj
+          dotnet restore CDBox.ReleaseTool/CDBox.ReleaseTool.csproj
+          dotnet restore CDBoxInstaller/CDBoxInstaller.csproj
           dotnet restore tests/CDBox.CoreTests/CDBox.CoreTests.csproj
 
-      - name: Build updater
-        run: dotnet build CDBoxUpdater/CDBoxUpdater.csproj -c Release --no-restore
+      - name: Validate Release Manifest V2 pipeline
+        shell: pwsh
+        run: ./tests/Test-ReleaseManifest.ps1
+
+      - name: Build installer
+        run: dotnet build CDBoxInstaller/CDBoxInstaller.csproj -c Release --no-restore
 
       - name: Run core tests
         run: dotnet run --project tests/CDBox.CoreTests/CDBox.CoreTests.csproj -c Release --no-restore

@@ -39,6 +39,8 @@ namespace TCPipeAutoDraw.UI.Studio
         private Panel _titleBar;
         private Panel _contentPanel;
         private Label _titleLabel;
+        private Button _titleActionButton;
+        private ToolTip _titleActionToolTip;
         private WebView2 _webView;
         private bool _webViewReady;
         private bool _windowStateRestored;
@@ -376,6 +378,61 @@ namespace TCPipeAutoDraw.UI.Studio
             _titleBar.Controls.Add(close);
         }
 
+        internal void ConfigureTitleBarAction(string text, string toolTip,
+            string clickScript, string hoverScript, string leaveScript)
+        {
+            if (string.IsNullOrWhiteSpace(text) || _titleBar == null) return;
+            if (_titleActionButton != null)
+            {
+                _titleBar.Controls.Remove(_titleActionButton);
+                _titleActionButton.Dispose();
+            }
+
+            var button = new Button
+            {
+                Text = text.Trim(),
+                Width = 28,
+                Height = 28,
+                Location = new Point(7, 7),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = _chromeBackColor,
+                ForeColor = Color.FromArgb(61, 75, 100),
+                Cursor = Cursors.Hand,
+                TabStop = false,
+                UseVisualStyleBackColor = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                AccessibleName = string.IsNullOrWhiteSpace(toolTip)
+                    ? text.Trim() : toolTip.Trim(),
+                Font = new Font(Font.FontFamily, 11F, FontStyle.Regular)
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.BorderColor = _chromeBackColor;
+            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(
+                226, 235, 248);
+            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(
+                211, 224, 244);
+            button.Click += delegate { TryExecutePageScript(clickScript); };
+            button.MouseEnter += delegate
+            {
+                TryExecutePageScript(hoverScript);
+            };
+            button.MouseLeave += delegate
+            {
+                TryExecutePageScript(leaveScript);
+            };
+            _titleActionButton = button;
+            _titleLabel.Padding = new Padding(43, 0, 0, 0);
+            _titleBar.Controls.Add(button);
+            button.BringToFront();
+
+            if (!string.IsNullOrWhiteSpace(toolTip))
+            {
+                if (_titleActionToolTip == null)
+                    _titleActionToolTip = new ToolTip();
+                _titleActionToolTip.SetToolTip(button, toolTip.Trim());
+            }
+        }
+
         private Button CreateTitleButton(string text, bool isClose)
         {
             var button = new Button();
@@ -492,13 +549,20 @@ namespace TCPipeAutoDraw.UI.Studio
                 CDBoxStudioRuntimeInfo runtime = CDBoxStudioRuntime.Detect();
                 if (runtime == null || !runtime.Available)
                 {
+                    runtime = await CDBoxStudioRuntimeInstaller
+                        .EnsureAvailableWithPromptAsync(this, runtime);
+                }
+                if (runtime == null || !runtime.Available)
+                {
                     string reason = runtime == null ? "未知错误" : runtime.ErrorMessage;
                     throw new InvalidOperationException(string.IsNullOrWhiteSpace(reason) ? "未检测到 Microsoft Edge WebView2 Runtime。" : reason);
                 }
 
                 CDBoxStudioLogger.Info("独立页面 WebView2 Runtime 可用。版本：" + runtime.Version + "，页面：" + _baseTitle);
 
-                await _webView.EnsureCoreWebView2Async(null);
+                CoreWebView2Environment environment = await
+                    CDBoxStudioRuntime.GetEnvironmentAsync();
+                await _webView.EnsureCoreWebView2Async(environment);
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
                 _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
@@ -716,6 +780,11 @@ namespace TCPipeAutoDraw.UI.Studio
                     _webView.Dispose();
                     _webView = null;
                 }
+                if (_titleActionToolTip != null)
+                {
+                    _titleActionToolTip.Dispose();
+                    _titleActionToolTip = null;
+                }
             }
             catch
             {
@@ -736,6 +805,9 @@ namespace TCPipeAutoDraw.UI.Studio
             body.Text = "该独立页面需要 Microsoft Edge WebView2 Runtime。\r\n\r\n"
                 + "当前 WebView2 初始化失败，旧版 WinForms 页面和其他旧功能不受影响。\r\n\r\n"
                 + "宿主模板仍可拖动、最小化、关闭和边缘缩放。\r\n\r\n"
+                + "CDBox 用户数据目录：\r\n"
+                + CDBoxStudioWebViewProfile.PreferredUserDataFolder
+                + "\r\n\r\n"
                 + "错误信息：" + (ex == null ? "未知错误" : ex.Message) + "\r\n\r\n"
                 + "Studio 日志：" + CDBoxStudioLogger.LogFilePath;
 
@@ -817,6 +889,11 @@ namespace TCPipeAutoDraw.UI.Studio
         {
             if (disposing)
             {
+                if (_titleActionToolTip != null)
+                {
+                    _titleActionToolTip.Dispose();
+                    _titleActionToolTip = null;
+                }
                 if (_webView != null)
                 {
                     try

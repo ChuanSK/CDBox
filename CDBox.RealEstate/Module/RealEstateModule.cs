@@ -16,7 +16,6 @@ namespace CDBox.RealEstate.Module
         public const string ModuleVersion = "0.2.0";
 
         private ICDBoxLogger _logger;
-        private RealEstateWorkspaceService _workspace;
         private BuildingLengthAnnotationCadService _buildingAnnotations;
         private BuildingLengthAnnotationSettingsService _buildingSettings;
         private ParcelSurveyEditorService _parcelSurveyEditor;
@@ -40,8 +39,6 @@ namespace CDBox.RealEstate.Module
                 services.GetRequired<ICDBoxColorPickerService>();
 
             _logger = logger;
-            _workspace = new RealEstateWorkspaceService(
-                pageService, logger);
             _buildingAnnotations = new BuildingLengthAnnotationCadService(
                 prompts, notifications, logger);
             _buildingSettings = new BuildingLengthAnnotationSettingsService(
@@ -53,15 +50,16 @@ namespace CDBox.RealEstate.Module
 
         public void OpenWorkspace()
         {
-            if (_workspace == null)
+            if (_parcelSurveyEditor == null)
                 throw new InvalidOperationException(
                     "RealEstate 模块尚未初始化。");
-            _workspace.Open(Version);
+            // 旧版工作区命令兼容转入核心独立编辑器，不再创建聚合工作台。
+            _parcelSurveyEditor.Open();
         }
 
         public void ExecuteCommand(string commandId)
         {
-            if (_workspace == null || _buildingAnnotations == null
+            if (_buildingAnnotations == null
                 || _buildingSettings == null || _parcelSurveyEditor == null)
                 throw new InvalidOperationException(
                     "RealEstate 模块尚未初始化。");
@@ -107,6 +105,13 @@ namespace CDBox.RealEstate.Module
                 _parcelSurveyEditor.FillNeighborInformation();
                 return;
             }
+            if (string.Equals(commandId,
+                RealEstateCommandCatalog.FinishMapSheetRecognition,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSurveyEditor.FinishMapSheetRecognition();
+                return;
+            }
             throw new ArgumentException("未知的不动产命令：" + commandId,
                 "commandId");
         }
@@ -115,7 +120,6 @@ namespace CDBox.RealEstate.Module
         {
             if (_logger != null)
                 _logger.Info("RealEstate 模块已关闭。");
-            _workspace = null;
             _buildingAnnotations = null;
             _buildingSettings = null;
             _parcelSurveyEditor = null;

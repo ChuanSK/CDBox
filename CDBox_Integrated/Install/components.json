@@ -1,0 +1,83 @@
+{
+  "SchemaVersion": 1,
+  "ProductVersion": "5.1.0",
+  "Components": [
+    {
+      "Id": "base",
+      "DisplayName": "基础组件",
+      "Required": true,
+      "DefaultSelected": true,
+      "CanChangeSelection": false,
+      "StatusText": "必须安装",
+      "MinimumAutoCadYear": 0,
+      "MaximumAutoCadYear": 0,
+      "MinimumCoreVersion": "",
+      "Dependencies": [],
+      "RequiredBundlePaths": [
+        "PackageContents.xml",
+        "Contents\\CDBox.dll",
+        "Contents\\CDBox.Shared.dll",
+        "Contents\\components.json"
+      ],
+      "OwnedBundlePaths": []
+    },
+    {
+      "Id": "common",
+      "DisplayName": "公共业务",
+      "Required": false,
+      "DefaultSelected": true,
+      "CanChangeSelection": true,
+      "StatusText": "可选安装",
+      "MinimumAutoCadYear": 0,
+      "MaximumAutoCadYear": 0,
+      "MinimumCoreVersion": "",
+      "Dependencies": ["base"],
+      "RequiredBundlePaths": ["Contents\\CDBox.Common.dll"],
+      "OwnedBundlePaths": [
+        "Contents\\CDBox.Common.dll",
+        "Contents\\CDBox.Common.pdb"
+      ]
+    },
+    {
+      "Id": "wastewater",
+      "DisplayName": "污水业务",
+      "Required": false,
+      "DefaultSelected": true,
+      "CanChangeSelection": true,
+      "StatusText": "可选安装",
+      "MinimumAutoCadYear": 0,
+      "MaximumAutoCadYear": 0,
+      "MinimumCoreVersion": "",
+      "Dependencies": ["base"],
+      "RequiredBundlePaths": [
+        "Contents\\CDBox.Wastewater.dll",
+        "Contents\\Templates\\工程量计算表模板.xls"
+      ],
+      "OwnedBundlePaths": [
+        "Contents\\CDBox.Wastewater.dll",
+        "Contents\\CDBox.Wastewater.pdb",
+        "Contents\\Templates\\工程量计算表模板.xls"
+      ]
+    },
+    {
+      "Id": "realestate",
+      "DisplayName": "不动产业务",
+      "Required": false,
+      "DefaultSelected": true,
+      "CanChangeSelection": true,
+      "StatusText": "可选安装",
+      "MinimumAutoCadYear": 0,
+      "MaximumAutoCadYear": 0,
+      "MinimumCoreVersion": "",
+      "Dependencies": ["base"],
+      "RequiredBundlePaths": ["Contents\\CDBox.RealEstate.dll"],
+      "OwnedBundlePaths": [
+        "Contents\\CDBox.RealEstate.dll",
+        "Contents\\CDBox.RealEstate.pdb",
+        "Contents\\Templates\\权籍调查表.xls",
+        "Contents\\Templates\\地籍调查表.docx",
+        "Contents\\Templates\\四张检查表.xls"
+      ]
+    }
+  ]
+}

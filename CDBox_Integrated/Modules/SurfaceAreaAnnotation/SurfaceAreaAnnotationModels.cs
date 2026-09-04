@@ -3,13 +3,6 @@ using Autodesk.AutoCAD.Geometry;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
-    public enum AnnotationLayerMode
-    {
-        DefaultZJ = 0,
-        ExistingLayer = 1,
-        CustomLayer = 2
-    }
-
     public enum SurfaceAreaCalculationMode
     {
         /// <summary>

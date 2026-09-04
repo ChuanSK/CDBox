@@ -5,10 +5,9 @@ using Autodesk.AutoCAD.ApplicationServices;
 using TCPipeAutoDraw.Core.Check;
 using TCPipeAutoDraw.Core.Business;
 using TCPipeAutoDraw.Core.FloatingCenter;
-using TCPipeAutoDraw.Modules.AnnotationHud;
-using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
 using TCPipeAutoDraw.UI.Studio;
+using CDBox.Shared.Wastewater.Cad;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 using FloatingHub = TCPipeAutoDraw.Core.FloatingCenter.FloatingCenter;
 
@@ -267,10 +266,15 @@ namespace TCPipeAutoDraw.Core.Sync
                     List<string> scopedHandles = FilterToDashboardScope(
                         document, task.ObjectHandles);
                     undoMarkStarted = manageUndoMark && TrySetUndoMark(true);
-                    SimpleAnnotationObjectService.RefreshNodeAnnotationsForSourceHandles(
-                        document, scopedHandles);
-                    PipeLengthAnnotationObjectService.RefreshBindingsForSourceHandles(
-                        document, scopedHandles, string.Empty);
+                    IWastewaterCadInteractionService interaction =
+                        WastewaterCadInteractionRegistry.Current;
+                    if (interaction != null)
+                    {
+                        interaction.RefreshNodeAnnotations(document,
+                            scopedHandles);
+                        interaction.RefreshPipeAnnotations(document,
+                            scopedHandles);
+                    }
                 }
                 else if (task.Type == SyncTaskType.Calculation)
                 {

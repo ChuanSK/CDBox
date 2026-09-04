@@ -22,6 +22,10 @@ namespace CDBox.RealEstate.Services
 
         private static readonly XNamespace W =
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        private static readonly XNamespace W14 =
+            "http://schemas.microsoft.com/office/word/2010/wordml";
+        private static readonly XNamespace MC =
+            "http://schemas.openxmlformats.org/markup-compatibility/2006";
         private static readonly XNamespace XmlNamespace =
             "http://www.w3.org/XML/1998/namespace";
 
@@ -657,38 +661,132 @@ namespace CDBox.RealEstate.Services
         {
             if (element == null) throw new InvalidDataException(
                 "Word 模板缺少勾选项位置。");
-            var boxes = new List<XElement>();
+            EnsureClickableCheckboxNamespaces(element.Document);
+            var boxes = new List<CheckboxTarget>();
             foreach (XElement text in element.Descendants(W + "t"))
             {
-                int count = (text.Value ?? string.Empty).Count(x =>
-                    x == '□' || x == '√' || x == '☑');
-                for (int i = 0; i < count; i++) boxes.Add(text);
+                string value = text.Value ?? string.Empty;
+                for (int position = 0; position < value.Length; position++)
+                    if (IsCheckboxCharacter(value[position]))
+                        boxes.Add(new CheckboxTarget(text, position));
             }
             if (boxes.Count < selected.Length)
                 throw new InvalidDataException(
                     "地籍调查表 Word 模板中的勾选项数量不足。");
-            var occurrence = new Dictionary<XElement, int>();
             for (int index = 0; index < selected.Length; index++)
+                boxes[index].Selected = selected[index];
+
+            int controlId = 410100 + element.Document
+                .Descendants(W + "sdt").Count();
+            foreach (IGrouping<XElement, CheckboxTarget> group in boxes
+                .Take(selected.Length).GroupBy(x => x.Text))
             {
-                XElement text = boxes[index];
-                int skip;
-                occurrence.TryGetValue(text, out skip);
+                XElement text = group.Key;
+                XElement run = text.Parent;
+                if (run == null || run.Name != W + "r"
+                    || run.Elements(W + "t").Count() != 1)
+                    throw new InvalidDataException(
+                        "地籍调查表 Word 模板中的复选框格式不受支持。");
+
                 string value = text.Value ?? string.Empty;
-                int found = -1;
-                for (int i = 0; i <= skip; i++)
+                int start = 0;
+                var replacement = new List<XElement>();
+                foreach (CheckboxTarget target in group.OrderBy(x =>
+                    x.Position))
                 {
-                    found = value.IndexOfAny(new[] { '□', '√', '☑' },
-                        found + 1);
-                    if (found < 0) break;
+                    if (target.Position > start)
+                        replacement.Add(CloneRunWithText(run,
+                            value.Substring(start, target.Position - start)));
+                    replacement.Add(CreateClickableCheckbox(run,
+                        target.Selected, controlId++));
+                    start = target.Position + 1;
                 }
-                if (found >= 0)
-                {
-                    char mark = selected[index] ? '√' : '□';
-                    text.Value = value.Substring(0, found) + mark
-                        + value.Substring(found + 1);
-                    occurrence[text] = skip + 1;
-                }
+                if (start < value.Length)
+                    replacement.Add(CloneRunWithText(run,
+                        value.Substring(start)));
+                run.AddBeforeSelf(replacement);
+                run.Remove();
             }
+        }
+
+        private static bool IsCheckboxCharacter(char value)
+        {
+            return value == '□' || value == '√' || value == '☑'
+                || value == '☐';
+        }
+
+        private static void EnsureClickableCheckboxNamespaces(
+            XDocument document)
+        {
+            XElement root = document == null ? null : document.Root;
+            if (root == null) throw new InvalidDataException(
+                "Word 模板缺少文档根节点。");
+            XNamespace currentW14 = root.GetNamespaceOfPrefix("w14");
+            if (currentW14 == null)
+                root.Add(new XAttribute(XNamespace.Xmlns + "w14",
+                    W14.NamespaceName));
+            else if (currentW14 != W14)
+                throw new InvalidDataException(
+                    "Word 模板的 w14 命名空间不兼容。");
+
+            XNamespace currentMc = root.GetNamespaceOfPrefix("mc");
+            if (currentMc == null)
+                root.Add(new XAttribute(XNamespace.Xmlns + "mc",
+                    MC.NamespaceName));
+            else if (currentMc != MC)
+                throw new InvalidDataException(
+                    "Word 模板的 mc 命名空间不兼容。");
+
+            XAttribute ignorable = root.Attribute(MC + "Ignorable");
+            var prefixes = new HashSet<string>((ignorable == null
+                ? string.Empty : ignorable.Value).Split(new[] { ' ' },
+                    StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.Ordinal);
+            if (prefixes.Add("w14"))
+            {
+                string value = string.Join(" ", prefixes);
+                if (ignorable == null)
+                    root.Add(new XAttribute(MC + "Ignorable", value));
+                else
+                    ignorable.Value = value;
+            }
+        }
+
+        private static XElement CloneRunWithText(XElement templateRun,
+            string value)
+        {
+            XElement run = new XElement(templateRun);
+            XElement text = run.Elements(W + "t").Single();
+            text.Value = value ?? string.Empty;
+            SetPreserveSpace(text);
+            return run;
+        }
+
+        private static XElement CreateClickableCheckbox(
+            XElement templateRun, bool selected, int controlId)
+        {
+            XElement displayRun = CloneRunWithText(templateRun,
+                selected ? "☑" : "☐");
+            return new XElement(W + "sdt",
+                new XElement(W + "sdtPr",
+                    new XElement(W + "alias",
+                        new XAttribute(W + "val", "CDBox 复选框")),
+                    new XElement(W + "tag",
+                        new XAttribute(W + "val", "CDBoxCheckbox")),
+                    new XElement(W + "id",
+                        new XAttribute(W + "val", controlId.ToString(
+                            CultureInfo.InvariantCulture))),
+                    new XElement(W14 + "checkbox",
+                        new XElement(W14 + "checked",
+                            new XAttribute(W14 + "val",
+                                selected ? "1" : "0")),
+                        new XElement(W14 + "checkedState",
+                            new XAttribute(W14 + "val", "2611"),
+                            new XAttribute(W14 + "font", "MS Gothic")),
+                        new XElement(W14 + "uncheckedState",
+                            new XAttribute(W14 + "val", "2610"),
+                            new XAttribute(W14 + "font", "MS Gothic")))),
+                new XElement(W + "sdtContent", displayRun));
         }
 
         private static void SetUnderlinedValueAfterLabel(XElement paragraph,
@@ -1155,6 +1253,19 @@ namespace CDBox.RealEstate.Services
             public XElement Text { get; private set; }
             public int Start { get; private set; }
             public int End { get; private set; }
+        }
+
+        private sealed class CheckboxTarget
+        {
+            public CheckboxTarget(XElement text, int position)
+            {
+                Text = text;
+                Position = position;
+            }
+
+            public XElement Text { get; private set; }
+            public int Position { get; private set; }
+            public bool Selected { get; set; }
         }
 
         private sealed class PageBlock

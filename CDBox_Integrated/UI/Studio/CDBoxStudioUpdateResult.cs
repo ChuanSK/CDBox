@@ -19,8 +19,8 @@ namespace TCPipeAutoDraw.UI.Studio
             SourceName = string.Empty;
             SourceUrl = string.Empty;
             DownloadUrl = string.Empty;
-            PackageFileName = string.Empty;
-            PackageSizeBytes = 0;
+            InstallerFileName = string.Empty;
+            InstallerSizeBytes = 0;
             Title = string.Empty;
             Notes = string.Empty;
             ReleaseDate = string.Empty;
@@ -29,6 +29,10 @@ namespace TCPipeAutoDraw.UI.Studio
             ErrorMessage = string.Empty;
             CheckedAt = DateTime.Now;
             Sources = new List<CDBoxStudioUpdateSource>();
+            InstalledComponentIds = new string[0];
+            InstalledComponentNames = new string[0];
+            ComponentPlanText = string.Empty;
+            ComponentStateWarning = string.Empty;
         }
 
         public bool Success { get; set; }
@@ -41,8 +45,8 @@ namespace TCPipeAutoDraw.UI.Studio
         public string SourceName { get; set; }
         public string SourceUrl { get; set; }
         public string DownloadUrl { get; set; }
-        public string PackageFileName { get; set; }
-        public long PackageSizeBytes { get; set; }
+        public string InstallerFileName { get; set; }
+        public long InstallerSizeBytes { get; set; }
         public string Title { get; set; }
         public string Notes { get; set; }
         public string ReleaseDate { get; set; }
@@ -51,13 +55,17 @@ namespace TCPipeAutoDraw.UI.Studio
         public string ErrorMessage { get; set; }
         public DateTime CheckedAt { get; set; }
         public List<CDBoxStudioUpdateSource> Sources { get; private set; }
+        public string[] InstalledComponentIds { get; set; }
+        public string[] InstalledComponentNames { get; set; }
+        public string ComponentPlanText { get; set; }
+        public string ComponentStateWarning { get; set; }
 
-        public string PackageSizeText
+        public string InstallerSizeText
         {
             get
             {
-                if (PackageSizeBytes <= 0) return string.Empty;
-                double mb = PackageSizeBytes / 1024d / 1024d;
+                if (InstallerSizeBytes <= 0) return string.Empty;
+                double mb = InstallerSizeBytes / 1024d / 1024d;
                 return mb.ToString("0.##", CultureInfo.InvariantCulture) + " MB";
             }
         }
@@ -76,9 +84,9 @@ namespace TCPipeAutoDraw.UI.Studio
             Append(sb, "sourceName", SourceName); sb.Append(',');
             Append(sb, "sourceUrl", SourceUrl); sb.Append(',');
             Append(sb, "downloadUrl", DownloadUrl); sb.Append(',');
-            Append(sb, "packageFileName", PackageFileName); sb.Append(',');
-            Append(sb, "packageSizeText", PackageSizeText); sb.Append(',');
-            Append(sb, "packageSizeBytes", PackageSizeBytes); sb.Append(',');
+            Append(sb, "installerFileName", InstallerFileName); sb.Append(',');
+            Append(sb, "installerSizeText", InstallerSizeText); sb.Append(',');
+            Append(sb, "installerSizeBytes", InstallerSizeBytes); sb.Append(',');
             Append(sb, "title", Title); sb.Append(',');
             Append(sb, "notes", Notes); sb.Append(',');
             Append(sb, "releaseDate", ReleaseDate); sb.Append(',');
@@ -86,6 +94,10 @@ namespace TCPipeAutoDraw.UI.Studio
             Append(sb, "sha256", Sha256); sb.Append(',');
             Append(sb, "errorMessage", ErrorMessage); sb.Append(',');
             Append(sb, "checkedAt", CheckedAt.ToString("yyyy-MM-dd HH:mm:ss")); sb.Append(',');
+            Append(sb, "componentPlanText", ComponentPlanText); sb.Append(',');
+            Append(sb, "componentStateWarning", ComponentStateWarning); sb.Append(',');
+            AppendArray(sb, "installedComponentIds", InstalledComponentIds); sb.Append(',');
+            AppendArray(sb, "installedComponentNames", InstalledComponentNames); sb.Append(',');
             sb.Append("\"sources\":[");
             for (int i = 0; i < Sources.Count; i++)
             {
@@ -120,6 +132,20 @@ namespace TCPipeAutoDraw.UI.Studio
         private static void Append(StringBuilder sb, string name, long value)
         {
             sb.Append('"').Append(Escape(name)).Append("\":").Append(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendArray(StringBuilder sb, string name,
+            IEnumerable<string> values)
+        {
+            sb.Append('"').Append(Escape(name)).Append("\":[");
+            bool first = true;
+            foreach (string value in values ?? new string[0])
+            {
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append('"').Append(Escape(value ?? string.Empty)).Append('"');
+            }
+            sb.Append(']');
         }
 
         private static string Escape(string value)

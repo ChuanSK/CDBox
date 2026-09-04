@@ -59,7 +59,7 @@ namespace TCPipeAutoDraw.Core.Modules
                 return;
             }
 
-            var pageService = new CDBoxModulePageService();
+            var pageService = new CDBoxModulePageService("不动产业务");
             var services = new CDBoxServiceRegistry()
                 .Register<ICDBoxLogger>(Logger)
                 .Register<ICDBoxNotificationService>(Notifications)

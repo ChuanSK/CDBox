@@ -10,25 +10,25 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>4.1.1</Version>
+    <Version>5.1.0</Version>
 
-    <AssemblyVersion>4.1.1.0</AssemblyVersion>
-    <FileVersion>4.1.1.0</FileVersion>
-    <InformationalVersion>4.1.1</InformationalVersion>
+    <AssemblyVersion>5.1.0.0</AssemblyVersion>
+    <FileVersion>5.1.0.0</FileVersion>
+    <InformationalVersion>5.1.0</InformationalVersion>
 
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <CDBoxVersionCode>40101</CDBoxVersionCode>
+    <CDBoxVersionCode>50100</CDBoxVersionCode>
 
-    <CDBoxReleaseIdentity>CDBox-Studio-Preview-4.1.1</CDBoxReleaseIdentity>
-    <CDBoxReleaseTitle>CDBox Studio Preview 4.1.1</CDBoxReleaseTitle>
-    <CDBoxPackageFileName>CDBox.Studio.Preview.4.1.1.zip</CDBoxPackageFileName>
-    <CDBoxAppVersion>4.1.1</CDBoxAppVersion>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-5.1.0</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 5.1.0</CDBoxReleaseTitle>
+    <CDBoxInstallerFileName>CDBoxInstaller-5.1.0.exe</CDBoxInstallerFileName>
+    <CDBoxAppVersion>5.1.0</CDBoxAppVersion>
 
-    <CDBoxUpdateChannel>studio-preview</CDBoxUpdateChannel>
+    <CDBoxUpdateChannel Condition="'$(CDBoxUpdateChannel)' == ''">preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 	<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
-    <AutoCADManagedDir Condition="'$(AutoCADManagedDir)' == ''">C:\Program Files\Autodesk\AutoCAD 2023</AutoCADManagedDir>
+    <AutoCADManagedDir Condition="'$(AutoCADManagedDir)' == ''">D:\Program Files\Autodesk\AutoCAD 2023</AutoCADManagedDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -72,10 +72,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>SkiaSharp.dll</TargetPath>
     </Content>
-    <Content Include="CDBox_Integrated\Templates\工程量计算表模板.xls">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Templates\工程量计算表模板.xls</TargetPath>
-    </Content>
     <Content Include="CDBox_Integrated\Templates\权籍调查表.xls">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\权籍调查表.xls</TargetPath>
@@ -91,6 +87,10 @@
     <Content Include="CDBox_Integrated\Config\CDBoxColors.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Config\CDBoxColors.json</TargetPath>
+    </Content>
+    <Content Include="CDBox_Integrated\Install\components.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>components.json</TargetPath>
     </Content>
   </ItemGroup>
 
@@ -115,13 +115,36 @@
 
   <ItemGroup>
     <Compile Remove="CDBox.Shared\**\*.cs" />
+    <Compile Remove="CDBox.Common\**\*.cs" />
+    <Compile Remove="CDBox.Wastewater\**\*.cs" />
     <Compile Remove="CDBox.RealEstate\**\*.cs" />
+    <Compile Remove="CDBox_Integrated\Modules\SurfaceAreaAnnotation\**\*.cs" />
+    <Compile Remove="CDBoxInstaller\**\*.cs" />
+    <Compile Remove="CDBox.ReleaseTool\**\*.cs" />
     <Compile Remove="CDBoxUpdater\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
     <ProjectReference Include="CDBox.Shared\CDBox.Shared.csproj" />
+    <ProjectReference Include="CDBox.Common\CDBox.Common.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="CDBox.Wastewater\CDBox.Wastewater.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="CDBox.RealEstate\CDBox.RealEstate.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="CDBoxUpdater\CDBoxUpdater.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyCommonModuleOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_CDBoxCommonFiles Include="$(MSBuildProjectDirectory)\CDBox.Common\bin\$(Configuration)\net48\CDBox.Common.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CDBoxCommonFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(_CDBoxCommonFiles)' != ''" />
+  </Target>
+
+  <Target Name="CopyWastewaterModuleOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_CDBoxWastewaterFiles Include="$(MSBuildProjectDirectory)\CDBox.Wastewater\bin\$(Configuration)\net48\CDBox.Wastewater.*" />
+      <_CDBoxWastewaterTemplates Include="$(MSBuildProjectDirectory)\CDBox.Wastewater\bin\$(Configuration)\net48\Templates\工程量计算表模板.xls" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CDBoxWastewaterFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(_CDBoxWastewaterFiles)' != ''" />
+    <MakeDir Directories="$(TargetDir)Templates" Condition="'@(_CDBoxWastewaterTemplates)' != ''" />
+    <Copy SourceFiles="@(_CDBoxWastewaterTemplates)" DestinationFolder="$(TargetDir)Templates" SkipUnchangedFiles="true" Condition="'@(_CDBoxWastewaterTemplates)' != ''" />
+  </Target>
 
   <Target Name="CopyRealEstateModuleOutput" AfterTargets="Build">
     <ItemGroup>
@@ -130,12 +153,8 @@
     <Copy SourceFiles="@(_CDBoxRealEstateFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(_CDBoxRealEstateFiles)' != ''" />
   </Target>
 
-  <Target Name="CopyCDBoxUpdaterOutput" AfterTargets="Build">
-    <ItemGroup>
-      <_CDBoxUpdaterFiles Include="$(MSBuildProjectDirectory)\CDBoxUpdater\bin\$(Configuration)\net48\CDBoxUpdater.*" />
-    </ItemGroup>
-    <MakeDir Directories="$(TargetDir)Updater" />
-    <Copy SourceFiles="@(_CDBoxUpdaterFiles)" DestinationFolder="$(TargetDir)Updater" SkipUnchangedFiles="true" Condition="'@(_CDBoxUpdaterFiles)' != ''" />
+  <Target Name="RemoveLegacyUpdateArtifacts" BeforeTargets="Build">
+    <RemoveDir Directories="$(TargetDir)Updater;$(TargetDir)Installer" />
   </Target>
 
   <Target Name="ValidateAutoCADManagedReferences" BeforeTargets="ResolveAssemblyReferences">
