@@ -1444,8 +1444,8 @@ namespace CDBox.CoreTests
 
             IReadOnlyList<CadInstallation> installations =
                 CadDetectionService.DetectSupportedVersions();
-            True(installations.Count > 0,
-                "本机至少应发现一个已安装 AutoCAD 产品");
+            True(installations != null,
+                "未安装 AutoCAD 的构建机应返回空集合，而不是检测失败");
             True(installations.All(x => x.IsDetected
                     && File.Exists(x.AcadExecutablePath)),
                 "安装器只应列出实际存在 acad.exe 的版本");
