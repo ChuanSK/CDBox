@@ -1,3 +1,17 @@
+extern alias BaseUi;
+using ReleaseService = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioUpdateService;
+using ReleaseSettings = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettings;
+using ReleaseCatalog = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioUpdateSourceCatalog;
+using ReleaseUpdatePage = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxReleaseUpdatePage;
+using WastewaterQuantityDashboardController = BaseUi::CDBox.Wastewater.UI.WastewaterQuantityDashboardController;
+using WastewaterQuantityAttributeEditorController = BaseUi::CDBox.Wastewater.UI.WastewaterQuantityAttributeEditorController;
+using ShortCodeRecognitionSettingsPage = BaseUi::CDBox.Common.UI.ShortCodeRecognitionSettingsPage;
+using CDBoxStudioExcelToCadPage = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioExcelToCadPage;
+using BuildingLengthAnnotationSettingsPage = BaseUi::CDBox.RealEstate.UI.BuildingLengthAnnotationSettingsPage;
+using ParcelSurveyEditorPage = BaseUi::CDBox.RealEstate.UI.ParcelSurveyEditorPage;
+using WastewaterQuantityAttributeEditorPage = BaseUi::CDBox.Wastewater.UI.WastewaterQuantityAttributeEditorPage;
+using WastewaterQuantityDashboardPage = BaseUi::CDBox.Wastewater.UI.WastewaterQuantityDashboardPage;
+using WastewaterAnnotationSettingsPage = BaseUi::CDBox.Wastewater.UI.WastewaterAnnotationSettingsPage;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,7 +30,6 @@ using CDBox.Shared.Wastewater.Drafting;
 using CDBox.Common.Module;
 using CDBox.Common.Commands;
 using CDBox.Common.Features.ShortCodeRecognition;
-using CDBox.Common.UI;
 using CDBox.Wastewater.Module;
 using CDBox.Wastewater.Commands;
 using CDBox.Wastewater.Features.Inspection;
@@ -24,7 +37,6 @@ using CDBox.Wastewater.Features.Sync;
 using CDBox.Wastewater.Features.Annotation;
 using CDBox.Wastewater.Features.LongitudinalProfile;
 using CDBox.Wastewater.Features.SectionDrawing;
-using CDBox.Wastewater.UI;
 using CDBox.RealEstate.Module;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Commands;
@@ -32,7 +44,6 @@ using CDBox.RealEstate.Geometry;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Services;
 using CDBox.RealEstate.Settings;
-using CDBox.RealEstate.UI;
 using CDBox.Setup;
 using TCPipeAutoDraw.Modules.WastewaterResultTable;
 using TCPipeAutoDraw.Core.Colors;
@@ -71,6 +82,10 @@ namespace CDBox.CoreTests
 
         private static int Main()
         {
+            BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxUiDispatcher.Initialize();
+            Run("组件管理器持久化复制", TestManagementInstallerCopy);
+            Run("基础 UI 归属与业务程序集隔离", TestBaseUiOwnership);
+            Run("基础 UI 输入端口与延迟会话", TestBaseUiPorts);
             QuantityAttributeEngineRegistry.Register(
                 new WastewaterQuantityAttributeEngine());
             Run("对象类型识别", TestKindRecognition);
@@ -102,8 +117,25 @@ namespace CDBox.CoreTests
             Run("RealEstate 最小模块边界", TestRealEstateModuleBoundary);
             Run("不动产菜单顺序与分组", TestRealEstateMenuLayout);
             Run("建筑边长与面积辅助线规划", TestBuildingLengthAnnotationPlanner);
+            Run("房屋三角形高度与公式闭合", BuildingAreaFeatureTests.Geometry);
+            Run("房屋单顶点划分与圆弧面积", BuildingPropertyFeatureTests.Geometry);
+            Run("房屋矩形优先分割与尺寸复用", BuildingRectangleFeatureTests.Geometry);
+            Run("房屋中空解析包含判断", BuildingPropertyFeatureTests.HollowContainment);
+            Run("房屋层次与底层占地合并", BuildingPropertyFeatureTests.FloorsAndMerge);
+            Run("房产文档模板与层次导出", () => {
+                string directory = NewTemporaryDirectory("property-export");
+                try {BuildingPropertyFeatureTests.Export(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Templates","房产.docx"),directory);}
+                finally {DeleteDirectory(directory);}
+            });
+            Run("房屋面积中空扣减与半封计半", BuildingAreaFeatureTests.WeightedArea);
+            Run("添加房屋持久化与旧草稿合并", BuildingAreaFeatureTests.Persistence);
+            Run("添加房屋失败回滚与重复保护", BuildingAreaFeatureTests.FailureSafety);
             Run("建筑边长独立设置页", TestBuildingLengthAnnotationSettingsPage);
             Run("宗地调查业务模型与项目默认值", TestParcelSurveyModelAndDefaults);
+            Run("宗地自动保存确认与范围保护", TestParcelAutoSave);
+            Run("工作台主题持久化与旧设置迁移", TestWorkbenchThemeSettings);
+            Run("公共工作台入口与主题范围", TestCommonWorkbench);
+            Run("统一强调色与按钮文字对比度", TestAccentColors);
             Run("独立宗地选择、命名与数据隔离", TestIndependentParcelSelection);
             Run("界址点坐标约定与旧数据迁移",
                 TestParcelBoundaryCoordinateConvention);
@@ -791,26 +823,77 @@ namespace CDBox.CoreTests
             Equal("沉泥井", silt["WellType"], "沉泥井绑定应包含井类型文字行");
         }
 
+        private static void TestManagementInstallerCopy()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "CDBoxManagerTest-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                string source = Path.Combine(directory, "installer.exe");
+                string destination = Path.Combine(directory, "installed", "manager.exe");
+                File.WriteAllBytes(source, new byte[] { 1, 2, 3 });
+                BundleInstallService.PreserveInstallerCopy(source, destination);
+                True(File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(destination)), "首次安装复制完整文件");
+                File.WriteAllBytes(source, new byte[] { 4, 5, 6, 7 });
+                BundleInstallService.PreserveInstallerCopy(source, destination);
+                True(File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(destination)), "升级原子替换管理器");
+                BundleInstallService.PreserveInstallerCopy(destination, destination);
+                using (File.Open(destination, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    BundleInstallService.PreserveInstallerCopy(source, destination);
+                True(Capture(delegate { BundleInstallService.PreserveInstallerCopy(source + ".missing", destination); }) != null, "缺失安装源明确失败");
+                Equal(4L, new FileInfo(destination).Length, "失败保留原管理器");
+                False(Directory.GetFiles(Path.GetDirectoryName(destination), "*.tmp").Any(), "清理临时副本");
+            }
+            finally { Directory.Delete(directory, true); }
+        }
+
         private static void TestBuiltInUpdateSourcePriority()
         {
-            IList<CDBoxStudioUpdateSource> sources =
-                CDBoxStudioUpdateSourceCatalog.CreateManifestSources();
-            Equal(1, sources.Count, "客户端应只使用一个官方 update.json 数据源");
-            Equal("CDBox 官方发布源", sources[0].Name, "更新源名称");
-            Equal(CDBoxStudioUpdateSourceCatalog.PreviewManifestUrl,
-                sources[0].Url, "Preview 清单地址");
-            True(sources[0].Enabled, "官方更新源必须启用");
-            False(sources[0].Url.IndexOf("github.com",
-                    StringComparison.OrdinalIgnoreCase) >= 0,
-                "业务代码不得使用 GitHub 作为正式下载源");
-            False(sources[0].Url.IndexOf("gitee.com",
-                    StringComparison.OrdinalIgnoreCase) >= 0,
-                "业务代码不得使用 Gitee 作为正式下载源");
-
-            IList<CDBoxStudioUpdateSource> stable =
-                CDBoxStudioUpdateSourceCatalog.CreateManifestSources("stable");
-            Equal(CDBoxStudioUpdateSourceCatalog.StableManifestUrl,
-                stable[0].Url, "Stable 清单地址");
+            var settings = new ReleaseSettings { UpdateChannel = " Stable ", ReleaseServiceUrl = "https://releases.example.test/latest?product=cdbox&channel=preview" };
+            settings.Normalize();
+            Equal("stable", settings.UpdateChannel, "通道选择不可被构建通道覆盖");
+            string url = ReleaseCatalog.BuildServiceUrl(settings.ReleaseServiceUrl, settings.UpdateChannel);
+            Contains(url, "channel=stable", "查询所选通道");
+            Equal(ReleaseCatalog.DefaultReleaseServiceUrl, settings.ReleaseServiceUrl, "旧设置不能覆盖内置服务");
+            Contains(ReleaseCatalog.BuildServiceUrl("https://example.test/api?product=cdbox", "stable"), "product=cdbox", "保留接口已有参数");
+            False(url.Contains("channel=preview"), "替换旧查询通道");
+            False(url.Contains("update.json"), "查询不依赖版本文件");
+            foreach (string invalid in new[] { "", "http://example.test/api", "file:///C:/update.json", "https://user:pass@example.test/api", "https://example.test/api#test" })
+                True(Capture(delegate { ReleaseCatalog.BuildServiceUrl(invalid, "stable"); }) != null, "拒绝无效服务地址");
+            True(Capture(delegate { ReleaseCatalog.BuildServiceUrl("https://example.test/api", "nightly"); }) != null, "拒绝未知通道");
+            string response = "{\"channel\":\"stable\",\"release\":{\"version\":\"5.2.0\",\"summary\":\"测试摘要\",\"changelog\":\"测试日志\",\"publishedAt\":\"2026-09-07\",\"downloadUrl\":\"file:///malicious.exe\"}}";
+            var result = ReleaseService.ParseResponse(response, "stable", "5.1.0");
+            True(result.Success && result.HasRelease && result.UpdateAvailable, "无需安装包信息即可发现新版本");
+            Equal("测试摘要", result.Summary, "摘要独立读取");
+            Equal("测试日志", result.Notes, "日志独立读取");
+            False(result.ToJson().Contains("malicious"), "不消费或传递远程安装器链接");
+            False(ReleaseService.ParseResponse(response, "stable", "5.2.0").UpdateAvailable, "同版本不更新");
+            False(ReleaseService.ParseResponse(response, "stable", "5.3.0").UpdateAvailable, "服务回滚不自动降级");
+            string preview = response.Replace("stable", "preview").Replace("5.2.0", "5.2.0-preview.10");
+            True(ReleaseService.ParseResponse(preview, "preview", "5.2.0-preview.2").UpdateAvailable, "预发行序号正确比较");
+            True(ReleaseService.ParseResponse(response, "stable", "5.2.0-preview.10").UpdateAvailable, "预发行升级正式版");
+            True(Capture(delegate { ReleaseService.ParseResponse(preview, "stable", "5.1.0"); }) != null, "拒绝错通道");
+            True(Capture(delegate { ReleaseService.ParseResponse(preview.Replace("preview\",", "stable\","), "stable", "5.1.0"); }) != null, "Stable 不返回预发行版本");
+            var empty = ReleaseService.ParseResponse("{\"channel\":\"stable\",\"release\":null}", "stable", "5.1.0");
+            True(empty.Success && !empty.HasRelease && !empty.UpdateAvailable, "空通道与错误分离");
+            foreach (string invalid in new[] { "", "<html>error</html>", "{}", "{\"channel\":\"stable\",\"release\":{\"version\":123}}", new string('x', 128 * 1024 + 1) })
+                True(Capture(delegate { ReleaseService.ParseResponse(invalid, "stable", "5.1.0"); }) != null, "拒绝异常响应");
+            string requested = "";
+            var check = ReleaseService.Check(settings, delegate(string target) { requested = target; return response; });
+            True(check.Success && requested.Contains("channel=stable"), "实际检查使用用户设置");
+            var failed = ReleaseService.Check(settings, delegate(string target) { throw new TimeoutException("timeout"); });
+            False(failed.Success || failed.UpdateAvailable, "超时不等于最新版本");
+            settings.ReleaseServiceUrl = "";
+            bool fetched = false;
+            var unconfigured = ReleaseService.Check(settings, delegate(string target) { fetched = true; return response; });
+            True(unconfigured.Success && fetched, "空旧设置使用用户指定的内置服务");
+            Equal(ReleaseCatalog.DefaultReleaseServiceUrl, settings.ReleaseServiceUrl, "检查前恢复内置地址");
+            string controls = ReleaseUpdatePage.BuildControls(settings);
+            Contains(controls, "value='stable' selected", "页面显示已选通道");
+            Contains(controls, "openReleaseWebsiteButton", "保留官网入口");
+            False(controls.Contains("releaseServiceUrl") || controls.Contains("版本服务地址"), "设置不显示服务地址");
+            False(controls.Contains("下载安装器"), "没有插件内下载按钮");
+            Contains(ReleaseUpdatePage.BuildScript(), "window.confirm", "新版本引导需用户确认");
         }
 
         private static void TestReleaseVersionComparison()
@@ -1746,6 +1829,44 @@ namespace CDBox.CoreTests
                 "不兼容组件应在组件树中标明");
         }
 
+        private static void TestBaseUiOwnership()
+        {
+            Assembly core = typeof(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxUiDispatcher).Assembly;
+            foreach (Assembly business in new[] { typeof(CommonModule).Assembly,
+                typeof(WastewaterModule).Assembly, typeof(RealEstateModule).Assembly })
+            {
+                string[] forbidden = { "System.Windows.Forms", "PresentationFramework",
+                    "PresentationCore", "System.Xaml", "Microsoft.Web.WebView2.Core",
+                    "Microsoft.Web.WebView2.WinForms", "CDBox" };
+                False(business.GetReferencedAssemblies().Any(x => forbidden.Contains(x.Name)),
+                    business.GetName().Name + " 不得实现原生 UI 或反向引用基础 UI 程序集");
+            }
+            foreach (Type page in new[] { typeof(ShortCodeRecognitionSettingsPage),
+                typeof(CDBoxStudioExcelToCadPage), typeof(BuildingLengthAnnotationSettingsPage),
+                typeof(ParcelSurveyEditorPage), typeof(WastewaterQuantityAttributeEditorPage),
+                typeof(WastewaterQuantityDashboardPage), typeof(WastewaterAnnotationSettingsPage) })
+                Equal(core, page.Assembly, page.Name + " 必须编入必装基础组件");
+            True(typeof(WastewaterModule).Assembly.GetType(
+                "TCPipeAutoDraw.Modules.PipeLengthAnnotation.PipeLengthAnnotationCardWindow", false) == null,
+                "污水模块不得保留注记浮窗实现");
+            True(typeof(RealEstateModule).Assembly.GetType(
+                "CDBox.RealEstate.UI.ParcelBoundaryCadDialogs", false) == null,
+                "不动产模块不得保留界址浮窗实现");
+        }
+
+        private static void TestBaseUiPorts()
+        {
+            // 空选项应直接取消；通过真实基础输入端口验证 out 参数回传，且不显示窗口。
+            object[] arguments = { "test", "test", null, "", null, null };
+            False(CDBoxUiGateway.Call<bool>("common.choice", "TryChoose", arguments),
+                "无选项时不得弹出空选择窗");
+            Equal(string.Empty, (string)arguments[4], "out 参数必须原样回传给业务端口");
+            True(Capture(() => CDBoxUiGateway.Call("not-registered", "Create"))
+                is InvalidOperationException, "未登记的 UI 调用必须明确拒绝");
+            // 未打开的会话不应实例化控件或请求业务类型，关闭未创建会话亦安全。
+            using (var unopened = new CDBoxUiSession("not-registered")) { }
+        }
+
         private static void TestCommonModuleBoundary()
         {
             var logger = new CapturingLogger();
@@ -1769,9 +1890,9 @@ namespace CDBox.CoreTests
             Equal(typeof(CommonModule).Assembly,
                 typeof(ExcelTableReader).Assembly,
                 "Excel 转 CAD 业务实现必须物理归属 Common 程序集");
-            Equal(typeof(CommonModule).Assembly,
+            Equal(typeof(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxUiDispatcher).Assembly,
                 typeof(CDBoxStudioExcelToCadPage).Assembly,
-                "Excel 转 CAD 独立页面必须物理归属 Common 程序集");
+                "Excel 转 CAD 独立页面必须物理归属基础程序集");
             module.OpenWorkspace();
             Equal("common-home", pages.LastPage.Id,
                 "公共业务模块应通过统一页面服务打开独立工作区");
@@ -1993,12 +2114,12 @@ namespace CDBox.CoreTests
             Equal(typeof(WastewaterModule).Assembly,
                 typeof(WastewaterQuantityAttributeCadStore).Assembly,
                 "CAD Xrecord 属性存储必须物理归属 Wastewater 程序集");
-            Equal(typeof(WastewaterModule).Assembly,
+            Equal(typeof(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxUiDispatcher).Assembly,
                 typeof(WastewaterQuantityAttributeEditorPage).Assembly,
-                "属性编辑器页面必须物理归属 Wastewater 程序集");
-            Equal(typeof(WastewaterModule).Assembly,
+                "属性编辑器页面必须物理归属基础程序集");
+            Equal(typeof(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxUiDispatcher).Assembly,
                 typeof(WastewaterQuantityDashboardPage).Assembly,
-                "工程量看板页面必须物理归属 Wastewater 程序集");
+                "工程量看板页面必须物理归属基础程序集");
             Equal(typeof(WastewaterModule).Assembly,
                 typeof(QuantityDashboardSnapshot).Assembly,
                 "工程量看板业务模型必须物理归属 Wastewater 程序集");
@@ -2150,7 +2271,7 @@ namespace CDBox.CoreTests
             Equal(string.Join("|", new[]
                 {
                     "▣ 选择宗地", "✎ 填写界址段", "◇ 填写邻宗信息", "---",
-                    "▤ 宗地调查数据编辑器", "---", "▱ 注记建筑边长",
+                    "▤ 宗地调查数据编辑器", "---", "▱ 添加房屋",
                     "⚙ 建筑边长注记设置", "---", "⚙ CDBox设置", "---",
                     "ⓘ 关于超重氢工具箱"
                 }), string.Join("|", RealEstateMenuLayout.Items.Select(item =>
@@ -2201,11 +2322,11 @@ namespace CDBox.CoreTests
                 "旋转后的 L 形仍应识别为正交建筑");
             Equal(6, lShape.BoundarySegments.Count,
                 "L 形应标注六条外边");
-            Equal(0, lShape.AuxiliarySegments.Count,
-                "正交 L 形可拆分为矩形，不应生成辅助线");
-            Near(1.05 / (4 * 0.72 + 0.8) * 2.0,
-                lShape.TextHeight, 1e-9,
-                "自适应高度应按原计算结果统一放大两倍");
+            Equal(0, lShape.AuxiliarySegments.Count(x => x.IsHeight),
+                "L 形矩形分割不再绘制三角形高度");
+            Equal(2, lShape.AreaTerms.Count, "L 形使用两个矩形");
+            True(lShape.TextHeight > 0 && lShape.TextHeight <= 1.0,
+                "自适应高度应统一并受配置上限约束");
 
             BuildingAnnotationPlan skewedEqualOpposites =
                 BuildingLengthAnnotationPlanner.Create(new[]
@@ -2217,10 +2338,10 @@ namespace CDBox.CoreTests
                 }, 0.5, true);
             False(skewedEqualOpposites.IsOrthogonal,
                 "斜四边形不应被误判为严格正交图形");
-            True(skewedEqualOpposites.CanCalculateAreaFromBoundary,
-                "对应边长相等时应视为外边数据已经足够");
-            Equal(0, skewedEqualOpposites.AuxiliarySegments.Count,
-                "对应边长相等的斜四边形不得绘制辅助线");
+            False(skewedEqualOpposites.CanCalculateAreaFromBoundary,
+                "斜四边形只知道对边长度不足以得到面积");
+            Equal(3, skewedEqualOpposites.AuxiliarySegments.Count,
+                "斜四边形应绘制分割线和两个三角形高度");
 
             BuildingAnnotationPlan irregular =
                 BuildingLengthAnnotationPlanner.Create(new[]
@@ -2238,8 +2359,8 @@ namespace CDBox.CoreTests
                 "非正交四边形应标注四条外边");
             Equal(3, irregular.AuxiliarySegments.Count,
                 "非正交四边形应生成一条计算轴和两条垂线");
-            Near(11.83, irregular.AuxiliarySegments[0].Length, 1e-6,
-                "应选择贯穿建筑的最长有效对角线作为计算轴");
+            Equal(2, irregular.AuxiliarySegments.Count(x => x.IsHeight),
+                "两个划分三角形必须各有一条高度");
             True(irregular.AuxiliarySegments.All(x => x.IsAuxiliary),
                 "面积计算线必须标记为辅助线");
             True(irregular.BoundarySegments.Concat(irregular.AuxiliarySegments)
@@ -2258,8 +2379,8 @@ namespace CDBox.CoreTests
                 }, 0.5, true);
             False(concave.IsOrthogonal,
                 "非正交凹五边形不得误判为可矩形拆分");
-            Equal(2, concave.AuxiliarySegments.Count,
-                "非正交五边形应以两条内部对角线拆分为三角形");
+            Equal(5, concave.AuxiliarySegments.Count,
+                "非正交五边形应有两条内部对角线和三条三角形高度");
             Equal(string.Empty, concave.Warning,
                 "成功三角化后不应留下人工补线警告");
         }
@@ -2426,6 +2547,123 @@ namespace CDBox.CoreTests
             {
                 if (Directory.Exists(directory)) DeleteDirectory(directory);
             }
+        }
+
+        private static void TestAccentColors()
+        {
+            foreach (string accent in new[] { "#000000", "#FFFFFF", "#FFFF00", "#0169CC", "#1F6FEB", "#777777" })
+            {
+                string foreground = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxThemeCatalog.OnAccent(accent);
+                Func<string, double> luminance = hex => {
+                    var color = System.Drawing.ColorTranslator.FromHtml(hex);
+                    Func<byte,double> linear = value => { double v=value/255.0;return v<=.04045 ? v/12.92 : Math.Pow((v+.055)/1.055,2.4); };
+                    return .2126*linear(color.R)+.7152*linear(color.G)+.0722*linear(color.B);
+                };
+                double a=luminance(accent), b=luminance(foreground);
+                True((Math.Max(a,b)+.05)/(Math.Min(a,b)+.05)>=4.5, "强调色上的按钮文字必须有足够对比度");
+                var profile=BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxThemeCatalog.Create("codex","light");profile.Accent=accent;
+                Contains(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxThemeCatalog.Css(profile,"light"),"--brand:"+accent,"主按钮使用强调色");
+            }
+            var settings=new BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettings();
+            settings.LightTheme.AccentSource="foreground";
+            Equal(settings.LightTheme.Foreground,BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxThemeCatalog.Accent(settings.LightTheme),"跟随前景的强调色仍然有效");
+            string legacy="<html><head><style>body{background:#abcdef}</style></head><body><button>导出报表</button></body></html>";
+            string html=BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.Attach(legacy,settings);
+            Contains(html,"background:#abcdef","旧页面原布局配色保持定义");
+            Contains(html,"CDBoxApplyAccentTheme","所有宿主页面具备实时强调色入口");
+            Equal(html,BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.Attach(html,settings),"重复接入不会重复注册观察器");
+        }
+
+        private static void TestCommonWorkbench()
+        {
+            int shortCalls = 0, frameCalls = 0, excelCalls = 0;
+            var page = BaseUi::CDBox.Common.UI.CommonHomePage.CreateWithTools("0.5.0",
+                () => shortCalls++, () => frameCalls++, () => excelCalls++);
+            foreach (string id in new[] { "short-code", "frame", "excel" })
+            {
+                var route = page.RouteHandler(new CDBoxPageRouteRequest("openCommonTool", id));
+                True(route.Handled && route.ActionToRun != null, "工具入口必须有可执行操作");
+                route.ActionToRun();
+            }
+            True(shortCalls == 1 && frameCalls == 1 && excelCalls == 1, "入口只执行对应工具");
+            False(page.RouteHandler(new CDBoxPageRouteRequest("openCommonTool", "unknown")).Handled,
+                "未知入口不执行其他 CAD 操作");
+            foreach (string id in new[] { "common-home", "common-short-code-settings", "common-frame-settings", "common-excel-to-cad" })
+                True(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxWorkbenchAppearance.IsEnabledFor(id), "公共页面接入原生主题同步");
+            False(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxWorkbenchAppearance.IsEnabledFor("wastewater-dashboard"),
+                "本轮不扩展到污水工作台");
+            var settings = new BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettings();
+            var shortSettings = new CDBox.Common.Features.ShortCodeRecognition.ShortCodeRecognitionSettings
+                { RecognitionSymbol = "</script>" };
+            string html = BaseUi::CDBox.Common.UI.ShortCodeRecognitionSettingsPage.BuildDocument(shortSettings, settings);
+            Contains(html, "\\u003c/script\\u003e", "用户设置不能截断页面脚本");
+            string settingsHtml = BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsPage.BuildDocument(settings, "", "", "5.1.1");
+            False(settingsHtml.Contains("theme-preview"), "外观页移除示例宗地块与样式");
+            Contains(settingsHtml, "ContentFont", "删除预览不能删除内容字体设置");
+        }
+
+        private static void TestWorkbenchThemeSettings()
+        {
+            string dir=Path.Combine(Path.GetTempPath(),"cdbox-theme-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);string path=Path.Combine(dir,"settings.xml");
+            try
+            {
+                File.WriteAllText(path,"<CDBoxStudioSettings><Theme>fresh</Theme><FloatingCenterEnabled>false</FloatingCenterEnabled></CDBoxStudioSettings>");
+                var settings=BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsStore.Load(path);
+                Equal("fresh",settings.Theme,"旧外观值应兼容读取");
+                False(settings.FloatingCenterEnabled,"迁移不能重置无关开关");
+                Equal("#181818",settings.DarkTheme.Background,"旧设置应补全 Codex 深色配置");
+                settings.DarkTheme=BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxThemeCatalog.Create("github","dark");
+                settings.LightTheme.UiFont="yahei";settings.DarkTheme.ContentFont="mono";settings.DarkTheme.Contrast=76;
+                True(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsStore.TrySave(settings,path),"主题应保存到 XML");
+                var restored=BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsStore.Load(path);
+                Equal("#0D1117",restored.DarkTheme.Background,"深色预设颜色应往返保留");
+                Equal("yahei",restored.LightTheme.UiFont,"浅色字体独立保留");
+                Equal("mono",restored.DarkTheme.ContentFont,"深色内容字体独立保留");
+                Equal(76,restored.DarkTheme.Contrast,"对比度应往返保留");
+                False(restored.FloatingCenterEnabled,"保存新主题不能重置原开关");
+                restored.DarkTheme.Background="red;}body{display:none}";restored.DarkTheme.UiFont="bad-font";restored.DarkTheme.Contrast=999;restored.Normalize();
+                Equal("#181818",restored.DarkTheme.Background,"非法颜色不能进入样式");
+                Equal("system",restored.DarkTheme.UiFont,"字体使用白名单");
+                Equal(100,restored.DarkTheme.Contrast,"对比度限制在范围内");
+                using(var locked=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None))
+                    False(BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsStore.TrySave(restored,path),"写入受阻必须报告失败");
+                Equal("#0D1117",BaseUi::TCPipeAutoDraw.UI.Studio.CDBoxStudioSettingsStore.Load(path).DarkTheme.Background,"写入失败保留原有效配置");
+            }
+            finally { foreach(string f in Directory.GetFiles(dir))File.Delete(f);Directory.Delete(dir); }
+        }
+
+        private static void TestParcelAutoSave()
+        {
+            string directory = Path.Combine(Path.GetTempPath(),
+                "cdbox-autosave-" + Guid.NewGuid().ToString("N"));
+            var store = new ParcelSurveyStore(Path.Combine(directory, "data.json"));
+            var first = store.CreateOrSelectParcel("autosave-doc", "test.dwg", "宗地一", "1A");
+            var second = store.CreateOrSelectParcel("autosave-doc", "test.dwg", "宗地二", "2B");
+            first.Field("project.name").TextValue = "未填写完也应保存";
+            var route = typeof(ParcelSurveyEditorPage).GetMethod("Route", BindingFlags.NonPublic | BindingFlags.Static);
+            var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+            Func<int, ParcelSurveyRecord, CDBoxPageRouteResult> save = (id, record) =>
+                (CDBoxPageRouteResult)route.Invoke(null, new object[] {
+                    new CDBoxPageRouteRequest("autoSaveParcel", serializer.Serialize(new {RequestId = id, Record = record})),
+                    store, null, null, null, null });
+            var result = save(7, first);
+            True(result.Handled && !result.RefreshPage, "自动保存不刷新页面或打断输入");
+            Contains(result.ExecuteScript, "(7,true,", "保存落盘后确认匹配的请求序号");
+            Equal("未填写完也应保存", store.GetRecord(first.Id).Field("project.name").TextValue,
+                "未完成表单也应保存用户内容");
+            Equal(second.ParcelId, store.GetCurrentParcelId("autosave-doc"), "后台保存不得切换当前宗地");
+            store.DeleteParcelInfo("autosave-doc", first.Id);
+            result = save(8, first);
+            Contains(result.ExecuteScript, "(8,false,", "已删除宗地应返回失败确认");
+            True(store.GetRecord(first.Id) == null, "自动保存不能复活已删除宗地");
+            result = save(9, new ParcelSurveyRecord());
+            Contains(result.ExecuteScript, "(9,false,", "无绑定宗地不能显示保存成功");
+            // This is a unique test-owned directory beneath the system temporary directory.
+            string resolved = Path.GetFullPath(directory);
+            if (resolved.StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileName(resolved).StartsWith("cdbox-autosave-", StringComparison.Ordinal))
+                Directory.Delete(resolved, true);
         }
 
         private static void TestIndependentParcelSelection()
@@ -2810,10 +3048,10 @@ namespace CDBox.CoreTests
                 "CASS 图幅文字应兼容全角和半角连接线");
             Equal("2624.00-550.00", mapSheets[0],
                 "图幅号应统一为半角连接线并保持 CASS 数值精度");
-            Contains(html, "保存宗地信息", "编辑器顶部应提供保存宗地信息按钮");
+            False(html.Contains("保存宗地信息"), "编辑器应自动保存并移除保存按钮");
             False(html.Contains("检查数据") || html.Contains("checkParcel"),
                 "编辑器不应继续提供数据检查入口或页面路由");
-            Contains(html, "导出调查表", "编辑器顶部应提供导出按钮");
+            Contains(html, "导出 ▾", "编辑器顶部应提供导出按钮");
             Contains(html, "导出为 Word 文档",
                 "导出下拉框应预留 Word 文档入口");
             Contains(html, "导出为 Excel 表格",
@@ -2842,41 +3080,33 @@ namespace CDBox.CoreTests
             int sidebarIndex = html.IndexOf("class=\"sidebar\"",
                 StringComparison.Ordinal);
             True(toolbarIndex >= 0 && sidebarIndex > toolbarIndex,
-                "编辑器顶部工具区应横跨左侧导航与右侧内容区");
-            int currentParcelIndex = html.IndexOf("<strong>当前宗地</strong>",
-                toolbarIndex, StringComparison.Ordinal);
-            int renameIndex = html.IndexOf(">重命名宗地</button>",
-                toolbarIndex, StringComparison.Ordinal);
-            int deleteIndex = html.IndexOf(">删除宗地信息</button>",
-                toolbarIndex, StringComparison.Ordinal);
-            int saveIndex = html.IndexOf(">保存宗地信息</button>",
-                toolbarIndex, StringComparison.Ordinal);
-            int exportIndex = html.IndexOf("导出调查表",
-                toolbarIndex, StringComparison.Ordinal);
-            True(currentParcelIndex >= 0 && currentParcelIndex < renameIndex
-                    && renameIndex < deleteIndex && deleteIndex < saveIndex
-                    && saveIndex < exportIndex && exportIndex < sidebarIndex,
-                "宗地选择、重命名、删除、保存和导出应依次位于同一工具栏");
+                "编辑器应包含工具区与导航栏");
+            Contains(html, "aria-label=\"宗地选择\"", "宗地选择应保留无障碍名称");
+            False(html.Contains("<strong>当前宗地</strong>"), "工具栏不再显示当前宗地标签");
+            Contains(html, "id=\"parcelMore\"", "宗地操作应收进三点按钮");
+            Contains(html, "autoSaveParcel", "编辑器应接入自动保存路由");
+            Contains(html, "building-master-detail", "房屋应采用主从结构");
+            False(html.Contains("每幢房屋"), "不再永久展开所有房屋属性");
             Contains(html,
                 ".toolbar-btn{width:104px;flex:0 0 104px;font-size:11px;line-height:1}",
                 "顶部操作按钮应使用统一尺寸");
             Contains(html,
                 ".toolbar-btn,.nav-item,.btn,.export-option,.mini,.icon-btn{font-weight:400}",
                 "编辑器内按钮文字应统一使用常规字重");
-            Equal(136, ParcelSurveyEditorPage.SidebarWidth,
-                "导航栏应缩小到略宽于最长页签文字");
-            Contains(html, ":root{--sidebar-width:136px}",
+            Equal(184, ParcelSurveyEditorPage.SidebarWidth,
+                "导航栏应容纳页签名称与右对齐待处理数量");
+            Contains(html, ":root{--sidebar-width:184px}",
                 "页面导航栏宽度应采用精简尺寸");
-            Contains(html, "type='button'>${n}</button>",
-                "导航栏只应显示页签文字而不再添加序号");
+            Contains(html, "<span class='nav-label'>${n}</span>",
+                "导航栏应保留页签名称并分开呈现待处理数量");
             Contains(html, ".sidebar{padding:0 8px 12px}",
-                "导航栏上缘应贴合顶部功能区下缘");
-            Contains(html, ".shell.sidebar-collapsed .sidebar{top:0}",
-                "覆盖导航栏不应在工作区起点上再次叠加顶部高度");
+                "导航栏应保留紧凑内边距");
+            Contains(html, "grid-template-areas:'sidebar top' 'sidebar workspace'",
+                "左侧导航应整高并让工具栏与工作区对齐");
             Contains(html,
                 ".nav{min-width:0;gap:5px;padding:10px 0 0;overflow-x:hidden;overflow-y:auto}",
                 "首个导航按钮应保留上边距且导航栏不得出现横向滚动条");
-            Contains(html, "border-radius:0 14px 14px 0",
+            Contains(html, "border-radius:0 8px 8px 0",
                 "覆盖式导航栏应使用圆角边缘");
             Contains(html, "当前宗地",
                 "顶部工具区应直接提供宗地选择");
@@ -2906,12 +3136,12 @@ namespace CDBox.CoreTests
                 "编辑器应提供标题栏侧边栏切换动作");
             Contains(html, "sidebarPreferredVisible",
                 "侧边栏显示偏好应持久保存");
-            Contains(html, "window.innerWidth<1040",
-                "窗口窄于旧最小宽度时应强制收起侧边栏");
+            Contains(html, "Number(ctx.SidebarExpandedMinimumWidth)||960",
+                "侧栏应按最小录入宽度与侧栏宽度之和自动收起");
             Contains(html,
                 ".shell.sidebar-collapsed.sidebar-preview .sidebar",
                 "收起的侧边栏应支持临时覆盖展开");
-            Contains(html, "position:absolute;left:0;top:var(--top-height)",
+            Contains(html, "position:absolute;left:0;top:0",
                 "临时展开侧边栏不得挤压右侧工作区");
             Equal(776, ParcelSurveyEditorPage.MinimumEditorWidth,
                 "编辑器新最小宽度应为旧最小宽度减去导航栏宽度");
@@ -3008,6 +3238,8 @@ namespace CDBox.CoreTests
 
                 var record = new ParcelSurveyRecord();
                 record.Normalize();
+                record.Field("project.rightsSurveyor").TextValue = "调查员张三、李四";
+                record.Field("project.rightsSurveyDate").TextValue = "2026-09-09";
                 record.Field(ParcelSurveyFieldKeys.ParcelSeaCode).TextValue =
                     "532525000000GB00001";
                 record.Field(ParcelSurveyFieldKeys.ParcelCode).TextValue =
@@ -3251,6 +3483,8 @@ namespace CDBox.CoreTests
 
                 var record = new ParcelSurveyRecord();
                 record.Normalize();
+                record.Field("project.rightsSurveyor").TextValue = "调查员张三、李四";
+                record.Field("project.rightsSurveyDate").TextValue = "2026-09-09";
                 record.Field(ParcelSurveyFieldKeys.ParcelSeaCode).TextValue =
                     "532525000000GB00001";
                 record.Field(ParcelSurveyFieldKeys.ParcelCode).TextValue =
@@ -3412,9 +3646,29 @@ namespace CDBox.CoreTests
                 Equal("/", WordCellText(tables
                     .First(WordIsBoundarySignatureTable), 3, 1),
                     "无中间点的 Word 签章组应输出斜杠");
-                Equal(2, tables.Count(WordIsHouseTable),
-                    "多幢房屋应逐幢生成 Word 房屋调查表");
+                Equal(1, tables.Count(WordIsHouseTable),
+                    "三幢以内房屋应填在同一张 Word 调查表");
                 XElement firstHouse = tables.First(WordIsHouseTable);
+                Equal("1", WordCellText(firstHouse,12,1), "第一幢位于首行");
+                Equal("2", WordCellText(firstHouse,13,1), "第二幢位于第二行");
+                Equal(16, firstHouse.Elements(WordMl + "tr").Count(), "两幢仅保留两条数据行");
+                var twoHouseTemplate = new XElement(WordTables(templateDocument).First(WordIsHouseTable));
+                twoHouseTemplate.Elements(WordMl + "tr").ElementAt(14).Remove();
+                int inheritedSlots = AssertBlankSlotFormats(WordTables(templateDocument).First(WordIsBasicTable), basic)
+                    + AssertBlankSlotFormats(twoHouseTemplate, firstHouse)
+                    + AssertBlankSlotFormats(WordTables(templateDocument).First(WordIsBoundaryMarkTable), marks[0]);
+                True(inheritedSlots > 10, "检查多个空白填写位置的模板字体和字号继承");
+                foreach (XElement houseTable in tables.Where(WordIsHouseTable))
+                {
+                    XElement footer = houseTable.ElementsAfterSelf().First();
+                    XElement templateFooter = WordTables(templateDocument).First(WordIsHouseTable).ElementsAfterSelf().First();
+                    True(XNode.DeepEquals(templateFooter.Element(WordMl + "pPr"),footer.Element(WordMl + "pPr")),"页脚保留模板原始段落位置和缩进");
+                    Equal(templateFooter.Descendants(WordMl + "rPr").Count(),footer.Descendants(WordMl + "rPr").Count(),"日期原始文本段及字体不重建");
+                    Contains(WordText(footer), "年", "日期保留年份单位");
+                    Contains(WordText(footer), "月", "日期保留月份单位");
+                    Contains(WordText(footer), "日", "日期保留日期单位");
+                    Contains(WordText(footer), "调查员：" + record.Field("project.rightsSurveyor").TextValue, "调查员姓名保留");
+                }
                 string unitTypes = WordCellText(firstHouse, 2, 2);
                 Contains(unitTypes, "☑幢",
                     "Word 房屋调查表应勾选“幢”类型");
@@ -3438,10 +3692,6 @@ namespace CDBox.CoreTests
                     .Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                 Equal(checkboxIds.Count, checkboxIds.Distinct().Count(),
                     "Word 可点击复选框控件标识不得重复");
-                True(document.Descendants(WordMl + "br").Any(x =>
-                        string.Equals((string)x.Attribute(WordMl + "type"),
-                            "page", StringComparison.OrdinalIgnoreCase)),
-                    "多幢房屋之间应插入整页分页符");
                 XElement audit = tables.First(WordIsAuditTable);
                 string auditText = WordText(audit);
                 Contains(auditText, "该不动产宗地面积为：101.87平方米",
@@ -3716,7 +3966,7 @@ namespace CDBox.CoreTests
                 ParcelSurveyValidator.Validate(record));
             False(html.Contains("data-cad='boundary'"),
                 "界址页不应重复提供权属线建宗入口");
-            Contains(html, "<strong>界址点列表</strong>",
+            Contains(html, "'boundary|points','界址点列表'",
                 "CAD 宗地几何标题应改为界址点列表");
             False(html.Contains("CAD宗地几何"),
                 "界址调查页不应继续显示旧的 CAD 宗地几何标题");
@@ -3729,9 +3979,9 @@ namespace CDBox.CoreTests
                 "连续填写邻宗信息结束后应整体保留本轮签章组结果");
             Contains(html, "CDBoxParcelCadInteractionFinished",
                 "页面应接收 CAD 外部浮窗完成结果并恢复编辑器");
-            Contains(html, "重新生成说明与四至",
+            Contains(html, "刷新界址说明",
                 "界址页应提供说明和四至重新生成入口");
-            Contains(html, "<strong>宗地四至</strong>",
+            Contains(html, "'parcel|宗地四至','宗地四至'",
                 "界址页应直接显示可编辑的宗地四至");
             False(html.IndexOf("<th>处理/确认</th>",
                     StringComparison.Ordinal) >= 0,
@@ -3754,35 +4004,13 @@ namespace CDBox.CoreTests
             Contains(html, "class='icon-btn danger' data-remove-signature",
                 "签章组删除操作应使用工作台统一的叉号图标按钮");
             Contains(html, "col-point-coordinate",
-                "界址点坐标列应具有响应式隐藏标识");
-            int segmentOwnerRule = html.IndexOf(
-                "@media(max-width:1240px){.segment-table .col-segment-owner",
-                StringComparison.Ordinal);
-            int segmentMiddleRule = html.IndexOf(
-                "@media(max-width:1040px){.segment-table .col-segment-middle",
-                StringComparison.Ordinal);
-            int segmentDirectionRule = html.IndexOf(
-                ".segment-table .col-segment-direction{display:none}",
-                StringComparison.Ordinal);
-            int segmentDistanceRule = html.IndexOf(
-                "@media(max-width:800px){.segment-table .col-segment-distance",
-                StringComparison.Ordinal);
-            True(segmentOwnerRule >= 0 && segmentOwnerRule < segmentMiddleRule
-                    && segmentMiddleRule < segmentDirectionRule
-                    && segmentDirectionRule < segmentDistanceRule,
-                "界址段应依次隐藏相邻权利人、中间点号、方向和距离");
-            int signatureDateRule = html.IndexOf(
-                "@media(max-width:1120px){.signature-table .col-signature-date",
-                StringComparison.Ordinal);
-            int signatureSelfRule = html.IndexOf(
-                "@media(max-width:980px){.signature-table .col-signature-self",
-                StringComparison.Ordinal);
-            int signatureNeighborRule = html.IndexOf(
-                "@media(max-width:840px){.signature-table .col-signature-neighbor",
-                StringComparison.Ordinal);
-            True(signatureDateRule >= 0 && signatureDateRule < signatureSelfRule
-                    && signatureSelfRule < signatureNeighborRule,
-                "签章分组应依次隐藏指界日期、本宗指界人和邻宗指界人");
+                "界址点坐标列应保留独立列标识");
+            Contains(html, ".point-table .col-point-coordinate{display:none}",
+                "窄窗应隐藏界址点坐标列");
+            Contains(html, ".signature-table .col-signature-date{display:none}",
+                "窄窗应优先隐藏指界日期");
+            Contains(html, ".table-wrap{overflow-x:auto",
+                "界址表应提供横向滚动容器");
             Contains(html, "class='multi-check-grid' data-role='value'",
                 "多选字段应呈现为复选框组而不是原生多选列表");
             False(html.IndexOf("id=\"modalHost\"",
@@ -3797,8 +4025,10 @@ namespace CDBox.CoreTests
             Contains(html, "post('saveParcelView'",
                 "文本框拉伸高度应写入宗地持久数据而非只保存于页面");
             Contains(html,
-                "textarea.control{width:100%!important;max-width:100%;min-width:0;resize:vertical;overflow-y:hidden}",
-                "可拉伸文本框应限制为卡片宽度并只允许纵向拉伸");
+                "width:100%!important;max-width:100%;min-width:0",
+                "可拉伸文本框应限制为录入列宽度");
+            Contains(html, "resize:vertical;overflow-y:hidden",
+                "可拉伸文本框应只允许纵向拉伸");
             Contains(html, "function fitTextarea(x)",
                 "宗地四至等文本框应按文字内容自动适应高度");
             Contains(html, "x.scrollHeight+2",
@@ -3971,8 +4201,8 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityDashboardPage", StringComparison.Ordinal) >= 0, "内嵌页应提供共享组件根节点");
             True(standalone.IndexOf("CDBoxQuantityDashboardPage.create", StringComparison.Ordinal) >= 0, "独立页应创建同一个共享页面组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
-            True(standalone.IndexOf("data-theme=\"fresh\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
-            True(standalone.IndexOf("class=\"no-animations\"", StringComparison.Ordinal) >= 0, "独立页应继承动画设置");
+            True(standalone.IndexOf("data-theme='light'", StringComparison.Ordinal) >= 0, "旧清新主题使用统一浅色工作台");
+            True(standalone.IndexOf("class='no-animations'", StringComparison.Ordinal) >= 0, "独立页应继承动画设置");
             False(standalone.IndexOf("当前工程量快速估算台", StringComparison.Ordinal) >= 0, "看板不应显示冗余副标题");
             False(standalone.IndexOf("当前结果为基于图纸现有属性", StringComparison.Ordinal) >= 0, "看板不应显示估算说明小字");
             False(standalone.IndexOf("适合截图、复制或导出", StringComparison.Ordinal) >= 0, "参考表不应显示用途说明小字");
@@ -4045,8 +4275,8 @@ namespace CDBox.CoreTests
             True(embedded.IndexOf("quantityAttributeEditorPage", StringComparison.Ordinal) >= 0, "内嵌属性编辑器应提供共享根节点");
             True(standalone.IndexOf("CDBoxQuantityAttributeEditorPage.create", StringComparison.Ordinal) >= 0, "独立窗口应创建同一共享组件");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立属性编辑器应启用独立模式");
-            True(standalone.IndexOf("5.1.0", StringComparison.Ordinal) >= 0, "页面应显示 5.1.0 身份");
-            True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
+            True(standalone.IndexOf("对象属性", StringComparison.Ordinal) >= 0 && !standalone.Contains("5.1.0"), "页面不再显示过期版本标签");
+            True(standalone.IndexOf("data-theme='dark'", StringComparison.Ordinal) >= 0, "独立属性编辑器应继承主题");
             True(standalone.IndexOf("qa-structure", StringComparison.Ordinal) >= 0, "结构层应使用表格编辑器");
             True(standalone.IndexOf("data-layer", StringComparison.Ordinal) >= 0, "结构层表格应允许直接编辑单元格");
             True(standalone.IndexOf("bindLayerDrag", StringComparison.Ordinal) >= 0, "结构层应支持拖动排序");
@@ -4079,7 +4309,7 @@ namespace CDBox.CoreTests
                 "属性编辑器结构层删除应复用×图标按钮");
             False(standalone.IndexOf("data-sec=", StringComparison.Ordinal) >= 0, "属性编辑器不应保留左侧导航");
             False(standalone.IndexOf("图层识别信息", StringComparison.Ordinal) >= 0, "属性编辑器不应显示图层识别信息卡片");
-            True(standalone.IndexOf("属性与结构层", StringComparison.Ordinal) >= 0, "基本参数与结构层应合并显示");
+            True(standalone.Contains("基本属性") && standalone.Contains("尺寸与计算") && standalone.Contains("this.workSection('structure'"), "属性与结构层应保留在同页的三个手动折叠分组中");
             False(standalone.IndexOf("function parseLayers", StringComparison.Ordinal) >= 0, "前端不得自行解析结构层业务文本");
             False(standalone.IndexOf("function encodeLayers", StringComparison.Ordinal) >= 0, "前端不得建立第二套结构层序列化逻辑");
             False(standalone.IndexOf("['Remark','备注'", StringComparison.Ordinal) >= 0, "新界面不应恢复已删除的备注字段");
@@ -4225,7 +4455,7 @@ namespace CDBox.CoreTests
             False(script.IndexOf("data-act='close'>关闭", StringComparison.Ordinal) >= 0, "断面图独立页不应保留关闭按钮");
             True(standalone.IndexOf("Preview 10", StringComparison.Ordinal) >= 0, "独立页应显示 Preview 10 身份");
             True(standalone.IndexOf("standalone:true", StringComparison.Ordinal) >= 0, "独立页应启用独立宿主模式");
-            True(standalone.IndexOf("data-theme=\"dark\"", StringComparison.Ordinal) >= 0, "独立页应继承 Studio 主题");
+            True(standalone.IndexOf("data-theme='dark'", StringComparison.Ordinal) >= 0, "独立页继承统一深色主题");
             False(standalone.IndexOf("打开旧版", StringComparison.Ordinal) >= 0, "断面图不应保留旧版入口按钮");
             False(script.IndexOf(">独立窗口<", StringComparison.Ordinal) >= 0, "内嵌断面图不应保留独立窗口按钮");
 
@@ -5182,6 +5412,24 @@ namespace CDBox.CoreTests
                 "不同图纸的同步任务必须隔离");
             Equal(1, manager.GetSnapshot("doc-sync-b").Tasks.Count,
                 "目标图纸应保留自己的同步任务");
+        }
+
+        private static int AssertBlankSlotFormats(XElement template, XElement output)
+        {
+            var originals = template.Descendants(WordMl + "tc").ToList();
+            var actual = output.Descendants(WordMl + "tc").ToList();
+            int count = 0;
+            for (int i = 0; i < originals.Count; i++)
+            {
+                XElement p = originals[i].Element(WordMl + "p");
+                XElement style = p?.Element(WordMl + "pPr")?.Element(WordMl + "rPr");
+                if (style == null || originals[i].Descendants(WordMl + "t").Any() || p.Descendants(WordMl + "r").Any()) continue;
+                XElement text = actual[i].Descendants(WordMl + "t").FirstOrDefault(x => x.Value.Length > 0);
+                if (text == null) continue;
+                True(XNode.DeepEquals(style, text.Parent.Element(WordMl + "rPr")), "空白填写位置完整继承原模板格式：" + text.Value);
+                count++;
+            }
+            return count;
         }
 
         private static XDocument ReadWordDocument(string path)

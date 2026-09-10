@@ -2,7 +2,6 @@ using System;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.EditorInput;
 using CDBox.Common.Features.ShortCodeRecognition;
-using CDBox.Common.UI;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -57,7 +56,7 @@ namespace CDBox.Common.Services
 
         public void OpenSettings()
         {
-            _pages.Show(ShortCodeRecognitionSettingsPage.Create());
+            _pages.Show(CDBoxUiGateway.Call<CDBoxPageDefinition>("common.short-code", "Create"));
         }
     }
 }

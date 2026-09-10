@@ -10,19 +10,19 @@
     <PlatformTarget>x64</PlatformTarget>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>5.1.0</Version>
+    <Version>5.1.9</Version>
 
-    <AssemblyVersion>5.1.0.0</AssemblyVersion>
-    <FileVersion>5.1.0.0</FileVersion>
-    <InformationalVersion>5.1.0</InformationalVersion>
+    <AssemblyVersion>5.1.9.0</AssemblyVersion>
+    <FileVersion>5.1.9.0</FileVersion>
+    <InformationalVersion>5.1.9</InformationalVersion>
 
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <CDBoxVersionCode>50100</CDBoxVersionCode>
+    <CDBoxVersionCode>50109</CDBoxVersionCode>
 
-    <CDBoxReleaseIdentity>CDBox-Studio-Preview-5.1.0</CDBoxReleaseIdentity>
-    <CDBoxReleaseTitle>CDBox Studio Preview 5.1.0</CDBoxReleaseTitle>
-    <CDBoxInstallerFileName>CDBoxInstaller-5.1.0.exe</CDBoxInstallerFileName>
-    <CDBoxAppVersion>5.1.0</CDBoxAppVersion>
+    <CDBoxReleaseIdentity>CDBox-Studio-Preview-5.1.9</CDBoxReleaseIdentity>
+    <CDBoxReleaseTitle>CDBox Studio Preview 5.1.9</CDBoxReleaseTitle>
+    <CDBoxInstallerFileName>CDBoxInstaller-5.1.9.exe</CDBoxInstallerFileName>
+    <CDBoxAppVersion>5.1.9</CDBoxAppVersion>
 
     <CDBoxUpdateChannel Condition="'$(CDBoxUpdateChannel)' == ''">preview</CDBoxUpdateChannel>
     <UseWindowsForms>true</UseWindowsForms>
@@ -32,6 +32,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="CDBox_Integrated\UI\WorkbenchAssets\*.*" LogicalName="CDBox.Workbench.%(Filename)%(Extension)" />
     <AssemblyMetadata Include="CDBoxVersionCode" Value="$(CDBoxVersionCode)" />
     <AssemblyMetadata Include="CDBoxReleaseIdentity" Value="$(CDBoxReleaseIdentity)" />
     <AssemblyMetadata Include="CDBoxReleaseTitle" Value="$(CDBoxReleaseTitle)" />
@@ -55,6 +56,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Web" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -79,6 +81,10 @@
     <Content Include="CDBox_Integrated\Templates\地籍调查表.docx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\地籍调查表.docx</TargetPath>
+    </Content>
+    <Content Include="CDBox_Integrated\Templates\房产.docx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\房产.docx</TargetPath>
     </Content>
     <Content Include="CDBox_Integrated\Templates\四张检查表.xls">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -124,9 +130,9 @@
     <Compile Remove="CDBoxUpdater\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
     <ProjectReference Include="CDBox.Shared\CDBox.Shared.csproj" />
-    <ProjectReference Include="CDBox.Common\CDBox.Common.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="CDBox.Wastewater\CDBox.Wastewater.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="CDBox.RealEstate\CDBox.RealEstate.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="CDBox.Common\CDBox.Common.csproj" Private="false" />
+    <ProjectReference Include="CDBox.Wastewater\CDBox.Wastewater.csproj" Private="false" Aliases="WastewaterBusiness" />
+    <ProjectReference Include="CDBox.RealEstate\CDBox.RealEstate.csproj" Private="false" />
   </ItemGroup>
 
   <Target Name="CopyCommonModuleOutput" AfterTargets="Build">

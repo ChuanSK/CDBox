@@ -1,0 +1,24 @@
+<article class="rr-card" data-recognition-rules="1">
+  <header class="rr-toolbar">
+    <div class="rr-heading"><strong>属性识别表</strong><small>匹配图层名称，填写图层属性</small></div>
+    <span id="rulesStatus" class="rr-status" role="status">已保存</span>
+    <button id="addRuleButton" class="rr-btn">新增规则</button>
+    <button id="deleteRuleButton" class="rr-btn danger">删除</button>
+    <button id="saveRulesButton" class="rr-btn primary">保存</button>
+  </header>
+  <div class="rr-layout">
+    <aside class="rr-sidebar" aria-label="识别规则列表">
+      <div class="rr-search-wrap" id="searchWrap"><input id="rulesSearch" class="rr-search" type="search" aria-label="搜索识别规则" placeholder="搜索规则、匹配内容…"></div>
+      <div class="rr-list-meta"><span id="rulesCount"></span><span>拖动排序</span></div>
+      <nav id="rulesBody" class="rr-list" aria-label="规则"></nav>
+      <div id="rulesEmpty" class="rr-empty" hidden>没有匹配的规则</div>
+    </aside>
+    <main class="rr-detail">
+      <div id="ruleDetail"></div>
+      <details class="rr-test"><summary>规则快速测试</summary>
+        <div class="rr-test-grid"><textarea id="ruleTestInput" aria-label="测试图层名称" placeholder="每行一个图层名，例如：&#10;300波纹管（砼恢复）&#10;井-沉泥井-D700-砖砌-铸铁盖"></textarea><pre id="ruleTestOutput" role="status">输入图层名，预览匹配的规则。最终识别结果请在图层管理器中查看。</pre></div>
+        <button id="testRulesButton" class="rr-btn primary-soft">测试当前规则</button>
+      </details>
+    </main>
+  </div>
+</article>

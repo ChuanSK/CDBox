@@ -45,7 +45,7 @@ namespace TCPipeAutoDraw.UI
                 RealEstateMenuItem.Separator(),
                 RealEstateMenuItem.Command("▤ 宗地调查数据编辑器", "CDREDJ"),
                 RealEstateMenuItem.Separator(),
-                RealEstateMenuItem.Command("▱ 注记建筑边长", "CDREBL"),
+                RealEstateMenuItem.Command("▱ 添加房屋", "CDREBL"),
                 RealEstateMenuItem.Command("⚙ 建筑边长注记设置", "CDREBLSZ"),
                 RealEstateMenuItem.Separator(),
                 RealEstateMenuItem.Command("⚙ CDBox设置", "CDSET"),

@@ -14,17 +14,17 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
     {
         public void Initialize()
         {
-            PipeLengthAnnotationInteractionService.Initialize();
+            PipeAnnotationPresentation.Initialize();
         }
 
         public void Terminate()
         {
-            PipeLengthAnnotationInteractionService.Terminate();
+            PipeAnnotationPresentation.Terminate();
         }
 
         public void RefreshAppearance()
         {
-            PipeLengthAnnotationInteractionService.RefreshAppearance();
+            PipeAnnotationPresentation.RefreshAppearance();
         }
 
         public void RefreshNodeAnnotations(object document,

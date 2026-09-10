@@ -215,6 +215,10 @@ namespace CDBox.RealEstate.Models
     public sealed class ParcelBuildingRecord
     {
         public string Id { get; set; }
+        public int AddedRevision { get; set; }
+        public BuildingAreaCalculation AreaCalculation { get; set; }
+        public bool HasFloorAreas { get; set; }
+        public List<BuildingFloorArea> FloorAreas { get; set; } = new List<BuildingFloorArea>();
         public Dictionary<string, ParcelSurveyFieldValue> Fields { get; set; }
 
         public ParcelBuildingRecord()
@@ -243,6 +247,15 @@ namespace CDBox.RealEstate.Models
                 }
                 value.Normalize();
             }
+            FloorAreas = FloorAreas ?? new List<BuildingFloorArea>();
+            if (!HasFloorAreas && AreaCalculation != null && FloorAreas.Count == 0)
+            {
+                FloorAreas.Add(new BuildingFloorArea { Id = "legacy-" + Id,
+                    Name = Fields["building.floor"].TextValue, Calculation = AreaCalculation,
+                    AddedRevision = AddedRevision });
+                HasFloorAreas = true;
+            }
+            if (FloorAreas.Count > 0) HasFloorAreas = true;
         }
     }
 
@@ -291,6 +304,7 @@ namespace CDBox.RealEstate.Models
         public Dictionary<string, ParcelSurveyFieldValue> Fields { get; set; }
         public ParcelBoundaryData Boundary { get; set; }
         public List<ParcelBuildingRecord> Buildings { get; set; }
+        public int BuildingsRevision { get; set; }
         public ParcelLayoutDiagnostics LayoutDiagnostics { get; set; }
 
         public ParcelSurveyRecord()

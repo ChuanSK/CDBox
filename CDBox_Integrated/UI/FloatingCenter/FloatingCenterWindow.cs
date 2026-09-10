@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -91,14 +91,14 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 BlurRadius = 22,
                 ShadowDepth = 0,
                 Opacity = 0.28,
-                Color = Color.FromRgb(66, 139, 255)
+                Color = ((SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush).Color
             };
             _ballGlow = new DropShadowEffect
             {
                 BlurRadius = 18,
                 ShadowDepth = 0,
                 Opacity = 0.28,
-                Color = Color.FromRgb(66, 139, 255)
+                Color = ((SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush).Color
             };
             _animationRoot = new Grid
             {
@@ -136,7 +136,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Width = 44,
                 Height = 44,
                 CornerRadius = new CornerRadius(22),
-                Background = Brush("#3B82F6"),
+                Background = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Effect = _ballGlow,
@@ -307,9 +307,9 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                     ? "当前为污水管线模式；点击切换为不动产"
                     : "当前为不动产模式；污水检查与同步已暂停。点击切换为污水管线";
                 _modeButton.Foreground = wastewater
-                    ? Brush("#2458B8") : Brush("#6D28D9");
+                    ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush : TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush;
                 _modeButton.Background = wastewater
-                    ? Brush("#EDF4FF") : Brush("#F3EEFF");
+                    ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush : TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush;
             }
             if (_refreshButton != null)
                 _refreshButton.Visibility = wastewater
@@ -475,7 +475,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Width = 36,
                 Height = 36,
                 CornerRadius = new CornerRadius(18),
-                Background = Brush("#3B82F6"),
+                Background = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush,
                 Child = new TextBlock
                 {
                     Text = "CD",
@@ -510,7 +510,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Name = "ActivityText",
                 Text = "空闲",
                 Margin = new Thickness(8, 0, 0, 0),
-                Foreground = Brush("#7C5CFC"),
+                Foreground = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush,
                 FontSize = 11
             });
             titles.Children.Add(statusLine);
@@ -632,7 +632,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                 Child = new TextBlock
                 {
                     Text = FloatingCenterPresentation.KindGlyph(message.Kind),
-                    Foreground = Brushes.White,
+                    Foreground = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentHex(MessageColor(message.Kind)) ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.OnAccentBrush : Brushes.White,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
@@ -683,9 +683,9 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                     button.Margin = new Thickness(0, 0, 6, 0);
                     if (current.IsPrimary)
                     {
-                        button.Background = Brush("#EAF2FF");
+                        button.Background = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush;
                         button.BorderBrush = Brush("#A9C8FF");
-                        button.Foreground = Brush("#2563EB");
+                        button.Foreground = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush;
                     }
                     else if (current.IsDestructive)
                     {
@@ -1106,8 +1106,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
         private static void SetTabVisual(Button button, bool selected)
         {
             if (button == null) return;
-            button.Background = selected ? Brush("#EAF2FF") : Brushes.Transparent;
-            button.Foreground = selected ? Brush("#2563EB") : Brush("#617188");
+            button.Background = selected ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush : Brushes.Transparent;
+            button.Foreground = selected ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush : Brush("#617188");
             button.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
         }
 
@@ -1182,6 +1182,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
 
         private static SolidColorBrush Brush(string hex)
         {
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush;
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentSoftHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush;
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             brush.Freeze();
             return brush;

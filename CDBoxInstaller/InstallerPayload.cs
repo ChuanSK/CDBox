@@ -48,7 +48,7 @@ namespace CDBox.Setup
                 }
             }
 
-            return CDBoxComponentCatalog.CreateManifest("5.1.0");
+            return CDBoxComponentCatalog.CreateManifest("5.1.9");
         }
 
         public static InstallerPayload Open()

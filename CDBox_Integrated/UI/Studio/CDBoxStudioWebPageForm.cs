@@ -33,7 +33,9 @@ namespace TCPipeAutoDraw.UI.Studio
         private readonly Func<CDBoxStudioRouteRequest, CDBoxStudioRouteResult> _routeHandler;
         private readonly string _baseTitle;
         private readonly string _windowStateKey;
-        private readonly Color _chromeBackColor;
+        private Color _chromeBackColor;
+        private readonly bool _workbenchAppearance;
+        private string _workbenchTheme;
         private readonly List<Control> _resizeGrips = new List<Control>();
         private Panel _rootPanel;
         private Panel _titleBar;
@@ -43,6 +45,7 @@ namespace TCPipeAutoDraw.UI.Studio
         private ToolTip _titleActionToolTip;
         private WebView2 _webView;
         private bool _webViewReady;
+        private bool _parcelSaveAllowsClose;
         private bool _windowStateRestored;
         private FormWindowState _windowStateBeforeCadMinimize =
             FormWindowState.Normal;
@@ -83,7 +86,11 @@ namespace TCPipeAutoDraw.UI.Studio
             _windowStateKey = "page:" + (string.IsNullOrWhiteSpace(windowStateKey) ? _baseTitle : windowStateKey.Trim());
             _htmlFactory = htmlFactory ?? throw new ArgumentNullException("htmlFactory");
             _routeHandler = routeHandler;
-            _chromeBackColor = chromeBackColor.IsEmpty ? DefaultChromeBackColor : chromeBackColor;
+            _workbenchAppearance = CDBoxWorkbenchAppearance.IsEnabledFor(windowStateKey);
+            _workbenchTheme = _workbenchAppearance ? CDBoxStudioSettingsStore.Load().Theme : null;
+            _chromeBackColor = _workbenchAppearance
+                ? CDBoxWorkbenchAppearance.ChromeBackground(_workbenchTheme)
+                : chromeBackColor.IsEmpty ? DefaultChromeBackColor : chromeBackColor;
 
             Text = _baseTitle;
             Width = 1320;
@@ -142,6 +149,15 @@ namespace TCPipeAutoDraw.UI.Studio
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (_windowStateKey == "page:realestate-parcel-survey-editor"
+                && _webViewReady && !_parcelSaveAllowsClose
+                && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                // The editor acknowledges its final draft before asking the host to close.
+                ExecuteScript("if(window.CDBoxRequestParcelClose){window.CDBoxRequestParcelClose();}else{chrome.webview.postMessage('studio|closeParcelSaved|');}");
+                return;
+            }
             if (_hudMode && _hudAnimationsEnabled && !_hudAllowImmediateClose
                 && e.CloseReason == CloseReason.UserClosing)
             {
@@ -175,6 +191,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 : 216;
             Color borderColor = _hudMode && _hudHovered
                 ? Color.FromArgb(glowAlpha, 115, 169, 245)
+                : _workbenchAppearance ? CDBoxWorkbenchAppearance.HoverBackground(_workbenchTheme)
                 : Color.FromArgb(216, 231, 245);
             using (Pen pen = new Pen(borderColor, _hudMode && _hudHovered ? 1.5F : 1F))
             {
@@ -366,8 +383,8 @@ namespace TCPipeAutoDraw.UI.Studio
             _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
             _titleLabel.AutoEllipsis = true;
             _titleLabel.Padding = new Padding(16, 0, 0, 0);
-            _titleLabel.ForeColor = Color.FromArgb(22, 32, 51);
-            _titleLabel.Font = new Font(Font.FontFamily, 10F, FontStyle.Bold);
+            _titleLabel.ForeColor = _workbenchAppearance ? CDBoxWorkbenchAppearance.Foreground(_workbenchTheme) : Color.FromArgb(22, 32, 51);
+            _titleLabel.Font = new Font(Font.FontFamily, 10F, _workbenchAppearance ? FontStyle.Regular : FontStyle.Bold);
             _titleLabel.MouseDown += delegate(object sender, MouseEventArgs args)
             {
                 if (args.Button == MouseButtons.Left) BeginWindowDrag();
@@ -396,7 +413,7 @@ namespace TCPipeAutoDraw.UI.Studio
                 Location = new Point(7, 7),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = _chromeBackColor,
-                ForeColor = Color.FromArgb(61, 75, 100),
+                ForeColor = _workbenchAppearance ? CDBoxWorkbenchAppearance.Foreground(_workbenchTheme) : Color.FromArgb(61, 75, 100),
                 Cursor = Cursors.Hand,
                 TabStop = false,
                 UseVisualStyleBackColor = false,
@@ -407,10 +424,10 @@ namespace TCPipeAutoDraw.UI.Studio
             };
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.BorderColor = _chromeBackColor;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(
-                226, 235, 248);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(
-                211, 224, 244);
+            button.FlatAppearance.MouseOverBackColor = _workbenchAppearance
+                ? CDBoxWorkbenchAppearance.HoverBackground(_workbenchTheme) : Color.FromArgb(226, 235, 248);
+            button.FlatAppearance.MouseDownBackColor = _workbenchAppearance
+                ? CDBoxWorkbenchAppearance.HoverBackground(_workbenchTheme) : Color.FromArgb(211, 224, 244);
             button.Click += delegate { TryExecutePageScript(clickScript); };
             button.MouseEnter += delegate
             {
@@ -440,12 +457,13 @@ namespace TCPipeAutoDraw.UI.Studio
             button.Width = 48;
             button.Height = 42;
             button.Text = text;
+            button.Tag = isClose ? "close" : "window-action";
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = isClose ? Color.FromArgb(239, 68, 68) : Color.FromArgb(226, 235, 248);
-            button.FlatAppearance.MouseDownBackColor = isClose ? Color.FromArgb(220, 38, 38) : Color.FromArgb(211, 224, 244);
+            button.FlatAppearance.MouseOverBackColor = isClose ? Color.FromArgb(239, 68, 68) : _workbenchAppearance ? CDBoxWorkbenchAppearance.HoverBackground(_workbenchTheme) : Color.FromArgb(226, 235, 248);
+            button.FlatAppearance.MouseDownBackColor = isClose ? Color.FromArgb(220, 38, 38) : _workbenchAppearance ? CDBoxWorkbenchAppearance.HoverBackground(_workbenchTheme) : Color.FromArgb(211, 224, 244);
             button.BackColor = _chromeBackColor;
-            button.ForeColor = isClose ? Color.FromArgb(153, 27, 27) : Color.FromArgb(61, 75, 100);
+            button.ForeColor = _workbenchAppearance ? CDBoxWorkbenchAppearance.Foreground(_workbenchTheme) : isClose ? Color.FromArgb(153, 27, 27) : Color.FromArgb(61, 75, 100);
             button.Cursor = Cursors.Default;
             button.TabStop = false;
             button.Font = new Font(Font.FontFamily, isClose ? 12F : 10F, FontStyle.Regular);
@@ -455,7 +473,7 @@ namespace TCPipeAutoDraw.UI.Studio
             };
             button.MouseLeave += delegate
             {
-                button.ForeColor = isClose ? Color.FromArgb(153, 27, 27) : Color.FromArgb(61, 75, 100);
+                button.ForeColor = _workbenchAppearance ? CDBoxWorkbenchAppearance.Foreground(_workbenchTheme) : isClose ? Color.FromArgb(153, 27, 27) : Color.FromArgb(61, 75, 100);
             };
             return button;
         }
@@ -584,13 +602,60 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 string html = _htmlFactory == null ? string.Empty : _htmlFactory();
                 if (string.IsNullOrWhiteSpace(html)) throw new InvalidOperationException("页面 HTML 为空，无法加载。");
-                _webView.NavigateToString(html);
+                if (_workbenchAppearance)
+                    RefreshWorkbenchChrome(CDBoxStudioSettingsStore.Load().Theme);
+                _webView.NavigateToString(CDBoxAccentAppearance.Attach(html));
             }
             catch (Exception ex)
             {
                 CDBoxStudioLogger.Error("独立 WebView2 页面刷新失败：" + _baseTitle, ex);
                 NavigateToErrorPage("页面加载失败", ex.Message, ex.ToString());
             }
+        }
+
+        internal static void RefreshWorkbenchWindows(CDBoxStudioSettings settings)
+        {
+            CDBoxAccentAppearance.RefreshNative(settings);
+            WastewaterNativeAppearance.Refresh(settings);
+            foreach (Form form in Application.OpenForms)
+            {
+                var page = form as CDBoxStudioWebPageForm;
+                if (page == null)
+                {
+                    var studio = form as CDBoxStudioForm;
+                    if (studio != null) studio.RefreshAccent(settings);
+                    else if (form.GetType().Assembly == typeof(CDBoxAccentAppearance).Assembly) CDBoxAccentAppearance.ApplyNative(form);
+                    continue;
+                }
+                if (page._workbenchAppearance) page.RefreshWorkbenchChrome(settings.Theme);
+                page.ExecuteScript((page._workbenchAppearance ? "window.CDBoxApplyWorkbenchTheme && window.CDBoxApplyWorkbenchTheme(" : "window.CDBoxApplyAccentTheme && window.CDBoxApplyAccentTheme(")
+                    + CDBoxThemeCatalog.Json(settings) + (page._workbenchAppearance ? ");" : ",true);"));
+            }
+        }
+
+        private void RefreshWorkbenchChrome(string theme)
+        {
+            _workbenchTheme = theme;
+            _chromeBackColor = CDBoxWorkbenchAppearance.ChromeBackground(theme);
+            Color foreground = CDBoxWorkbenchAppearance.Foreground(theme);
+            Color hover = CDBoxWorkbenchAppearance.HoverBackground(theme);
+            BackColor = _chromeBackColor;
+            _rootPanel.BackColor = _titleBar.BackColor = _contentPanel.BackColor = _chromeBackColor;
+            _webView.DefaultBackgroundColor = _chromeBackColor;
+            _titleLabel.ForeColor = foreground;
+            foreach (Control control in _titleBar.Controls)
+            {
+                Button button = control as Button;
+                if (button == null) continue;
+                button.BackColor = _chromeBackColor;
+                button.ForeColor = foreground;
+                button.FlatAppearance.BorderColor = _chromeBackColor;
+                if (string.Equals(button.Tag as string, "close", StringComparison.Ordinal)) continue;
+                button.FlatAppearance.MouseOverBackColor = hover;
+                button.FlatAppearance.MouseDownBackColor = hover;
+            }
+            foreach (Control grip in _resizeGrips) grip.BackColor = _chromeBackColor;
+            Invalidate();
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -621,6 +686,14 @@ namespace TCPipeAutoDraw.UI.Studio
             {
                 CDBoxStudioLogger.Warn("独立页面收到无法识别的路由消息：" + raw + "，页面：" + _baseTitle);
                 NavigateToErrorPage("页面路由格式异常", "前端发送的路由消息无法识别。", "原始消息：" + raw);
+                return;
+            }
+
+            if (_windowStateKey == "page:realestate-parcel-survey-editor"
+                && string.Equals(request.Name, "closeParcelSaved", StringComparison.OrdinalIgnoreCase))
+            {
+                _parcelSaveAllowsClose = true;
+                Close();
                 return;
             }
 

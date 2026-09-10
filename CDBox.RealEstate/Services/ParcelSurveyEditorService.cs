@@ -1,7 +1,6 @@
 using System;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Settings;
-using CDBox.RealEstate.UI;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 
@@ -15,6 +14,7 @@ namespace CDBox.RealEstate.Services
         private readonly ParcelMapSheetCadService _mapSheets;
         private readonly ParcelSurveyCadScopeService _scopes;
         private readonly ParcelSurveyCadWorkflowService _workflow;
+        public Action AddBuilding { get; set; }
 
         public ParcelSurveyEditorService(ICDBoxPageService pages,
             ICDBoxPromptService prompts,
@@ -34,8 +34,8 @@ namespace CDBox.RealEstate.Services
 
         public void Open()
         {
-            _pages.Show(ParcelSurveyEditorPage.Create(_store, _cad,
-                _scopes, _workflow));
+            _pages.Show(CDBoxUiGateway.Call<CDBoxPageDefinition>("realestate.parcel", "Create",
+                _store, _cad, _scopes, _workflow, AddBuilding));
         }
 
         public void SelectParcel() { _workflow.SelectParcel(); }

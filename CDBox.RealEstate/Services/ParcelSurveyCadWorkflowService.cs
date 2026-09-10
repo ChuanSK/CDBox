@@ -5,7 +5,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using CDBox.RealEstate.Cad;
 using CDBox.RealEstate.Models;
 using CDBox.RealEstate.Settings;
-using CDBox.RealEstate.UI;
+using CDBox.RealEstate.Services;
 using CDBox.Shared.Services;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -137,7 +137,7 @@ namespace CDBox.RealEstate.Services
                         x.EndPointNumber, selected.Range.StartPointNumber,
                         selected.Range.EndPointNumber));
                 ParcelBoundarySegmentRecord segment =
-                    ParcelBoundaryCadDialogs.EditSegment(selected.Range,
+                    ParcelBoundaryInput.EditSegment(selected.Range,
                         existing);
                 if (segment == null) break;
                 ParcelBoundaryCadService.ApplySegment(record, segment);
@@ -176,7 +176,7 @@ namespace CDBox.RealEstate.Services
                         x.EndPointNumber, selected.Range.StartPointNumber,
                         selected.Range.EndPointNumber));
                 ParcelBoundarySignatureGroupRecord group =
-                    ParcelBoundaryCadDialogs.EditSignature(selected.Range,
+                    ParcelBoundaryInput.EditSignature(selected.Range,
                         existing, segment,
                         record.Field("rights.ownerName").TextValue);
                 if (group == null) break;

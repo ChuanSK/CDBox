@@ -25,8 +25,11 @@ namespace TCPipeAutoDraw.UI.Studio
             DoubleClickOpenEnabled = true;
             ColorOutputMode = TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode.PreserveOriginalType;
             UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
+            ReleaseServiceUrl = CDBoxStudioUpdateSourceCatalog.DefaultReleaseServiceUrl;
         }
 
+        public CDBoxThemeProfile LightTheme { get; set; } = CDBoxThemeCatalog.Create("codex", "light");
+        public CDBoxThemeProfile DarkTheme { get; set; } = CDBoxThemeCatalog.Create("codex", "dark");
         public string Theme { get; set; }
         public bool AnimationsEnabled { get; set; }
         public double AnnotationHudNormalOpacity { get; set; }
@@ -42,10 +45,14 @@ namespace TCPipeAutoDraw.UI.Studio
         public bool DoubleClickOpenEnabled { get; set; }
         public TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode ColorOutputMode { get; set; }
         public string UpdateChannel { get; set; }
+        public string ReleaseServiceUrl { get; set; }
 
         public void Normalize()
         {
             if (!IsValidTheme(Theme)) Theme = ThemeLight;
+            LightTheme = LightTheme ?? CDBoxThemeCatalog.Create("codex", "light");
+            DarkTheme = DarkTheme ?? CDBoxThemeCatalog.Create("codex", "dark");
+            LightTheme.Normalize("light"); DarkTheme.Normalize("dark");
             AnnotationHudNormalOpacity = Clamp(AnnotationHudNormalOpacity, 0.20, 1.0, 0.68);
             AnnotationHudHoverOpacity = Clamp(AnnotationHudHoverOpacity, 0.20, 1.0, 1.0);
             AnnotationHudGlowIntensity = Clamp(AnnotationHudGlowIntensity, 0.0, 1.0, 0.28);
@@ -55,7 +62,8 @@ namespace TCPipeAutoDraw.UI.Studio
                 ColorOutputMode = TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode.PreserveOriginalType;
             if (string.IsNullOrWhiteSpace(UpdateChannel)) UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
             else UpdateChannel = UpdateChannel.Trim().ToLowerInvariant();
-            if (!string.Equals(UpdateChannel, CDBoxStudioUpdateService.DefaultChannel, StringComparison.OrdinalIgnoreCase)) UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
+            if (UpdateChannel != "stable" && UpdateChannel != "preview") UpdateChannel = CDBoxStudioUpdateService.DefaultChannel;
+            ReleaseServiceUrl = CDBoxStudioUpdateSourceCatalog.DefaultReleaseServiceUrl;
         }
 
         public static bool IsValidTheme(string theme)

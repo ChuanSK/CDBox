@@ -1,0 +1,57 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const root = path.resolve(__dirname, '..');
+const source = fs.readFileSync(path.join(root, 'CDBox_Integrated/UI/Studio/CDBoxReleaseUpdatePage.cs'), 'utf8');
+const script = source.match(/return @"([\s\S]*?)";/)[1].replace(/""/g, '"');
+const controls = {};
+for (const id of ['releaseChannel', 'releaseServiceUrl', 'checkUpdateButton', 'openReleaseWebsiteButton', 'releaseResult', 'releaseProgress']) {
+  controls[id] = { value: '', textContent: '', disabled: false, addEventListener(name, handler) { this[name] = handler; } };
+}
+controls.releaseChannel.value = 'stable';
+controls.releaseServiceUrl.value = 'https://example.test/api/latest';
+const sent = [];
+let accepted = true, confirmations = 0;
+const window = { confirm() { confirmations++; return accepted; } };
+vm.runInNewContext(script, { window, document: { getElementById: id => controls[id] } });
+window.CDBoxReleaseUpdates.init((name, value) => sent.push([name, value]), () => 'channel=' + controls.releaseChannel.value);
+const result = { success: true, hasRelease: true, updateAvailable: true, channel: 'stable', currentVersion: '5.1.0', latestVersion: '5.2.0', summary: '<script>bad()</script>', checkedAt: 'test' };
+controls.checkUpdateButton.onclick();
+assert.equal(controls.checkUpdateButton.disabled, true);
+assert.equal(sent.at(-1)[0], 'checkUpdate');
+window.CDBoxStudioUpdateResult(result);
+assert.equal(controls.checkUpdateButton.disabled, false);
+assert.equal(sent.at(-1)[0], 'openReleaseWebsite');
+assert.ok(controls.releaseResult.textContent.includes(result.summary));
+assert.equal(controls.releaseResult.innerHTML, undefined);
+accepted = false;
+controls.checkUpdateButton.onclick();
+window.CDBoxStudioUpdateResult(result);
+assert.equal(sent.at(-1)[0], 'checkUpdate');
+assert.equal(confirmations, 2);
+controls.checkUpdateButton.onclick();
+controls.releaseChannel.value = 'preview';
+controls.releaseChannel.change();
+assert.equal(sent.at(-1)[0], 'settings');
+window.CDBoxStudioUpdateResult(result);
+assert.equal(confirmations, 2);
+assert.ok(controls.releaseResult.textContent.includes('重新检查'));
+controls.checkUpdateButton.onclick();
+window.CDBoxStudioUpdateResult({ success: false, errorMessage: 'timeout' });
+assert.ok(controls.releaseResult.textContent.includes('失败'));
+assert.equal(confirmations, 2);
+window.CDBoxStudioUpdateResult({ ...result, hasRelease: false, updateAvailable: false });
+assert.ok(controls.releaseResult.textContent.includes('暂无'));
+controls.openReleaseWebsiteButton.onclick();
+assert.equal(sent.at(-1)[0], 'openReleaseWebsite');
+assert.ok(sent.every(([name]) => name !== 'downloadUpdate' && name !== 'openSettingsWindow'));
+const startup = fs.readFileSync(path.join(root, 'CDBox_Integrated/Commands/TCPipeCommands.cs'), 'utf8');
+assert.match(startup, /if \(choice == DialogResult.Yes\)\s+CDBoxReleaseWebsite.Open\(\);/);
+for (const name of ['CDBoxStudioHtml.cs', 'CDBoxStudioSettingsPage.cs']) {
+  const page = fs.readFileSync(path.join(root, 'CDBox_Integrated/UI/Studio', name), 'utf8');
+  assert.ok(page.includes('CDBoxReleaseUpdatePage.BuildControls'));
+  assert.ok(page.includes('CDBoxReleaseUpdates.init'));
+  assert.ok(!page.includes('update.json') && !page.includes('downloadUpdate'));
+}
+console.log('PASS: Release UI confirmation, cancellation, channel changes, errors, safe text and website-only navigation');

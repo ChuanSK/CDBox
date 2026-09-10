@@ -1,16 +1,15 @@
-using System;
+﻿using System;
 using CDBox.Shared.Modules;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using CDBox.Common.Commands;
 using CDBox.Common.Services;
-using CDBox.Common.UI;
 
 namespace CDBox.Common.Module
 {
     /// <summary>
     /// 公共业务的独立模块边界。基础组件仅保留 AutoCAD 命令名
-    /// 和动态转发，公共业务实现与独立页面均由本程序集承载。
+    /// 和统一 UI，公共业务实现由本程序集承载。
     /// </summary>
     public sealed class CommonModule : ICDBoxWorkspaceModule,
         ICDBoxCommandModule
@@ -46,7 +45,8 @@ namespace CDBox.Common.Module
         {
             if (_pages == null)
                 throw new InvalidOperationException("Common 模块尚未初始化。");
-            _pages.Show(CommonHomePage.Create(Version));
+            _pages.Show(CDBoxUiGateway.Call<CDBoxPageDefinition>("common.home", "CreateWithTools", Version,
+                new Action(_shortCode.OpenSettings), new Action(_frames.OpenSettings), new Action(_excelToCad.Open)));
         }
 
         public void ExecuteCommand(string commandId)

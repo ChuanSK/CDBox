@@ -6,7 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using CDBox.RealEstate.Models;
-using CDBox.RealEstate.UI;
+using CDBox.RealEstate.Services;
 using CDBox.Shared.Services;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 using WorldDraw = Autodesk.AutoCAD.GraphicsInterface.WorldDraw;
@@ -79,7 +79,7 @@ namespace CDBox.RealEstate.Cad
                 }
 
                 string ownerName;
-                if (!ParcelBoundaryCadDialogs.TryGetOwnerName(
+                if (!ParcelBoundaryInput.TryGetOwnerName(
                     currentOwnerName, out ownerName)) return null;
                 result.OwnerName = ownerName;
 
@@ -93,10 +93,10 @@ namespace CDBox.RealEstate.Cad
                 result.SelectedStartSourceIndex = start.Index;
                 string prefix;
                 int startNumber;
-                if (!ParcelBoundaryCadDialogs.TryGetStartingPoint(out prefix,
+                if (!ParcelBoundaryInput.TryGetStartingPoint(out prefix,
                     out startNumber)) return null;
                 bool clockwise;
-                if (!ParcelBoundaryCadDialogs.TryGetNumberingDirection(
+                if (!ParcelBoundaryInput.TryGetNumberingDirection(
                     result.NativeClockwise, out clockwise)) return null;
                 result.StartPointPrefix = prefix;
                 result.StartPointNumber = startNumber;
@@ -264,7 +264,7 @@ namespace CDBox.RealEstate.Cad
                         x.EndPointNumber, range.StartPointNumber,
                         range.EndPointNumber));
                 ParcelBoundarySegmentRecord segment =
-                    ParcelBoundaryCadDialogs.EditSegment(range, existing);
+                    ParcelBoundaryInput.EditSegment(range, existing);
                 if (segment == null) break;
                 record.Boundary.Segments.RemoveAll(x => SameRange(
                     x.StartPointNumber, x.EndPointNumber,
@@ -298,7 +298,7 @@ namespace CDBox.RealEstate.Cad
                     range.EndPointNumber));
             string representative = record.Field("rights.ownerName")
                 .TextValue;
-            return ParcelBoundaryCadDialogs.EditSignature(range, existing,
+            return ParcelBoundaryInput.EditSignature(range, existing,
                 segment, representative);
         }
 

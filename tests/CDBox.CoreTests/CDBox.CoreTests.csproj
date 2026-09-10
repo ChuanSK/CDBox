@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="NPOI" Version="2.8.0" />
     <ProjectReference Include="..\..\CDBox.Shared\CDBox.Shared.csproj" />
+    <ProjectReference Include="..\..\CDBox.csproj" Aliases="BaseUi" />
     <ProjectReference Include="..\..\CDBox.Common\CDBox.Common.csproj" />
     <ProjectReference Include="..\..\CDBox.Wastewater\CDBox.Wastewater.csproj" />
     <ProjectReference Include="..\..\CDBox.RealEstate\CDBox.RealEstate.csproj" />
@@ -34,6 +35,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>Templates\地籍调查表.docx</TargetPath>
     </Content>
+    <Content Include="..\..\CDBox_Integrated\Templates\房产.docx" Link="Templates\房产.docx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Templates\房产.docx</TargetPath>
+    </Content>
     <Content Include="..\..\CDBox_Integrated\Templates\四张检查表.xls"
              Link="Templates\四张检查表.xls">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -47,13 +52,11 @@
     <Compile Include="..\..\CDBox_Integrated\Modules\QuantityCalculation\QuantityEngineeringMath.cs" Link="Source\QuantityEngineeringMath.cs" />
     <Compile Include="..\..\CDBox.Wastewater\Cad\Annotation\PipeLengthAnnotationCloneSafetyPolicy.cs" Link="Source\PipeLengthAnnotationCloneSafetyPolicy.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioRouteRequest.cs" Link="Source\CDBoxStudioRouteRequest.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSource.cs" Link="Source\CDBoxStudioUpdateSource.cs" />
-    <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioUpdateSourceCatalog.cs" Link="Source\CDBoxStudioUpdateSourceCatalog.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxReleaseVersionComparer.cs" Link="Source\CDBoxReleaseVersionComparer.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioWebViewProfile.cs" Link="Source\CDBoxStudioWebViewProfile.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioColorPickerPage.cs" Link="Source\CDBoxStudioColorPickerPage.cs" />
-    <Compile Include="..\..\CDBox.Wastewater\UI\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
-    <Compile Include="..\..\CDBox.Wastewater\UI\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Business\Wastewater\CDBoxStudioSectionDrawingPage.cs" Link="Source\CDBoxStudioSectionDrawingPage.cs" />
+    <Compile Include="..\..\CDBox_Integrated\UI\Business\Wastewater\CDBoxStudioLongitudinalProfileSettingsPage.cs" Link="Source\CDBoxStudioLongitudinalProfileSettingsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\Studio\CDBoxStudioQuantityDefaultsPage.cs" Link="Source\CDBoxStudioQuantityDefaultsPage.cs" />
     <Compile Include="..\..\CDBox_Integrated\UI\RealEstateMenuLayout.cs" Link="Source\RealEstateMenuLayout.cs" />
     <Compile Include="..\..\CDBox_Integrated\Core\Startup\CDBoxRequiredRuntimeFiles.cs" Link="Source\CDBoxRequiredRuntimeFiles.cs" />

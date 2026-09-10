@@ -135,7 +135,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         MovedBindingGrips.Add(entity.ObjectId);
                         if (dragDocument != null && !string.IsNullOrWhiteSpace(annotationId))
                         {
-                            PipeLengthAnnotationInteractionService.NotifySpatialEditStarted(dragDocument, annotationId);
+                            PipeAnnotationPresentation.NotifySpatialEditStarted(dragDocument, annotationId);
                         }
                     }
                     Point3d point = binding.OriginalPoint + offset;
@@ -183,7 +183,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             {
                 KeyValuePair<ObjectId, PendingBindingEdit> item = cancelled[i];
                 PendingBindings.Remove(item.Key);
-                PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(
+                PipeAnnotationPresentation.NotifySpatialEditFinished(
                     doc, item.Value.AnnotationId);
             }
             RequestMarkerRefresh(doc);
@@ -314,7 +314,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                         }
                         finally
                         {
-                            PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(
+                            PipeAnnotationPresentation.NotifySpatialEditFinished(
                                 doc, edit.AnnotationId);
                             RequestMarkerRefresh(doc);
                         }
@@ -325,7 +325,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 {
                     try { doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] 自动更新调度失败：" + ex.Message); }
                     catch { }
-                    PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(
+                    PipeAnnotationPresentation.NotifySpatialEditFinished(
                         doc, edit.AnnotationId);
                     RequestMarkerRefresh(doc);
                 }
@@ -346,7 +346,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     try { PipeLengthAnnotationService.RepositionExistingAnnotation(capturedDoc, objectId); }
                     finally
                     {
-                        PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(capturedDoc, annotationId);
+                        PipeAnnotationPresentation.NotifySpatialEditFinished(capturedDoc, annotationId);
                     }
                     return Task.CompletedTask;
                 }, null);
@@ -456,13 +456,13 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
 
                 if (status == Status.GripStart)
                 {
-                    PipeLengthAnnotationInteractionService.NotifySpatialEditStarted(doc, annotationId);
+                    PipeAnnotationPresentation.NotifySpatialEditStarted(doc, annotationId);
                     return;
                 }
 
                 if (status != Status.GripEnd && status != Status.GripAbort) return;
                 if (MovedBindingGrips.Remove(entityId)) return;
-                PipeLengthAnnotationInteractionService.NotifySpatialEditFinished(doc, annotationId);
+                PipeAnnotationPresentation.NotifySpatialEditFinished(doc, annotationId);
             }
         }
 
@@ -495,7 +495,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 try { doc = AcadApp.DocumentManager.GetDocument(entityId.Database); } catch { }
                 if (doc != null)
                 {
-                    PipeLengthAnnotationInteractionService.NotifySpatialEditStarted(doc, annotationId);
+                    PipeAnnotationPresentation.NotifySpatialEditStarted(doc, annotationId);
                 }
                 QueueReposition(entityId, annotationId);
                 return ReturnValue.GripHotToWarm;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -203,6 +203,12 @@ namespace TCPipeAutoDraw.UI.Studio
             }
         }
 
+
+        internal void RefreshAccent(CDBoxStudioSettings settings)
+        {
+            _settings.Theme = settings.Theme; _settings.LightTheme = settings.LightTheme; _settings.DarkTheme = settings.DarkTheme;
+            ExecuteScript("window.CDBoxApplyAccentTheme && window.CDBoxApplyAccentTheme(" + CDBoxThemeCatalog.Json(settings) + ",true);");
+        }
 
         private void PostScriptFromRouter(string script)
         {

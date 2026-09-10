@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>CDBox 污水业务工作台预览</title>
+<style>*{box-sizing:border-box}body{min-width:1220px;margin:0;background:#eaeaea;font:13px 'Segoe UI','Microsoft YaHei UI',sans-serif}header{padding:12px 18px;display:flex;align-items:center;gap:12px;background:#fafafa}select,button{font:inherit;padding:5px 10px}#stage{padding:16px;width:max-content}iframe{display:block;border:1px solid #bbb;width:1180px;height:820px;border-radius:8px;background:white}#status{margin-left:auto}pre{white-space:pre-wrap}</style>
+<header><strong>污水管线 · 工作台预览</strong><select id="page"><option value="dashboard">工程量看板</option><option value="attributes">对象属性</option><option value="defaults">属性默认表</option><option value="annotations">标注设置</option><option value="section">横断面生成</option><option value="longitudinal">纵断面设置</option></select><select id="size"><option>1180</option><option>1440</option><option>900</option><option>640</option></select><button id="theme">切换浅深色</button><button id="check">运行检查</button><span id="status">示例数据 · 不操作 CAD</span></header>
+<div id="stage"><iframe id="editor" src="dashboard.html" title="污水工作台"></iframe></div><details><summary>检查记录</summary><pre id="report"></pre></details>
+<script>
+const frame=document.getElementById('editor');document.getElementById('page').onchange=e=>frame.src=e.target.value+'.html';document.getElementById('size').onchange=e=>frame.style.width=e.target.value+'px';document.getElementById('theme').onclick=()=>{const b=frame.contentDocument.body;b.dataset.theme=b.dataset.theme==='dark'?'light':'dark';};
+document.getElementById('check').onclick=async function(){this.disabled=true;const log=[],wait=(n=200)=>new Promise(r=>setTimeout(r,n)),check=(v,t)=>{log.push((v?'PASS ':'FAIL ')+t);if(!v)throw Error(t)};const load=async name=>{frame.src=name+'.html?test='+Date.now();await new Promise(r=>frame.onload=r);await wait(450);return frame.contentWindow;};try{
+ for(const name of ['dashboard','attributes','defaults','annotations','section','longitudinal']){
+  const w=await load(name),d=w.document;check(d.body.dataset.appearance==='workbench',name+' 接入统一主题');check(d.body.dataset.wastewater===name,name+' 页面作用域');
+  for(const mode of ['light','dark'])for(const width of [1180,900,640]){
+   d.body.dataset.theme=mode;frame.style.width=width+'px';await wait(250);
+   check(d.documentElement.scrollWidth<=width+2,name+'/'+mode+'/'+width+' 页面无横向溢出');
+   check(w.getComputedStyle(d.body).backgroundColor===(mode==='dark'?'rgb(24, 24, 24)':'rgb(255, 255, 255)'),name+'/'+mode+' 主题背景');
+  }
+  check(w.previewErrors.length===0,name+' 无脚本异常');
+ }
+ let w=await load('attributes'),d=w.document;frame.style.width='1180px';
+ const material=d.querySelector('[data-key=Material]');material.value='测试管材';material.dispatchEvent(new w.Event('input',{bubbles:true}));await wait(500);
+ const group=d.querySelector('details');group.open=false;await wait();check(d.querySelector('[data-key=Material]').value==='测试管材','折叠属性分组保留输入');
+ d.querySelector('[data-act=save]').click();await wait();let msg=w.previewMessages.filter(x=>x.includes('|saveQuantityAttributes|')).pop();check(JSON.parse(decodeURIComponent(msg.split('|')[2])).attributes.Material==='测试管材','保存携带已折叠字段');
+ d.querySelector('[data-act=add-layer]').click();await wait(500);check(d.querySelectorAll('.qa-layer-row').length===3,'新增结构层保留原操作');check(!d.querySelector('details').open,'计算回写后保留手动折叠状态');
+ w=await load('annotations');d=w.document;d.querySelector('[data-tab=pipe]').click();let field=d.querySelector('#pipe [data-key=TextHeight]');field.value='1.8';field.dispatchEvent(new w.Event('change'));d.querySelector('[data-tab=node]').click();d.querySelector('[data-tab=pipe]').click();check(d.querySelector('#pipe [data-key=TextHeight]').value==='1.8','标注切换类别保留草稿');d.querySelector('#save').click();await wait();msg=w.previewMessages.filter(x=>x.includes('|saveWastewaterAnnotationSettings|')).pop();check(JSON.parse(decodeURIComponent(msg.split('|')[2])).pipe.TextHeight===1.8,'标注设置保存原消息结构');
+ w=await load('section');d=w.document;d.querySelector('[data-field=Width]').value='1.8';d.querySelector('[data-field=Width]').dispatchEvent(new w.Event('input',{bubbles:true}));d.querySelector('[data-act=save]').click();await wait();check(w.previewMessages.some(x=>x.includes('|saveSectionDrawingOptions|')),'断面保存仍接入原路由');check(d.querySelector('.sd-preview-stage svg')!==null,'断面保留绘图预览');
+ document.getElementById('status').textContent=log.length+' 项检查通过';
+ }catch(e){log.push(e.stack);document.getElementById('status').textContent='检查未通过';document.querySelector('details').open=true}finally{document.getElementById('report').textContent=log.join('\n');this.disabled=false;}};
+</script>

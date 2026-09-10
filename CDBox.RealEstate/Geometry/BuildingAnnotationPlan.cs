@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CDBox.RealEstate.Models;
 
 namespace CDBox.RealEstate.Geometry
 {
@@ -11,6 +12,9 @@ namespace CDBox.RealEstate.Geometry
         public double TextRotation { get; internal set; }
         public string Text { get; internal set; }
         public bool IsAuxiliary { get; internal set; }
+        public bool IsHeight { get; internal set; }
+        public bool Annotate { get; internal set; } = true;
+        public bool Draw { get; internal set; } = true;
     }
 
     public sealed class BuildingAnnotationPlan
@@ -28,5 +32,10 @@ namespace CDBox.RealEstate.Geometry
         public bool IsOrthogonal { get; internal set; }
         public bool CanCalculateAreaFromBoundary { get; internal set; }
         public string Warning { get; internal set; }
+        public List<BuildingAreaTerm> AreaTerms { get; } = new List<BuildingAreaTerm>();
+        public decimal CalculatedArea { get; internal set; }
+        public double GeometryArea { get; internal set; }
+        public string AreaFormula { get; internal set; }
+        public List<BuildingAreaBoundaryEdge> Boundary { get; } = new List<BuildingAreaBoundaryEdge>();
     }
 }

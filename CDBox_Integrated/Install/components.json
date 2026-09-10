@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "ProductVersion": "5.1.0",
+  "ProductVersion": "5.1.9",
   "Components": [
     {
       "Id": "base",

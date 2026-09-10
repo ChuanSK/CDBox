@@ -50,6 +50,8 @@ namespace CDBox.Shared.UI
         public int Height { get; set; }
         public int MinimumWidth { get; set; }
         public int MinimumHeight { get; set; }
+        /// <summary>Replace a previous instance when its callbacks belong to an earlier capture.</summary>
+        public bool ReplaceExistingPage { get; set; }
         public string TitleBarActionText { get; set; }
         public string TitleBarActionToolTip { get; set; }
         public string TitleBarActionScript { get; set; }

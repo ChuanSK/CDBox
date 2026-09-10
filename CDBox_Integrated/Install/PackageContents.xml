@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage
   SchemaVersion="1.0"
-  AppVersion="5.1.0"
+  AppVersion="5.1.9"
   Name="CDBox"
   Description="CDBox 管线测绘辅助插件"
   Author="CDBox"

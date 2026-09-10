@@ -85,7 +85,7 @@ namespace CDBox.RealEstate.Services
             int signaturePages = Math.Max(1,
                 (record.Boundary.SignatureGroups.Count
                     + SignatureRowsPerPage - 1) / SignatureRowsPerPage);
-            int housePages = Math.Max(1, record.Buildings.Count);
+            int housePages = 1; // One continuous house table; its data rows follow the actual building count.
 
             File.Copy(templatePath, outputPath, true);
             RewriteDocument(outputPath, record, boundaryRows, boundaryPages,
@@ -128,6 +128,14 @@ namespace CDBox.RealEstate.Services
                 XElement descriptions = tables[5];
                 XElement audit = tables[6];
                 XElement house = tables[7];
+
+                // The revised template has oversized empty signature rows. Keep its fixed page layout
+                // without carrying an empty signature row into the boundary-description sheet.
+                foreach (var row in signature.Elements(W + "tr").Skip(3))
+                    row.Element(W + "trPr")?.Element(W + "trHeight")?.SetAttributeValue(W + "val", 1440);
+                foreach (var row in descriptions.Elements(W + "tr").Skip(1))
+                    row.Element(W + "trPr")?.Element(W + "trHeight")?.SetAttributeValue(W + "val", 5400);
+                descriptions.AddBeforeSelf(CreatePageBreakParagraph());
 
                 IList<PageBlock> boundaryBlocks = PrepareBoundaryPages(
                     firstBoundary, secondBoundary, boundaryPages);
@@ -175,6 +183,18 @@ namespace CDBox.RealEstate.Services
                 new InlineField("调查时间：", ChineseDate(
                     Value(record, "project.surveyDate")))
             });
+            // Empty cover spacers must not push the filled investigation date onto a separate sheet.
+            foreach (var paragraph in table.Descendants(W + "p").Where(p =>
+                !p.Descendants(W + "t").Any(t => !string.IsNullOrWhiteSpace(t.Value))))
+            {
+                var properties = paragraph.Element(W + "pPr");
+                if (properties == null) { properties = new XElement(W + "pPr"); paragraph.AddFirst(properties); }
+                properties.Elements(W + "snapToGrid").Remove();
+                properties.Add(new XElement(W + "snapToGrid", new XAttribute(W + "val", "0")));
+                var spacing = properties.Element(W + "spacing");
+                if (spacing == null) { spacing = new XElement(W + "spacing"); properties.Add(spacing); }
+                spacing.SetAttributeValue(W + "line", 360); spacing.SetAttributeValue(W + "lineRule", "exact");
+            }
         }
 
         private static void WriteBasic(XElement table,
@@ -380,17 +400,86 @@ namespace CDBox.RealEstate.Services
         private static void WriteHouses(IList<PageBlock> pages,
             ParcelSurveyRecord record)
         {
-            for (int i = 0; i < pages.Count; i++)
+            var page = pages[0];
+            WriteHouse(page, record);
+            var rows = page.Table.Elements(W + "tr").ToList();
+            if (rows.Count < 15) throw new InvalidDataException("房屋调查表模板缺少房屋状况数据行。");
+            var prototype = new XElement(rows[12]);
+            var notes = rows[rows.Count - 2];
+            foreach (var row in rows.Skip(12).Take(rows.Count - 14)) row.Remove();
+            foreach (var building in record.Buildings) notes.AddBeforeSelf(new XElement(prototype));
+            for (int i = 0; i < record.Buildings.Count; i++)
+                WriteBuildingRow(page.Table, 12 + i, record.Buildings[i]);
+            int notesRow = 12 + record.Buildings.Count;
+            SetCellText(page.Table, notesRow, 1, BuildingNotes(record.Buildings, "building.sketch"));
+            SetCellText(page.Table, notesRow, 14, BuildingNotes(record.Buildings, "building.notes"));
+            SetCellText(page.Table, notesRow + 1, 14, BuildingNotes(record.Buildings, "building.reviewOpinion"));
+            FitHousePage(page, record.Buildings.Count);
+        }
+
+        private static string BuildingNotes(IList<ParcelBuildingRecord> buildings, string key)
+        {
+            return string.Join("\n", buildings.Select((b, index) => new {
+                Text = (key == "building.notes" && BuildingField(b, "building.floor").Length > 4
+                    ? "层次：" + BuildingField(b, "building.floor") + "；" : "") + BuildingField(b, key),
+                Number = BuildingField(b, "building.number"), Index = index
+            }).Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => buildings.Count > 1
+                ? (string.IsNullOrWhiteSpace(x.Number) ? "房屋 " + (x.Index + 1) : x.Number) + "：" + x.Text
+                : x.Text));
+        }
+
+        private static void FitHousePage(PageBlock page, int buildingCount)
+        {
+            // Compact the table without imposing a fixed building count or shrinking template fonts.
+            // Fonts remain inherited from the supplied template; only unnecessary grid spacing is removed.
+            foreach (var p in page.Table.Descendants(W + "p"))
             {
-                ParcelBuildingRecord building = i < record.Buildings.Count
-                    ? record.Buildings[i] : new ParcelBuildingRecord();
-                building.Normalize();
-                WriteHouse(pages[i], record, building);
+                var pr = p.Element(W + "pPr");
+                if (pr == null) { pr = new XElement(W + "pPr"); p.AddFirst(pr); }
+                pr.Elements(W + "snapToGrid").Remove();
+                pr.Add(new XElement(W + "snapToGrid", new XAttribute(W + "val", "0")));
+                var spacing = pr.Element(W + "spacing");
+                if (spacing == null) { spacing = new XElement(W + "spacing"); pr.Add(spacing); }
+                spacing.SetAttributeValue(W + "before", 0); spacing.SetAttributeValue(W + "after", 0);
+                spacing.SetAttributeValue(W + "line", 240); spacing.SetAttributeValue(W + "lineRule", "exact");
+            }
+            var tableProperties = page.Table.Element(W + "tblPr");
+            tableProperties?.Elements(W + "tblpPr").Remove();
+            var margins = tableProperties?.Element(W + "tblCellMar");
+            if (margins != null)
+                foreach (string side in new[] { "left", "right" })
+                    margins.Element(W + side)?.SetAttributeValue(W + "w", 24);
+            foreach (var height in page.Table.Descendants(W + "trHeight"))
+            {
+                int current;
+                if (int.TryParse((string)height.Attribute(W + "val"), out current))
+                    height.SetAttributeValue(W + "val", Math.Min(current, 360));
+            }
+            for (int row = 12; row < 12 + buildingCount; row++)
+            {
+                var element = page.Table.Elements(W + "tr").ElementAt(row);
+                var height = element.Element(W + "trPr")?.Element(W + "trHeight");
+                if (height != null) height.SetAttributeValue(W + "val", 480);
+            }
+            foreach (var row in page.Table.Elements(W + "tr"))
+            {
+                var pr = row.Element(W + "trPr");
+                if (pr == null) { pr = new XElement(W + "trPr"); row.AddFirst(pr); }
+                pr.Elements(W + "cantSplit").Remove();
+                pr.Add(new XElement(W + "cantSplit"));
+            }
+            // Word repeats only consecutive leading header rows. Keep the complete form header
+            // on continuation pages rather than producing anonymous columns for large parcels.
+            foreach (var row in page.Table.Elements(W + "tr").Take(12))
+            {
+                var pr = row.Element(W + "trPr");
+                pr.Elements(W + "tblHeader").Remove();
+                pr.Add(new XElement(W + "tblHeader", new XAttribute(W + "val", "true")));
             }
         }
 
         private static void WriteHouse(PageBlock page,
-            ParcelSurveyRecord record, ParcelBuildingRecord building)
+            ParcelSurveyRecord record)
         {
             XElement table = page.Table;
             bool followOwner = Boolean(record, "house.followParcelOwner");
@@ -458,55 +547,83 @@ namespace CDBox.RealEstate.Services
             SetCellText(table, 9, 1, FieldText(record,
                 "house.sharedArea", "0.00"));
 
-            SetCellText(table, 12, 1, BuildingField(building,
+            SetHouseFooter(page.Footer, table, record);
+        }
+
+        private static void WriteBuildingRow(XElement table, int row, ParcelBuildingRecord building)
+        {
+            building.Normalize();
+            SetCellText(table, row, 1, BuildingField(building,
                 "building.number"));
-            SetCellText(table, 12, 2, BuildingField(building,
+            SetCellText(table, row, 2, BuildingField(building,
                 "building.householdNumber"));
-            SetCellText(table, 12, 3, BuildingField(building,
+            SetCellText(table, row, 3, BuildingField(building,
                 "building.totalUnits"));
-            SetCellText(table, 12, 4, BuildingField(building,
+            SetCellText(table, row, 4, BuildingField(building,
                 "building.totalFloors"));
-            SetCellText(table, 12, 5, BuildingField(building,
-                "building.floor"));
-            SetCellText(table, 12, 6, BuildingField(building,
+            string floor = BuildingField(building, "building.floor");
+            SetCellText(table, row, 5, floor.Length > 4 ? "见说明" : floor);
+            SetCellText(table, row, 6, BuildingField(building,
                 "building.structure"));
-            SetCellText(table, 12, 7, BuildingField(building,
+            SetCellText(table, row, 7, BuildingField(building,
                 "building.completionDate"));
-            SetCellText(table, 12, 8, BuildingField(building,
+            SetCellText(table, row, 8, BuildingField(building,
                 "building.layout"));
-            SetCellText(table, 12, 9, BuildingField(building,
+            SetCellText(table, row, 9, BuildingField(building,
                 "building.orientation"));
-            SetCellText(table, 12, 11, BuildingField(building,
+            SetCellText(table, row, 11, BuildingField(building,
                 "building.footprintArea", "0.00"));
-            SetCellText(table, 12, 12, BuildingField(building,
+            SetCellText(table, row, 12, BuildingField(building,
                 "building.area", "0.00"));
-            SetCellText(table, 12, 13, BuildingField(building,
+            SetCellText(table, row, 13, BuildingField(building,
                 "building.exclusiveArea", "0.00"));
-            SetCellText(table, 12, 14, BuildingField(building,
+            SetCellText(table, row, 14, BuildingField(building,
                 "building.allocatedArea", "0.00"));
-            SetCellText(table, 12, 16, BuildingField(building,
+            SetCellText(table, row, 16, BuildingField(building,
                 "building.propertySource"));
-            SetCellText(table, 12, 17, BuildingField(building,
+            SetCellText(table, row, 17, BuildingField(building,
                 "building.wall东"));
-            SetCellText(table, 12, 18, BuildingField(building,
+            SetCellText(table, row, 18, BuildingField(building,
                 "building.wall南"));
-            SetCellText(table, 12, 19, BuildingField(building,
+            SetCellText(table, row, 19, BuildingField(building,
                 "building.wall西"));
-            SetCellText(table, 12, 20, BuildingField(building,
+            SetCellText(table, row, 20, BuildingField(building,
                 "building.wall北"));
-            SetCellText(table, 13, 1, BuildingField(building,
-                "building.sketch"));
-            SetCellText(table, 13, 14, BuildingField(building,
-                "building.notes"));
-            SetCellText(table, 14, 14, BuildingField(building,
-                "building.reviewOpinion"));
-            SetInlineFields(page.Footer, new[]
+        }
+
+        private static void SetHouseFooter(XElement paragraph, XElement table,
+            ParcelSurveyRecord record)
+        {
+            // Preserve all template runs, date units, indentation and fonts. The Song typeface's
+            // Latin spaces are half a CJK character: consume name space from the existing gap,
+            // so entering an investigator does not push the date away from its template position.
+            var texts = paragraph.Descendants(W + "t").ToList();
+            int investigator = texts.FindIndex(t => t.Value.Contains("调查员："));
+            int date = texts.FindIndex(t => t.Value.Contains("日期："));
+            string name = Value(record, "project.rightsSurveyor");
+            if (investigator >= 0 && date > investigator + 1 && !string.IsNullOrWhiteSpace(name))
             {
-                new InlineField("调查员：",
-                    Value(record, "project.rightsSurveyor")),
-                new InlineField("日期：", ChineseDate(
-                    Value(record, "project.rightsSurveyDate")))
-            });
+                var slot = texts[investigator + 1];
+                int leading = texts[date].Value.TakeWhile(char.IsWhiteSpace).Count();
+                int consumed = name.Sum(c => c <= 0xff ? 1 : 2) - slot.Value.Length;
+                texts[date].Value = new string(' ', Math.Max(1, leading - consumed))
+                    + texts[date].Value.Substring(leading);
+                slot.Value = name;
+            }
+            string value = Value(record, "project.rightsSurveyDate");
+            if (string.IsNullOrWhiteSpace(value)) return; // Retain “日期：   年   月  日” when unfilled.
+            DateTime parsed;
+            if (!DateTime.TryParse(value, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out parsed))
+                throw new ArgumentException("房屋调查日期无效，请填写有效的年、月、日。");
+            string[] units = { "年", "月", "日" };
+            int[] numbers = { parsed.Year, parsed.Month, parsed.Day };
+            for (int i = 0; i < units.Length; i++)
+            {
+                int unit = texts.FindIndex(Math.Max(0, date), t => t.Value == units[i]);
+                if (unit <= date || !string.IsNullOrWhiteSpace(texts[unit - 1].Value))
+                    throw new InvalidDataException("房屋调查表模板缺少日期的“" + units[i] + "”空白位置。");
+                texts[unit - 1].Value = numbers[i].ToString(CultureInfo.InvariantCulture);
+            }
         }
 
         private static IList<PageBlock> PrepareBoundaryPages(
@@ -933,6 +1050,12 @@ namespace CDBox.RealEstate.Services
                 if (run == null)
                 {
                     run = new XElement(W + "r");
+                    // Formatting on an empty paragraph mark is not inherited by
+                    // a new run in Word. Copy the template's blank-slot format.
+                    XElement blankStyle = paragraph.Element(W + "pPr")
+                        ?.Element(W + "rPr");
+                    if (blankStyle != null)
+                        run.Add(new XElement(blankStyle));
                     paragraph.Add(run);
                 }
                 first = new XElement(W + "t");
@@ -1164,6 +1287,12 @@ namespace CDBox.RealEstate.Services
                 if (houseCount != housePages)
                     throw new InvalidDataException(
                         "导出回读失败：房屋调查表页数不正确。");
+                XElement house = tables.Single(IsHouseTable);
+                if (house.Elements(W + "tr").Count() != 14 + record.Buildings.Count)
+                    throw new InvalidDataException("导出回读失败：房屋状况行数与实际幢数不一致。");
+                for (int i = 0; i < record.Buildings.Count; i++)
+                    if (ElementText(CellAt(house, 12 + i, 1)) != BuildingField(record.Buildings[i], "building.number"))
+                        throw new InvalidDataException("导出回读失败：房屋状况幢号顺序不正确。");
                 foreach (XElement mark in marks)
                     for (int row = 5; row < 40; row++)
                         if (!string.IsNullOrWhiteSpace(ElementText(

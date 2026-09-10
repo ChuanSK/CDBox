@@ -63,6 +63,11 @@ namespace TCPipeAutoDraw.UI.Studio
                 case "run":
                     return RouteRun(request.Argument);
 
+                case "copytheme":
+                    try { Clipboard.SetText(request.Argument ?? string.Empty); result.ToastMessage = "主题已复制"; }
+                    catch (Exception ex) { result.ToastKind = "error"; result.ToastMessage = "复制失败：" + ex.Message; }
+                    return result;
+
                 case "settings":
                     return RouteSettings(request.Argument);
 
@@ -164,7 +169,9 @@ namespace TCPipeAutoDraw.UI.Studio
             try
             {
                 ApplySettingsArgument(argument);
-                CDBoxStudioSettingsStore.Save(_settings);
+                if (!CDBoxStudioSettingsStore.TrySave(_settings)) throw new InvalidOperationException("无法写入设置文件");
+                result.ExecuteScript = "window.CDBoxSettingsSaved && window.CDBoxSettingsSaved(true);";
+                CDBoxStudioWebPageForm.RefreshWorkbenchWindows(_settings);
                 IWastewaterCadInteractionService interaction =
                     WastewaterCadInteractionRegistry.Current;
                 if (interaction != null) interaction.RefreshAppearance();
@@ -187,6 +194,7 @@ namespace TCPipeAutoDraw.UI.Studio
             }
             catch (Exception ex)
             {
+                result.ExecuteScript = "window.CDBoxSettingsSaved && window.CDBoxSettingsSaved(false);";
                 result.ToastKind = "error";
                 result.ToastMessage = "设置保存失败：" + ex.Message;
                 CDBoxStudioLogger.Error("保存 Studio 设置失败。", ex);
@@ -208,6 +216,12 @@ namespace TCPipeAutoDraw.UI.Studio
 
                 switch (key)
                 {
+                    case "lighttheme":
+                        _settings.LightTheme = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<CDBoxThemeProfile>(value);
+                        break;
+                    case "darktheme":
+                        _settings.DarkTheme = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<CDBoxThemeProfile>(value);
+                        break;
                     case "theme":
                         if (CDBoxStudioSettings.IsValidTheme(value)) _settings.Theme = value.ToLowerInvariant();
                         break;

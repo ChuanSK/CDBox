@@ -1,0 +1,21 @@
+<main class="page" data-page="realestate-building-length-settings">
+  <header class="head"><div><h1>建筑边长注记设置</h1><p>边长文字与面积计算辅助线</p></div><div class="head-tools"><span id="saveState" class="save-state" role="status">已保存</span><button id="save" class="save primary" type="button">保存设置</button></div></header>
+  <section class="setting-section">
+    <div class="section-head"><h2>注记文字</h2><p>房屋边长与计算辅助线的长度文字共用以下样式。</p></div>
+    <div class="settings-fields">
+      <div class="setting-row checkbox-row"><label class="setting-label" for="adaptive"><span>文字高度自适应</span><small>按最短注记线段统一计算一次，同一建筑的全部文字高度始终相同。</small></label><label class="toggle"><input id="adaptive" type="checkbox" aria-label="文字高度自适应">启用</label></div>
+      <div class="setting-row"><label class="setting-label" for="textHeight"><span>文字高度</span><small>关闭自适应时使用此高度；开启后按线段适配并以 2 倍高度出图。</small></label><input id="textHeight" type="number" min="0.01" step="any" aria-label="文字高度"></div>
+      <div class="setting-row"><label class="setting-label" for="textStyle"><span>文字样式</span><small>当前图纸中已加载的文字样式。</small></label><select id="textStyle"></select></div>
+      <div class="setting-row"><div class="setting-label"><span id="textColorLabel">文字颜色</span><small>使用 CDBox 插件内颜色选择器。</small></div><button id="textColor" class="color" type="button" aria-labelledby="textColorLabel"></button></div>
+    </div>
+  </section>
+  <section class="setting-section">
+    <div class="section-head"><h2>面积计算辅助线</h2><p>用于矩形分割、三角形高度及圆弧面积计算的辅助线。</p></div>
+    <div class="settings-fields">
+      <div class="setting-row"><label class="setting-label" for="linetype"><span>辅助线线型</span><small>当前图纸中已加载的线型。</small></label><select id="linetype"></select></div>
+      <div class="setting-row"><label class="setting-label" for="lineweight"><span>辅助线线宽</span><small>支持随层、随块、默认和常用毫米线宽。</small></label><select id="lineweight"></select></div>
+      <div class="setting-row"><div class="setting-label"><span id="auxColorLabel">辅助线颜色</span><small>线长文字仍使用上方的文字颜色。</small></div><button id="auxColor" class="color" type="button" aria-labelledby="auxColorLabel"></button></div>
+    </div>
+  </section>
+  <p class="help">保存后用于后续注记。</p>
+</main>

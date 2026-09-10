@@ -668,6 +668,14 @@ namespace TCPipeAutoDraw.UI.Studio
 
         public static string BuildStandaloneDocument(CDBoxStudioSettings settings, string logFilePath)
         {
+            return BuildDocument(settings, logFilePath,
+                CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadDefaults()),
+                CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadBuiltInDefaults()));
+        }
+
+        internal static string BuildDocument(CDBoxStudioSettings settings, string logFilePath,
+            string profilesJson, string builtInProfilesJson)
+        {
             settings = settings ?? new CDBoxStudioSettings();
             settings.Normalize();
 
@@ -676,14 +684,14 @@ namespace TCPipeAutoDraw.UI.Studio
             html.Append(BuildStyles(true));
             html.Append("</style></head><body data-theme=\"").Append(HtmlAttr(settings.Theme)).Append("\" class=\"").Append(settings.AnimationsEnabled ? string.Empty : "no-animations").Append("\">");
             html.Append("<section id=\"defaultProfilesPage\" class=\"quantity-defaults-page quantity-defaults-standalone\" data-route=\"quantity-defaults\">");
-            html.Append("<main class=\"qd-page\"><article class=\"qd-card\"><div class=\"qd-tabs-row\"><div id=\"defaultProfileTabs\" class=\"qd-tabs\"></div><button id=\"saveDefaultProfilesButton\" class=\"qd-btn primary\">保存</button></div>");
+            html.Append("<main class=\"qd-page\"><article class=\"qd-card\"><header class=\"ww-default-head\"><h1>属性默认表</h1><button id=\"saveDefaultProfilesButton\" class=\"qd-btn primary\">保存默认值</button></header><div class=\"qd-tabs-row\"><div id=\"defaultProfileTabs\" class=\"qd-tabs\"></div></div>");
             html.Append("<div id=\"defaultProfileEditor\" class=\"qd-editor\"></div></article></main></section><div id=\"toastStack\" class=\"toast-stack\"></div>");
             html.Append("<script>\n");
-            html.Append("var defaultProfilesData=").Append(CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadDefaults())).Append(";\n");
-            html.Append("var builtInDefaultProfilesData=").Append(CDBoxStudioDefaultProfiles.BuildDefaultsJson(CDBoxStudioDefaultProfiles.LoadBuiltInDefaults())).Append(";\n");
+            html.Append("var defaultProfilesData=").Append(profilesJson).Append(";\n");
+            html.Append("var builtInDefaultProfilesData=").Append(builtInProfilesJson).Append(";\n");
             html.Append(BuildStandaloneBootstrapScript());
             html.Append("</script></body></html>");
-            return html.ToString();
+            return TCPipeAutoDraw.UI.Studio.WastewaterWorkbench.Apply(html.ToString(), "defaults", settings);
         }
 
         public static string BuildStyles(bool standalone)

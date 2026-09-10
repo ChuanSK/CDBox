@@ -1,6 +1,12 @@
-# CDBox Studio Preview
+﻿# CDBox Studio Preview
 
 CDBox 是面向 AutoCAD / CASS 的 x64 .NET Framework 4.8 插件。主程序集提供经典工具箱、停靠侧栏和 WebView2 Studio；统一安装器负责首次安装、版本更新、业务模块增减和完整卸载。
+
+UI 页面、浮窗、主题和控件实现统一归属必装基础组件；可选业务模块只保留业务处理与展示请求。后续 UI 开发边界及验证方式见 [UI 基础组件归属](docs/ui-base-migration.md)。
+
+插件更新现已改为查询公开版本服务并引导官网，不再读取版本清单或下载安装器。真实服务地址与返回契约仍待确认，配置及对接约定见 [插件版本服务接入说明](docs/plugin-release-service.md)。
+
+本轮图层管理器、属性识别表和建筑边长注记设置重构见 [5.1.9 交付说明](docs/release-5.1.9.md)。房屋计算与导出说明见 [房屋面积使用说明](docs/building-area-5.1.8.md)。
 
 ## 开发环境
 

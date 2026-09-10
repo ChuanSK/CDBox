@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace TCPipeAutoDraw.UI
         private static readonly Color CardBack = Color.FromArgb(56, 56, 60);
         private static readonly Color Fore = Color.FromArgb(238, 238, 238);
         private static readonly Color Muted = Color.FromArgb(176, 180, 188);
-        private static readonly Color Accent = Color.FromArgb(73, 135, 244);
+        private static Color Accent => Studio.CDBoxAccentAppearance.AccentColor;
         private static readonly Color Issue = Color.FromArgb(255, 194, 92);
 
         private readonly FlowLayoutPanel _content;
@@ -351,7 +351,7 @@ namespace TCPipeAutoDraw.UI
                 Margin = new Padding(0, 0, 6, 6),
                 Padding = new Padding(8, 0, 8, 0),
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Fore,
+                ForeColor = accent ? Studio.CDBoxAccentAppearance.OnAccentColor : Fore,
                 BackColor = accent ? Accent : CardBack,
                 Cursor = Cursors.Hand
             };

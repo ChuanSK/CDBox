@@ -368,8 +368,8 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     }
                     CDBoxColor selectedColor = model.Kind == SimpleAnnotationKind.Node && i > 0
                         ? model.SecondaryColor : model.PrimaryColor;
-                    CDBoxColor original = CDBoxColorService.FromCadColor(text.Color);
-                    text.Color = CDBoxColorService.ToCadColor(CDBoxColorService.PrepareForWrite(selectedColor, original));
+                    CDBoxColor original = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(text.Color);
+                    text.Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.ToCadColor(CDBox.Wastewater.Infrastructure.WastewaterColorPort.PrepareForWrite(selectedColor, original));
                     try { text.AdjustAlignment(doc.Database); } catch { }
                     WriteMetadata(tr, text, new SimpleMetadata
                     {
@@ -386,8 +386,8 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     if (leader != null)
                     {
                         leader.Layer = model.LayerName;
-                        CDBoxColor original = CDBoxColorService.FromCadColor(leader.Color);
-                        leader.Color = CDBoxColorService.ToCadColor(CDBoxColorService.PrepareForWrite(
+                        CDBoxColor original = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(leader.Color);
+                        leader.Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.ToCadColor(CDBox.Wastewater.Infrastructure.WastewaterColorPort.PrepareForWrite(
                             model.SecondaryColor, original));
                         if (!linetypeId.IsNull) leader.LinetypeId = linetypeId;
                         leader.LineWeight = model.LineWeight;
@@ -459,20 +459,20 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     Role = textMembers[i].Metadata.Role,
                     Label = GetLineLabel(textMembers[i].Metadata.Role, text.TextString, isNode),
                     Text = text.TextString ?? string.Empty,
-                    Color = CDBoxColorService.FromCadColor(text.Color)
+                    Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(text.Color)
                 });
             }
             if (leaderMember != null)
             {
                 model.LeaderObjectId = leaderMember.ObjectId;
-                model.SecondaryColor = CDBoxColorService.FromCadColor(leaderMember.Entity.Color);
+                model.SecondaryColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(leaderMember.Entity.Color);
                 model.LinetypeName = ReadLinetypeName(tr, leaderMember.Entity.LinetypeId);
                 model.LineWeight = leaderMember.Entity.LineWeight;
                 Curve leader = leaderMember.Entity as Curve;
                 if (leader != null) model.AnchorPoint = SafeCurveStart(leader, GetTextAnchor(first));
             }
             else if (isNode && textMembers.Count > 1)
-                model.SecondaryColor = CDBoxColorService.FromCadColor(textMembers[1].Entity.Color);
+                model.SecondaryColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(textMembers[1].Entity.Color);
             return model;
         }
 
@@ -494,10 +494,10 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                     Role = role,
                     Label = GetLineLabel(role, cluster[i].TextString, true),
                     Text = cluster[i].TextString ?? string.Empty,
-                    Color = CDBoxColorService.FromCadColor(cluster[i].Color)
+                    Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(cluster[i].Color)
                 });
             }
-            if (cluster.Count > 1) node.SecondaryColor = CDBoxColorService.FromCadColor(cluster[1].Color);
+            if (cluster.Count > 1) node.SecondaryColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(cluster[1].Color);
             return node;
         }
 
@@ -511,7 +511,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                 TextHeight = text.Height,
                 TextStyleName = ReadTextStyleName(tr, text.TextStyleId),
                 LayerName = text.Layer,
-                PrimaryColor = CDBoxColorService.FromCadColor(text.Color),
+                PrimaryColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(text.Color),
                 SecondaryColor = CDBoxColor.FromIndex(7),
                 TextStyleNames = ReadTextStyles(db, tr),
                 LayerNames = ReadLayers(db, tr),

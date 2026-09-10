@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -215,9 +215,9 @@ namespace TCPipeAutoDraw.UI
                     BorderThickness = new Thickness(spec.Primary ? 0 : 1),
                     BorderBrush = Brush("#CFDAEA"),
                     Background = spec.Primary
-                        ? Brush("#326FEA") : Brushes.White,
+                        ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush : Brushes.White,
                     Foreground = spec.Primary
-                        ? Brushes.White : Brush("#334155"),
+                        ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.OnAccentBrush : Brush("#334155"),
                     IsDefault = i == defaultIndex
                 };
                 WinForms.DialogResult result = spec.Result;

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Web.Script.Serialization;
 using CDBox.RealEstate.Models;
+using CDBox.RealEstate.Services;
 
 namespace CDBox.RealEstate.Settings
 {
@@ -369,6 +370,77 @@ namespace CDBox.RealEstate.Settings
             return Save(record, true);
         }
 
+        public ParcelSurveyRecord AddCapturedBuilding(string documentId, string recordId,
+            ParcelBuildingRecord building, Action commitDrawing = null, string targetBuildingId = null)
+        {
+            if (building == null || building.AreaCalculation == null)
+                throw new ArgumentException("缺少房屋面积计算记录。");
+            lock (Gate)
+            {
+                // Adding a measured house must never replace unreadable existing survey data with an empty store.
+                var state = File.Exists(_path) ? Normalize(Serializer.Deserialize<ParcelSurveyRepositoryState>(
+                    File.ReadAllText(_path))) : Normalize(new ParcelSurveyRepositoryState());
+                string before = Serializer.Serialize(state);
+                var record = state.Records.FirstOrDefault(r => Same(r.Id, recordId) && Same(r.DocumentId, documentId)
+                    && (Same(r.ScopeType, "parcel") || Same(r.ScopeType, "region")));
+                if (record == null) throw new InvalidOperationException("所属宗地已删除或不属于当前图纸，请重新选择。");
+                if (!Same(building.AreaCalculation.DocumentId, documentId))
+                    throw new InvalidOperationException("房屋计算数据与当前图纸不匹配。");
+                var handles = new HashSet<string>(building.AreaCalculation.Components.Select(x => x.SourceHandle),
+                    StringComparer.OrdinalIgnoreCase);
+                if (string.IsNullOrWhiteSpace(targetBuildingId) && state.Records.Where(r => Same(r.DocumentId, documentId)).SelectMany(r => r.Buildings)
+                    .Any(b => b.FloorAreas.Any(f=>f.Calculation != null && f.Calculation.Components.Any(c => handles.Contains(c.SourceHandle)))))
+                    throw new InvalidOperationException("框选图形已经添加到房屋调查，请先在编辑器中核对已有房屋，避免重复计入面积。");
+                building.AddedRevision = ++record.BuildingsRevision;
+                foreach(var row in building.FloorAreas)row.AddedRevision=record.BuildingsRevision;
+                if(string.IsNullOrWhiteSpace(targetBuildingId))record.Buildings.Add(building);
+                else
+                {
+                    var target=record.Buildings.FirstOrDefault(b=>Same(b.Id,targetBuildingId));
+                    if(target==null)throw new InvalidOperationException("目标房屋已删除，请重新选择所属幢。");
+                    if(!target.HasFloorAreas && target.Fields["building.area"].NumericValue.HasValue)
+                        throw new InvalidOperationException("目标房屋为手工面积记录，请先核对并清空原面积，再添加测量层次，避免覆盖旧面积。");
+                    target.HasFloorAreas=true;target.FloorAreas.AddRange(building.FloorAreas);
+                }
+                BuildingAreaService.Synchronize(record);
+                record.UpdatedAtUtc = DateTime.UtcNow.ToString("o");
+                SaveState(state);
+                try { commitDrawing?.Invoke(); }
+                catch
+                {
+                    SaveState(Serializer.Deserialize<ParcelSurveyRepositoryState>(before));
+                    throw;
+                }
+                return record;
+            }
+        }
+
+        private static void MergeCapturedBuildings(ParcelSurveyRecord incoming, ParcelSurveyRecord saved)
+        {
+            if (saved == null) return;
+            foreach (var building in saved.Buildings.Where(b => b.HasFloorAreas))
+            {
+                var existing = incoming.Buildings.FirstOrDefault(b => Same(b.Id, building.Id));
+                if (existing != null)
+                {
+                    // Formula provenance belongs to the capture service, not to an editable browser draft.
+                    existing.AreaCalculation = building.AreaCalculation;
+                    existing.AddedRevision = building.AddedRevision;
+                    existing.HasFloorAreas = true;
+                    foreach(var row in building.FloorAreas)
+                    {
+                        var incomingRow=existing.FloorAreas.FirstOrDefault(f=>Same(f.Id,row.Id));
+                        if(incomingRow!=null){incomingRow.Calculation=row.Calculation;incomingRow.AddedRevision=row.AddedRevision;}
+                        else if(row.AddedRevision>incoming.BuildingsRevision)existing.FloorAreas.Add(row);
+                    }
+                }
+                else if (building.AddedRevision > incoming.BuildingsRevision
+                    || building.FloorAreas.Any(r=>r.AddedRevision>incoming.BuildingsRevision))
+                    incoming.Buildings.Add(building);
+            }
+            incoming.BuildingsRevision = Math.Max(incoming.BuildingsRevision, saved.BuildingsRevision);
+        }
+
         public ParcelSurveyRecord SavePreservingCurrentScope(
             ParcelSurveyRecord record)
         {
@@ -396,6 +468,8 @@ namespace CDBox.RealEstate.Settings
                 // that the user has just deleted.  This also closes the race
                 // between the old editor page's scope poll and page refresh.
                 if (index < 0 && !allowInsert) return null;
+                if (index >= 0) MergeCapturedBuildings(record, state.Records[index]);
+                BuildingAreaService.Synchronize(record);
                 if (index < 0) state.Records.Add(record);
                 else state.Records[index] = record;
                 if (selectRecord) state.CurrentRecordId = record.Id;
@@ -432,7 +506,8 @@ namespace CDBox.RealEstate.Settings
             try
             {
                 File.WriteAllText(temporary, Serializer.Serialize(state));
-                File.Copy(temporary, _path, true);
+                if (File.Exists(_path)) File.Replace(temporary, _path, null);
+                else File.Move(temporary, _path);
             }
             finally
             {

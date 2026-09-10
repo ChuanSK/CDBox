@@ -192,6 +192,7 @@ namespace CDBox.Setup
                     + "。请关闭这些 AutoCAD 窗口后重试。");
             }
 
+            PreserveManagementInstaller(progress);
             List<InstallResult> results = new List<InstallResult>();
             foreach (CadInstallation target in targets)
             {
@@ -209,9 +210,6 @@ namespace CDBox.Setup
                     progress?.Invoke(target.Version.DisplayName + " 安装失败：" + ex.Message);
                 }
             }
-
-            if (results.Any(item => item.Succeeded))
-                TryPreserveManagementInstaller(progress);
 
             return results;
         }
@@ -567,29 +565,51 @@ namespace CDBox.Setup
             }
         }
 
-        private static void TryPreserveManagementInstaller(
-            Action<string> progress)
+        private static void PreserveManagementInstaller(Action<string> progress)
         {
+            string source = Assembly.GetExecutingAssembly().Location;
+            string destination = Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.CommonApplicationData),
+                "CDBox", "CDBox组件管理器.exe");
+            PreserveInstallerCopy(source, destination);
+            progress?.Invoke("已安装 CDBox 组件管理器，可在插件设置中再次打开。");
+        }
+
+        internal static void PreserveInstallerCopy(string source, string destination)
+        {
+            source = Path.GetFullPath(source);
+            destination = Path.GetFullPath(destination);
+            if (!File.Exists(source)) throw new FileNotFoundException(
+                "未找到组件管理器安装源。", source);
+            if (string.Equals(source, destination,
+                StringComparison.OrdinalIgnoreCase)) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            string staging = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                string source = Path.GetFullPath(
-                    Assembly.GetExecutingAssembly().Location);
-                string directory = Path.Combine(Environment.GetFolderPath(
-                    Environment.SpecialFolder.CommonApplicationData),
-                    "CDBox");
-                string destination = Path.Combine(directory,
-                    "CDBox安装器.exe");
-                if (string.Equals(source, Path.GetFullPath(destination),
-                    StringComparison.OrdinalIgnoreCase)) return;
-                Directory.CreateDirectory(directory);
-                File.Copy(source, destination, true);
-                progress?.Invoke("已保存 CDBox 管理安装器，可在插件设置中再次打开。");
+                File.Copy(source, staging);
+                if (!SameFileContent(source, staging))
+                    throw new IOException("组件管理器复制校验失败。");
+                // An already-running installed manager need not be replaced
+                // when its bytes match the installer being run.
+                if (File.Exists(destination) && SameFileContent(staging, destination))
+                    return;
+                if (File.Exists(destination)) File.Replace(staging, destination, null);
+                else File.Move(staging, destination);
             }
-            catch (Exception ex)
+            finally
             {
-                progress?.Invoke("插件已安装，但保存管理安装器失败："
-                    + ex.Message);
+                if (File.Exists(staging)) File.Delete(staging);
             }
+        }
+
+        private static bool SameFileContent(string first, string second)
+        {
+            using (var hash = System.Security.Cryptography.SHA256.Create())
+            using (var a = File.OpenRead(first))
+            using (var b = File.OpenRead(second))
+                return a.Length == b.Length && hash.ComputeHash(a)
+                    .SequenceEqual(hash.ComputeHash(b));
         }
     }
 }

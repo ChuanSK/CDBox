@@ -49,3 +49,14 @@ jobs:
 
       - name: Run core tests
         run: dotnet run --project tests/CDBox.CoreTests/CDBox.CoreTests.csproj -c Release --no-restore
+
+      - name: Enforce base UI ownership
+        shell: pwsh
+        run: ./tests/Test-UiArchitecture.ps1
+
+      - name: Verify release guidance UI
+        run: node tests/Test-ReleaseUpdateUi.js
+
+      - name: Verify optional module UI isolation
+        shell: pwsh
+        run: ./tests/Test-UiModuleIsolation.ps1

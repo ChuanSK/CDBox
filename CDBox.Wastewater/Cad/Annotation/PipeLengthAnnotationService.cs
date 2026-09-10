@@ -110,8 +110,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 return false;
             }
 
-            OverlappingPipeSelectionService.EnrichDisplay(doc, candidates);
-            PipeSelectionCandidate selected = OverlappingPipeSelectionService.Select(doc, candidates, null);
+            OverlappingPipePresentation.EnrichDisplay(doc, candidates);
+            PipeSelectionCandidate selected = OverlappingPipePresentation.Select(doc, candidates, null);
             if (selected == null)
             {
                 errorMessage = "已取消重叠对象选择。";

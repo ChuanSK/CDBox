@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Xml.Linq;
@@ -12,19 +12,21 @@ namespace TCPipeAutoDraw.UI.Studio
             get { return Path.Combine(CDBoxStudioLogger.LogDirectory, "studio-settings.xml"); }
         }
 
-        public static CDBoxStudioSettings Load()
+        public static CDBoxStudioSettings Load() { return Load(SettingsFilePath); }
+
+        internal static CDBoxStudioSettings Load(string path)
         {
             var settings = new CDBoxStudioSettings();
 
             try
             {
-                if (!File.Exists(SettingsFilePath))
+                if (!File.Exists(path))
                 {
                     TCPipeAutoDraw.Core.Colors.CDBoxColorService.OutputMode = settings.ColorOutputMode;
                     return settings;
                 }
 
-                XDocument doc = XDocument.Load(SettingsFilePath);
+                XDocument doc = XDocument.Load(path);
                 XElement root = doc.Root;
                 if (root == null)
                 {
@@ -33,6 +35,10 @@ namespace TCPipeAutoDraw.UI.Studio
                 }
 
                 settings.Theme = ((string)root.Element("Theme") ?? settings.Theme).Trim();
+                var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+                string light = (string)root.Element("LightTheme"), dark = (string)root.Element("DarkTheme");
+                try { if (!string.IsNullOrWhiteSpace(light)) settings.LightTheme = serializer.Deserialize<CDBoxThemeProfile>(light); } catch { }
+                try { if (!string.IsNullOrWhiteSpace(dark)) settings.DarkTheme = serializer.Deserialize<CDBoxThemeProfile>(dark); } catch { }
                 settings.UpdateChannel = ((string)root.Element("UpdateChannel") ?? settings.UpdateChannel).Trim();
                 TCPipeAutoDraw.Core.Colors.CDBoxColorOutputMode colorOutputMode;
                 if (Enum.TryParse((string)root.Element("ColorOutputMode"), true, out colorOutputMode))
@@ -82,19 +88,25 @@ namespace TCPipeAutoDraw.UI.Studio
             return settings;
         }
 
-        public static void Save(CDBoxStudioSettings settings)
+        public static void Save(CDBoxStudioSettings settings) { TrySave(settings); }
+
+        public static bool TrySave(CDBoxStudioSettings settings) { return TrySave(settings, SettingsFilePath); }
+
+        internal static bool TrySave(CDBoxStudioSettings settings, string path)
         {
-            if (settings == null) return;
+            if (settings == null) return false;
 
             try
             {
                 settings.Normalize();
                 TCPipeAutoDraw.Core.Colors.CDBoxColorService.OutputMode = settings.ColorOutputMode;
-                CDBoxStudioLogger.EnsureLogDirectory();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
 
                 var root = new XElement("CDBoxStudioSettings",
-                    new XAttribute("Version", "6"),
+                    new XAttribute("Version", "7"),
                     new XElement("Theme", settings.Theme),
+                    new XElement("LightTheme", CDBoxThemeCatalog.Json(settings.LightTheme)),
+                    new XElement("DarkTheme", CDBoxThemeCatalog.Json(settings.DarkTheme)),
                     new XElement("AnimationsEnabled", settings.AnimationsEnabled),
                     new XElement("AnnotationHudNormalOpacity",
                         settings.AnnotationHudNormalOpacity.ToString("0.##", CultureInfo.InvariantCulture)),
@@ -116,11 +128,20 @@ namespace TCPipeAutoDraw.UI.Studio
                     new XElement("ColorOutputMode", settings.ColorOutputMode.ToString()),
                     new XElement("UpdateChannel", settings.UpdateChannel));
 
-                new XDocument(root).Save(SettingsFilePath);
+                string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    new XDocument(root).Save(temporary);
+                    if (File.Exists(path)) File.Replace(temporary, path, null);
+                    else File.Move(temporary, path);
+                }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                return true;
             }
             catch (Exception ex)
             {
                 CDBoxStudioLogger.Error("Studio 设置保存失败。", ex);
+                return false;
             }
         }
 

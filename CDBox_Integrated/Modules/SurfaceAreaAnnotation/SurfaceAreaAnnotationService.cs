@@ -11,7 +11,6 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using TCPipeAutoDraw.Core.Cad;
-using TCPipeAutoDraw.UI;
 
 namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
 {
@@ -481,7 +480,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
             _cassFinishIdleHandlerAttached = true;
             try
             {
-                System.Windows.Forms.Application.Idle += CassFinishOnIdle;
+                CDBox.Shared.UI.CDBoxUiGateway.Call("base.dialogs", "SubscribeIdle", new EventHandler(CassFinishOnIdle));
             }
             catch
             {
@@ -506,7 +505,7 @@ namespace TCPipeAutoDraw.Modules.SurfaceAreaAnnotation
         {
             try
             {
-                System.Windows.Forms.Application.Idle -= CassFinishOnIdle;
+                CDBox.Shared.UI.CDBoxUiGateway.Call("base.dialogs", "UnsubscribeIdle", new EventHandler(CassFinishOnIdle));
             }
             catch
             {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
@@ -30,7 +30,7 @@ namespace TCPipeAutoDraw.UI.Studio
 	.lm-recognition-overview{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 11px;border-radius:9px;background:var(--panel2);font-size:12px;color:var(--muted)}.lm-recognition-overview>strong{font-size:14px}.lm-recognition-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.lm-recognition-field,.lm-recognition-note{display:grid;gap:3px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}.lm-recognition-field span,.lm-recognition-note span{font-size:10px;color:var(--muted)}.lm-recognition-field strong,.lm-recognition-note strong{font-size:12px;word-break:break-word}.lm-recognition-note{margin-top:8px}.lm-recognition-note.warning{border-color:#fcd34d;background:#fffbeb}.lm-recognition-note.error{border-color:#fecaca;background:#fef2f2}.lm-recognition-explain{margin:10px 0 0!important;padding-top:9px;border-top:1px solid var(--line);font-size:12px!important;color:var(--muted);line-height:1.7!important}
 	.lm-toolbar,.lm-tree,.lm-grid-panel{border-radius:12px}.lm-batch-edit,.lm-action-bar,.lm-modal{border-radius:12px}
 	.lm-preset-form{display:grid;gap:10px}.lm-preset-form>label{display:grid;gap:5px;color:var(--muted);font-size:12px}.lm-preset-form select,.lm-preset-form input,.lm-preset-form textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);padding:9px 10px;outline:0}.lm-preset-form select,.lm-preset-form input{height:39px}.lm-preset-form textarea{min-height:180px;resize:vertical;line-height:1.55}.lm-preset-detail{padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);display:grid;gap:4px}.lm-preset-detail strong{font-size:13px}.lm-preset-detail span{color:var(--muted);font-size:11px;line-height:1.5}.lm-preset-tools{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}.lm-preset-tools .lm-btn{padding:7px 10px}.lm-preset-scope{display:grid;gap:2px}
-	";
+	" + UtilityWorkbench.Read("layers.css");
         }
 
         public static string BuildComponentScript()
@@ -172,7 +172,7 @@ LayerManagerPage.prototype.createDefaultLayers=function(){
             script = script.Replace(
                 "LayerManagerPage.prototype.renderSummary=function(){var s=this.$('[data-role=\"summary\"]');if(s)s.textContent='共 '+this.rows.length+' 个图层，当前显示 '+this.visible.length+' 个';var ss=this.$('[data-role=\"selection-summary\"]'),n=this.selectedNames().length;if(ss)ss.textContent=n?'已勾选 '+n+' 个图层':'';};",
                 "LayerManagerPage.prototype.renderSummary=function(){var s=this.$('[data-role=\"summary\"]'),counts={};this.rows.forEach(function(r){var k=trim(r.recognitionStatus)||'未识别';counts[k]=(counts[k]||0)+1;});if(s)s.textContent='共 '+this.rows.length+' 个图层，显示 '+this.visible.length+' 个 · 冲突 '+(counts['冲突']||0)+' · 混合 '+(counts['混合']||0)+' · 待补充 '+(counts['信息不完整']||0)+' · 未识别 '+(counts['未识别']||0);var ss=this.$('[data-role=\"selection-summary\"]'),n=this.selectedNames().length;if(ss)ss.textContent=n?'已勾选 '+n+' 个图层':'';};");
-            return script;
+            return script.Replace("var api={", UtilityWorkbench.Read("layers.js") + "\nvar api={");
         }
 
         public static CDBoxPageDefinition Create(ICDBoxLogger logger,
@@ -184,8 +184,8 @@ LayerManagerPage.prototype.createDefaultLayers=function(){
             {
                 Width = 1480,
                 Height = 900,
-                MinimumWidth = 1120,
-                MinimumHeight = 700
+                MinimumWidth = 720,
+                MinimumHeight = 620
             };
         }
 
@@ -200,7 +200,7 @@ LayerManagerPage.prototype.createDefaultLayers=function(){
             html.Append(BuildComponentScript());
             html.Append("var layerManagerEditor=window.CDBoxLayerManagerPage.create({rootId:'layerManagerPage',post:post,toast:toast,standalone:true});window.addEventListener('error',function(e){post('layerManagerPageError',(e.message||'页面异常')+'\\n'+(e.error&&e.error.stack||''));});setTimeout(function(){post('ready','');},50);");
             html.Append("</script></body></html>");
-            return html.ToString();
+            return UtilityWorkbench.Apply(html.ToString());
         }
 
         private static string BuildStandaloneVariables()

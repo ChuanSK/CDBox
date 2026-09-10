@@ -1,6 +1,5 @@
 using System;
 using CDBox.RealEstate.Cad;
-using CDBox.RealEstate.UI;
 using CDBox.Shared.UI;
 
 namespace CDBox.RealEstate.Services
@@ -23,8 +22,9 @@ namespace CDBox.RealEstate.Services
 
         public void Open()
         {
-            _pages.Show(BuildingLengthAnnotationSettingsPage.Create(
-                _cad.ReadCatalog, _colors));
+            _pages.Show(CDBoxUiGateway.Call<CDBoxPageDefinition>(
+                "realestate.building-settings", "Create",
+                new Func<CDBox.RealEstate.Settings.BuildingAnnotationCadCatalog>(_cad.ReadCatalog), _colors));
         }
     }
 }

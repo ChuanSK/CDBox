@@ -409,7 +409,8 @@ namespace CDBox.RealEstate.Services
             SetBuildingField(sheet, 13, 35, building, "building.notes");
             SetBuildingField(sheet, 14, 35, building,
                 "building.reviewOpinion");
-            SetText(sheet, 15, 1, "调查员：");
+            SetText(sheet, 15, 1, "调查员："
+                + Value(record, "project.rightsSurveyor"));
             SetText(sheet, 15, 32, "日期："
                 + ChineseDate(Value(record, "project.rightsSurveyDate")));
         }

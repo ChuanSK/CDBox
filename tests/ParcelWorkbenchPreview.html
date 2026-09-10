@@ -1,0 +1,171 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>宗地编辑器 · 外观试点预览</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#ededed;color:#1a1c1f;font:13px 'Segoe UI','Microsoft YaHei UI',sans-serif}header{position:sticky;left:0;top:0;z-index:2;display:flex;align-items:center;gap:8px;padding:10px 14px;background:#fafafa;border-bottom:1px solid #ddd}header strong{margin-right:12px;font-weight:600}button,select{padding:5px 10px;background:#fff;border:1px solid #ccc;border-radius:5px;color:inherit;font:inherit;cursor:pointer}#result{margin-left:auto;font-size:12px}#stage{padding:16px;width:max-content}.frame{border:1px solid #ccc;border-radius:9px;overflow:hidden;width:1380px;box-shadow:0 4px 20px #0001}#chrome{height:36px;display:flex;align-items:center;padding:0 12px;background:#f9f9f9;font-size:12px}#chrome button{padding:0;border:0;background:transparent;margin-right:10px;font-size:17px}.window-actions{margin-left:auto;color:#888}iframe{display:block;width:100%;height:820px;border:0;background:#fff}details{margin:0 16px 16px;max-width:1380px}pre{white-space:pre-wrap;font-size:12px}
+</style>
+<header><strong>宗地编辑器 · 外观试点</strong><button id="light">浅色</button><button id="dark">深色</button><label>窗口 <select id="size"><option value="1380">1380 × 820</option><option value="1040">1040 × 820</option><option value="776">776 × 820</option></select></label><button id="check">运行交互检查</button><span id="result" role="status">示例数据 · 可编辑预览</span></header>
+<div id="stage"><div class="frame"><div id="chrome"><button id="sidebar" aria-label="切换侧边栏">≡</button>宗地调查数据编辑器<span class="window-actions">—　×</span></div><iframe id="editor" src="light.html" title="宗地调查数据编辑器"></iframe></div></div>
+<details id="details"><summary>验证结果</summary><pre id="report"></pre></details>
+<script>
+const frame=document.getElementById('editor'),box=document.querySelector('.frame'),result=document.getElementById('result');
+const settle=()=>new Promise(resolve=>setTimeout(resolve,320));
+function theme(value){frame.contentDocument.body.dataset.theme=value;document.getElementById('chrome').style.background=value==='dark'?'#000':'#f9f9f9';document.getElementById('chrome').style.color=value==='dark'?'#dfdfdf':'#1a1c1f';}
+document.getElementById('light').onclick=()=>theme('light');document.getElementById('dark').onclick=()=>theme('dark');
+document.getElementById('size').onchange=e=>box.style.width=e.target.value+'px';
+document.getElementById('sidebar').onclick=()=>frame.contentWindow.CDBoxToggleParcelSidebar();
+document.getElementById('sidebar').onmouseenter=()=>frame.contentWindow.CDBoxPreviewParcelSidebar(true);
+document.getElementById('sidebar').onmouseleave=()=>frame.contentWindow.CDBoxPreviewParcelSidebar(false);
+document.getElementById('check').onclick=async function(){
+ this.disabled=true;result.textContent='正在验证…';const results=[];
+ const check=(condition,message)=>{results.push((condition?'PASS ':'FAIL ')+message);if(!condition)throw new Error(message);};
+ try{
+  frame.src='light.html?check='+Date.now();await new Promise(resolve=>frame.onload=resolve);await settle();
+  const w=frame.contentWindow,d=frame.contentDocument,q=s=>d.querySelector(s),all=s=>[...d.querySelectorAll(s)],css=e=>w.getComputedStyle(e);
+  const reveal=element=>{let groups=[];for(let p=element.parentElement;p;p=p.parentElement)if(p.matches('[data-group].is-collapsed'))groups.unshift(p);groups.forEach(group=>group.querySelector(':scope > .group-head .group-toggle').click());};
+  const click=s=>{const element=q(s);if(!element)throw new Error('Missing '+s);reveal(element);element.click();};
+  const change=(selector,value)=>{const el=q(selector);reveal(el);el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}));el.dispatchEvent(new w.Event('change',{bubbles:true}));};
+  const openGroups=()=>all('[data-group].is-collapsed > .group-head .group-toggle').forEach(el=>el.click());
+  check(all('[data-tab]').length===6,'保留六个一级导航');
+  check(!q('[data-group="parcel|项目资料"]').classList.contains('is-collapsed'),'已完成的分组首次打开保持展开');
+  openGroups();
+  const field=q('[data-key="project.name"] input');field.value='交互检查：修改项目';field.dispatchEvent(new w.Event('input',{bubbles:true}));
+  click('[data-tab="2"]');click('[data-tab="1"]');
+  check(q('[data-key="project.name"] input').value==='交互检查：修改项目','切换页签保留录入内容');
+  await new Promise(r=>setTimeout(r,750));const saved=w.previewMessages.filter(x=>x.startsWith('studio|autoSaveParcel|')).pop();
+  check(JSON.parse(decodeURIComponent(saved.split('|')[2])).Record.Fields['project.name'].TextValue==='交互检查：修改项目','保存消息携带修改后的业务值');
+  click('[data-tab="2"]');
+  let status=q('[data-key="parcel.mapScale"] [data-role="status"]');status.value='4';status.dispatchEvent(new w.Event('change',{bubbles:true}));
+  check(css(q('[data-key="parcel.mapScale"] .na-note')).display==='flex','不适用状态显示输出斜杠提示');
+  status=q('[data-key="parcel.mapScale"] [data-role="status"]');status.value='3';status.dispatchEvent(new w.Event('change',{bubbles:true}));
+  check(css(q('[data-key="parcel.mapScale"] input')).display!=='none','人工状态恢复可录入控件');
+  click('#exportSurvey');check(!q('#exportOptions').hidden,'导出菜单可展开');click('[data-export-format="word"]');
+  check(!!q('[data-export-warning]'),'保留导出前提示');click('[data-export-warning-cancel]');
+  check(!w.previewMessages.some(x=>x.startsWith('studio|exportParcelWord|')),'取消导出不发送导出消息');
+  click('[data-tab="6"]');check(all('[data-select-building]').length===3&&!q('[data-building]'),'房屋列表默认三幢且只显示摘要');click('[data-add="building"]');check(all('[data-select-building]').length===4&&all('[data-building]').length>0,'新增房屋自动选中并进入分类编辑');
+  const ids=all('[id]').map(el=>el.id);check(new Set(ids).size===ids.length,'房屋四向墙体等字段的标签关联ID保持唯一');
+  click('[data-remove-building]');check(all('[data-select-building]').length===3,'可删除预览新增房屋');
+  for(const width of [1380,1040,776]){
+   box.style.width=width+'px';await settle();
+   for(const palette of ['light','dark']){
+    theme(palette);
+    for(let tab=1;tab<=6;tab++){
+     click('[data-tab="'+tab+'"]');await settle();
+     const overflow=all('.toolbar button,.parcel-picker select').some(el=>el.getBoundingClientRect().right>w.innerWidth+1);
+     check(!overflow&&d.documentElement.scrollWidth<=w.innerWidth,`${width}/${palette}/页签${tab} 顶栏及页面无横向溢出`);
+     for(const grid of all('.field-grid'))check(css(grid).gridTemplateColumns.split(' ').length===2,`${width}/${palette}/页签${tab} 保留两列录入`);
+     for(const group of all('.group'))check(css(group).boxShadow==='none'&&css(group).borderRadius==='0px',`${width}/${palette}/页签${tab} 扁平分组`);
+     if(tab===5){
+      openGroups();await settle();
+      check(all('.table-wrap').every(el=>el.scrollWidth<=el.clientWidth+1),`${width}/${palette} 界址表格无横向滚动条`);
+      const workspace=q('.workspace').clientWidth;
+      const sequence=selectors=>{let visibleFound=false;for(const selector of selectors){const hidden=css(q('th'+selector)).display==='none';if(!hidden)visibleFound=true;else if(visibleFound)return false;}return true;};
+      check(sequence(['.col-segment-owner','.col-segment-middle','.col-segment-direction','.col-segment-distance']),`${width}/${palette} 界址段按指定优先级隐藏列`);
+      check(sequence(['.col-signature-date','.col-signature-self','.col-signature-neighbor']),`${width}/${palette} 签章表按指定优先级隐藏列`);
+      check((css(q('th.col-point-coordinate')).display==='none')===(workspace<=900),`${width}/${palette} 坐标列按工作区可用宽度隐藏`);
+      check(all('.group-head .section-tools').every(el=>el.getBoundingClientRect().height<36),`${width}/${palette} 表格按钮与标题保持同行`);
+     }
+     check(all('.field-card').every(el=>css(el).borderBottomWidth==='0px'),`${width}/${palette} 编辑项之间没有分割线`);
+    }
+    check(css(d.body).backgroundColor===(palette==='dark'?'rgb(24, 24, 24)':'rgb(255, 255, 255)'),`${width}/${palette} 主题应用到实际页面`);
+   }
+   if(width===776){w.CDBoxPreviewParcelSidebar(true);await settle();check(q('.sidebar').getBoundingClientRect().top===0,'窄窗临时侧栏整高并贴合标题下缘');w.CDBoxPreviewParcelSidebar(false);await settle();}
+  }
+  box.style.width='1380px';await settle();click('[data-tab="1"]');openGroups();
+  let group=q('[data-group="parcel|项目资料"]');
+  check(group.querySelector('.group-progress').textContent.includes('已完成'),'已填写分组显示完成状态');
+  const card=q('[data-key="project.organization"]');
+  check(css(card.querySelector('.field-editor')).display==='none','默认字段初始呈现纯文本');
+  click('[data-key="project.organization"] [data-edit-field]');
+  check(css(card.querySelector('.field-editor')).display!=='none','点击默认字段后进入编辑');
+  card.querySelector('input').blur();await settle();
+  check(card.querySelector('[data-role=status]').value==='1','仅进入编辑不修改时保留默认来源');
+  click('[data-key="project.organization"] [data-edit-field]');change('[data-key="project.organization"] input','手动修订单位');
+  check(card.querySelector('[data-role=status]').value==='3','修改默认值后转换为人工来源');
+  change('[data-key="project.organization"] [data-role=status]','1');click('[data-key="project.organization"] [data-edit-field]');
+  change('[data-key="project.organization"] input','临时改动');q('[data-key="project.organization"] input').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  check(q('[data-key="project.organization"] input').value==='手动修订单位'&&q('[data-key="project.organization"] [data-role=status]').value==='1','Escape 撤回临时修改并恢复来源');
+  click('[data-tab="4"]');openGroups();
+  change('[data-key="land.termStart"] input','2026-01-01');change('[data-key="land.termEnd"] input','2027-01-01');change('[data-key="land.termDescription"] textarea','示例期限');
+  for(const key of ['termStart','termEnd','termDescription'])change('[data-key="land.'+key+'"] [data-role=status]','1');
+  check(!q('[data-group="parcel|土地使用期限"]').classList.contains('is-collapsed'),'全部为默认项的分组填写完成后保持展开');
+  openGroups();
+  const auto=q('[data-key="land.parcelArea"]');
+  if(auto){click('[data-key="land.parcelArea"] [data-edit-field]');check(!auto.querySelector('input').readOnly,'自动面积点击后可编辑');}
+  click('[data-tab="3"]');openGroups();
+  const count=()=>Number(q('[data-tab="3"] .nav-count').textContent);
+  const before=count();click('[data-key="rights.hasAgent"] input');
+  check(count()===before+4,'启用代理人后待处理数量增加四项');
+  const toggle=q('[data-key="rights.hasAgent"]'),agent=q('[data-key="rights.agentName"]');
+  check(agent.getBoundingClientRect().top>=toggle.getBoundingClientRect().bottom-1,'代理人字段从勾选项下一行展开');
+  check(toggle.getBoundingClientRect().height<52,'存在代理人为紧凑单行');
+  click('[data-key="rights.hasAgent"] input');check(count()===before,'停用代理人后不再计入隐藏字段');
+  click('[data-tab="6"]');openGroups();click('[data-key="house.followParcelOwner"] input');
+  check(q('.inherited-owner').getBoundingClientRect().top>=q('[data-key="house.followParcelOwner"]').getBoundingClientRect().bottom-1,'沿用的权利人信息显示在开关下一行');
+  click('[data-tab="1"]');openGroups();
+  const admin=q('[data-group="parcel|行政区划"]');
+  for(const key of ['countyCode','cadastralDistrictCode','cadastralSubdistrictCode','postalCode'])change('[data-key="project.'+key+'"] input','123');
+  q('[data-key="project.postalCode"] input').focus();q('#scopeRegion').focus();await settle();
+  check(!admin.classList.contains('is-collapsed'),'必填字段完成并离开分组后保持展开');
+  admin.querySelector('.group-toggle').click();await settle();check(admin.classList.contains('is-collapsed'),'仍可手动折叠完成分组');
+  admin.querySelector('.group-toggle').click();await settle();check(!admin.classList.contains('is-collapsed'),'已完成分组可手动展开');
+  q('#scopeRegion').focus();await settle();check(!admin.classList.contains('is-collapsed'),'手动展开的完成分组不会立即再次折叠');
+  click('[data-tab="2"]');click('[data-tab="1"]');check(!q('[data-group="parcel|行政区划"]').classList.contains('is-collapsed'),'分组展开偏好在切页后保留');
+  w.CDBoxPreviewParcelSidebar(false);box.style.width='962px';await settle();click('[data-tab="5"]');openGroups();await settle();
+  check(!q('.shell').classList.contains('sidebar-collapsed')&&css(q('th.col-segment-distance')).display==='none'&&css(q('th.col-signature-neighbor')).display==='none','可隐藏列全部收起后仍优先保留侧栏');
+  check(all('.table-wrap').every(el=>el.scrollWidth<=el.clientWidth+1),'侧栏自动收起临界宽度表格无滚动条');
+  box.style.width='950px';await settle();check(q('.shell').classList.contains('sidebar-collapsed'),'空间不足时自动隐藏已显示侧栏');
+  const left=q('.workspace').getBoundingClientRect().left,width=q('.workspace').getBoundingClientRect().width;
+  w.CDBoxPreviewParcelSidebar(true);await settle();check(q('.shell').classList.contains('sidebar-preview'),'悬停标题按钮展开侧栏');
+  check(q('.workspace').getBoundingClientRect().left===left&&q('.workspace').getBoundingClientRect().width===width,'悬停展开覆盖工作区且不挤压内容');
+  w.CDBoxPreviewParcelSidebar(false);await settle();check(!q('.shell').classList.contains('sidebar-preview'),'离开悬停按钮后收回侧栏');
+  const edge=q('#sidebarEdge');edge.dispatchEvent(new w.MouseEvent('mouseenter'));await settle();check(q('.shell').classList.contains('sidebar-preview'),'左侧边缘触发临时展开');edge.dispatchEvent(new w.MouseEvent('mouseleave'));await settle();
+  box.style.width='1380px';await settle();check(!q('.shell').classList.contains('sidebar-collapsed'),'增宽后恢复原显示偏好');
+  w.CDBoxToggleParcelSidebar();box.style.width='776px';await settle();box.style.width='1380px';await settle();
+  check(q('.shell').classList.contains('sidebar-collapsed'),'手动隐藏偏好在缩放窗口后仍保持');w.CDBoxToggleParcelSidebar();
+  click('[data-tab="5"]');openGroups();await new Promise(r=>setTimeout(r,750));
+  const finalRecord=JSON.parse(decodeURIComponent(w.previewMessages.filter(x=>x.startsWith('studio|autoSaveParcel|')).pop().split('|')[2])).Record;
+  check(Number(finalRecord.Boundary.Points[0].X)===3500000.12&&Number(finalRecord.Boundary.Segments[0].Distance)===20&&finalRecord.Boundary.SignatureGroups[0].ConfirmationDate==='2026-09-07','隐藏列和折叠分组不丢失坐标、距离、日期');
+  check(q('.sidebar').getBoundingClientRect().top===0&&q('.sidebar').getBoundingClientRect().bottom===w.innerHeight,'导航栏从标题下方贯穿整个界面高度');
+  check(q('.top').getBoundingClientRect().left===q('.workspace').getBoundingClientRect().left,'宗地工具栏与工作区左边缘对齐');
+  check(!q('#saveParcel')&&!q('.parcel-picker strong'),'移除保存按钮和当前宗地文字');
+  click('#parcelMore');await settle();check(q('#parcelMore').getAttribute('aria-expanded')==='true'&&!q('#parcelActionItems').inert,'点击三点展开操作且可键盘访问');
+  check(q('#parcelActionItems').getBoundingClientRect().left>=q('#parcelMore').getBoundingClientRect().right-1,'宗地操作向右展开');
+  q('#parcelMore').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));check(q('#parcelActionItems').inert,'Escape 收起三点操作');
+  q('#parcelActions').dispatchEvent(new w.MouseEvent('mouseenter'));check(!q('#parcelActionItems').inert,'悬停三点操作可展开');q('#scopeRegion').focus();q('#parcelActions').dispatchEvent(new w.MouseEvent('mouseleave'));await settle();check(q('#parcelActionItems').inert,'离开未固定的三点操作后收起');
+  click('[data-tab="6"]');click('[data-select-building="preview-f1"]');
+  check(!q('[data-building]')&&q('.building-summary').textContent.includes('60.1'),'选择房屋默认只显示精简摘要');
+  click('[data-building-edit]');change('[data-key="building.number"] input','F0001-修订');
+  click('[data-building-category="1"]');click('[data-key="building.area"] [data-edit-field]');change('[data-key="building.area"] input','61.25');
+  check(q('[data-select-building="preview-f1"]').textContent.includes('61.25'),'房屋列表面积随修改即时更新');
+  click('[data-building-category="2"]');change('[data-key="building.propertySource"] textarea','分类切换保存产权说明');
+  click('[data-building-category="3"]');change('[data-key="building.notes"] textarea','分类切换保存附加说明');
+  click('[data-select-building="preview-f2"]');check(!q('[data-building]'),'切换另一幢后收起上一幢详细属性');
+  click('[data-select-building="preview-f1"]');click('[data-building-edit]');check(q('[data-key="building.notes"] textarea').value==='分类切换保存附加说明','返回房屋后保留其他分类字段');
+  click('[data-building-category="0"]');check(q('[data-key="building.number"] input').value==='F0001-修订','跨房屋和分类切换不丢失基本信息');
+  q('[data-building-category="0"]').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));check(q('[data-building-category="1"]').getAttribute('aria-selected')==='true','房屋属性分类支持方向键导航');
+  for(const width of [1380,1040,776]){box.style.width=width+'px';await settle();check(q('.building-master-detail').scrollWidth<=q('.building-master-detail').clientWidth+1&&q('.building-detail').getBoundingClientRect().left>q('.building-master').getBoundingClientRect().left,`${width} 房屋主从结构不横向溢出`);}
+  box.style.width='1380px';await settle();q('#scopeRegion').focus();await new Promise(r=>setTimeout(r,100));
+  const houses=w.previewSavedRecords['workbench-preview'].Buildings;
+  check(houses.length===3&&houses[0].Fields['building.area'].NumericValue===61.25&&houses[0].Fields['building.propertySource'].TextValue==='分类切换保存产权说明'&&houses[1].Fields['building.area'].NumericValue===84.26,'自动保存包含各房屋各分类和未编辑房屋的完整数据');
+  click('[data-building-category="0"]');w.previewSaveDelay=500;
+  change('[data-key="building.number"] input','第一次保存');q('#scopeRegion').focus();await new Promise(r=>setTimeout(r,50));
+  change('[data-key="building.number"] input','保存过程中再次修改');await new Promise(r=>setTimeout(r,1100));
+  check(w.previewSavedRecords['workbench-preview'].Buildings[0].Fields['building.number'].TextValue==='保存过程中再次修改'&&q('#autoSaveStatus').textContent==='已自动保存','保存进行中继续输入会串行补存最新内容并等待确认');
+  w.previewSaveDelay=30;w.previewSaveFails=true;q('[data-key="building.number"] input').focus();change('[data-key="building.number"] input','失败后待重试');q('#scopeRegion').focus();await new Promise(r=>setTimeout(r,100));
+  check(!q('#retryAutoSave').hidden&&q('#autoSaveStatus').textContent.includes('失败'),'保存失败明确显示重试而不是已保存');
+  const closeCount=w.previewMessages.filter(x=>x==='studio|closeParcelSaved|').length;w.CDBoxRequestParcelClose();await new Promise(r=>setTimeout(r,100));check(w.previewMessages.filter(x=>x==='studio|closeParcelSaved|').length===closeCount,'保存失败时不关闭窗口丢弃草稿');
+  w.previewSaveFails=false;click('#retryAutoSave');await new Promise(r=>setTimeout(r,100));check(q('#retryAutoSave').hidden&&w.previewSavedRecords['workbench-preview'].Buildings[0].Fields['building.number'].TextValue==='失败后待重试','重试成功后保存当前完整草稿');
+  change('[data-key="building.number"] input','关闭前最后编辑');w.CDBoxRequestParcelClose();await new Promise(r=>setTimeout(r,100));
+  check(w.previewMessages[w.previewMessages.length-1]==='studio|closeParcelSaved|'&&w.previewSavedRecords['workbench-preview'].Buildings[0].Fields['building.number'].TextValue==='关闭前最后编辑','关闭请求等待最后一次编辑保存成功后才交给宿主');
+  change('[data-key="building.number"] input','切换宗地前最后编辑');
+  q('#scopeRegion').value='workbench-preview-02';q('#scopeRegion').dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(r=>setTimeout(r,100));
+  check(w.previewMessages.some(x=>x.startsWith('studio|switchParcelScope|')&&decodeURIComponent(x).includes('workbench-preview-02')),'顶部宗地选择发送切换请求');check(w.previewSavedRecords['workbench-preview'].Buildings[0].Fields['building.number'].TextValue==='切换宗地前最后编辑','切换宗地前自动保存最后修改');
+  check(w.previewErrors.length===0,'无浏览器脚本异常');
+  result.textContent=results.length+' 项检查全部通过';
+ }catch(error){result.textContent='检查失败：'+error.message;results.push(error.stack);document.getElementById('details').open=true;}
+ finally{document.getElementById('report').textContent=results.join('\n');box.style.width='1380px';document.getElementById('size').value='1380';frame.contentDocument.querySelector('[data-tab="1"]')?.click();theme('light');this.disabled=false;}
+};
+</script>
+</html>

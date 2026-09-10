@@ -28,10 +28,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                 selected, screenPoint);
             if (candidates.Count > 1)
             {
-                OverlappingPipeSelectionService.EnrichDisplay(document,
+                OverlappingPipePresentation.EnrichDisplay(document,
                     candidates);
                 PipeSelectionCandidate chosen =
-                    OverlappingPipeSelectionService.Select(document,
+                    OverlappingPipePresentation.Select(document,
                         candidates, null);
                 if (chosen == null) return true;
                 selected = chosen.ObjectId;

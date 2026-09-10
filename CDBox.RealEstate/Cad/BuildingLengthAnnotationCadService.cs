@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -32,57 +32,6 @@ namespace CDBox.RealEstate.Cad
             _notifications = notifications
                 ?? throw new ArgumentNullException("notifications");
             _logger = logger ?? throw new ArgumentNullException("logger");
-        }
-
-        public void Execute()
-        {
-            Document document = AcadApp.DocumentManager.MdiActiveDocument;
-            if (document == null)
-            {
-                Notify("当前没有可用的 CAD 图纸。",
-                    CDBoxNotificationLevel.Warning);
-                return;
-            }
-
-            PromptEntityResult selected;
-            var options = new PromptEntityOptions("\n ");
-            options.SetRejectMessage("\n请选择闭合的二维多段线。\n");
-            options.AddAllowedClass(typeof(Polyline), true);
-            using (_prompts.Begin("选择建筑物",
-                "请选择建筑物闭合复合线；按 Esc 取消。"))
-                selected = document.Editor.GetEntity(options);
-            if (selected.Status != PromptStatus.OK) return;
-
-            try
-            {
-                BuildingLengthAnnotationSettings settings =
-                    BuildingLengthAnnotationSettingsStore.Load();
-                BuildingAnnotationPlan plan;
-                double elevation;
-                using (DocumentLock documentLock = document.LockDocument())
-                {
-                    ReadPlan(document.Database, selected.ObjectId, settings,
-                        out plan, out elevation);
-                    WritePlan(document.Database, plan, elevation, settings);
-                }
-
-                string summary = "已注记 " + plan.BoundarySegments.Count
-                    + " 条建筑外边";
-                if (plan.AuxiliarySegments.Count > 0)
-                    summary += "，并生成 " + plan.AuxiliarySegments.Count
-                        + " 条面积计算辅助线";
-                summary += "；统一文字高度 "
-                    + plan.TextHeight.ToString("0.###") + "。";
-                Notify(summary, CDBoxNotificationLevel.Success);
-                if (!string.IsNullOrWhiteSpace(plan.Warning))
-                    Notify(plan.Warning, CDBoxNotificationLevel.Warning);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("建筑物边长注记失败。", ex);
-                Notify("建筑物边长注记失败：" + ex.Message,
-                    CDBoxNotificationLevel.Error);
-            }
         }
 
         public BuildingAnnotationCadCatalog ReadCatalog()
@@ -139,50 +88,54 @@ namespace CDBox.RealEstate.Cad
             return result;
         }
 
-        private static void ReadPlan(Database database, ObjectId sourceId,
+        internal static void ReadPlan(Database database, ObjectId sourceId,
             BuildingLengthAnnotationSettings settings,
             out BuildingAnnotationPlan plan, out double elevation)
         {
             using (Transaction transaction = database.TransactionManager
                 .StartOpenCloseTransaction())
             {
-                Polyline polyline = transaction.GetObject(sourceId,
-                    OpenMode.ForRead, false) as Polyline;
+                var entity=transaction.GetObject(sourceId,OpenMode.ForRead,false);
+                var circle=entity as Circle;
+                if(circle!=null)
+                {
+                    if(Math.Abs(circle.Normal.X)>1e-8||Math.Abs(circle.Normal.Y)>1e-8)
+                        throw new InvalidOperationException("房屋圆边界必须位于水平平面。");
+                    elevation=circle.Center.Z;
+                    plan=BuildingCurvedBoundaryPlanner.Create(new[]{new BuildingPoint2(circle.Center.X-circle.Radius,circle.Center.Y),new BuildingPoint2(circle.Center.X+circle.Radius,circle.Center.Y)},new[]{1d,1d},settings.TextHeight,settings.AdaptiveTextHeight);
+                    return;
+                }
+                Polyline polyline = entity as Polyline;
                 if (polyline == null)
                     throw new InvalidOperationException(
                         "选择对象不是二维多段线。");
                 if (!polyline.Closed)
                     throw new InvalidOperationException(
                         "请选择已闭合的建筑物多段线。");
-                if (polyline.NumberOfVertices < 3)
+                if (Math.Abs(Math.Abs(polyline.Normal.Z) - 1) > 1e-8)
+                    throw new InvalidOperationException("房屋边界必须位于水平平面，请先检查图形坐标。");
+                if (polyline.NumberOfVertices < 2)
                     throw new InvalidOperationException(
                         "建筑物闭合线至少需要三个顶点。");
-                for (int index = 0; index < polyline.NumberOfVertices; index++)
-                    if (Math.Abs(polyline.GetBulgeAt(index)) > 1e-9)
-                        throw new InvalidOperationException(
-                            "当前功能暂不支持含圆弧段的建筑物边界。");
-
                 var points = new List<BuildingPoint2>(
                     polyline.NumberOfVertices);
+                var bulges = new List<double>();
                 elevation = polyline.GetPoint3dAt(0).Z;
                 for (int index = 0; index < polyline.NumberOfVertices; index++)
                 {
                     Point3d point = polyline.GetPoint3dAt(index);
                     points.Add(new BuildingPoint2(point.X, point.Y));
+                    bulges.Add(polyline.GetBulgeAt(index) * Math.Sign(polyline.Normal.Z));
                 }
-                plan = BuildingLengthAnnotationPlanner.Create(points,
+                plan = BuildingCurvedBoundaryPlanner.Create(points, bulges,
                     settings.TextHeight, settings.AdaptiveTextHeight);
                 transaction.Commit();
             }
         }
 
-        private static void WritePlan(Database database,
-            BuildingAnnotationPlan plan, double elevation,
-            BuildingLengthAnnotationSettings settings)
+        internal static void AppendPlan(Database database, Transaction transaction,
+            BuildingAnnotationPlan plan, double elevation, BuildingLengthAnnotationSettings settings)
         {
-            using (Transaction transaction = database.TransactionManager
-                .StartTransaction())
-            {
                 ObjectId layerId = EnsureLayer(database, transaction);
                 ObjectId textStyleId = ResolveTextStyle(database, transaction,
                     settings.TextStyleName);
@@ -196,7 +149,7 @@ namespace CDBox.RealEstate.Cad
                         "无法写入当前 CAD 空间。");
 
                 foreach (BuildingPlannedSegment segment in
-                    plan.BoundarySegments.Concat(plan.AuxiliarySegments))
+                    plan.BoundarySegments.Concat(plan.AuxiliarySegments).Where(s=>s.Annotate))
                     AppendText(database, transaction, space, segment,
                         elevation, plan.TextHeight, layerId, textStyleId,
                         settings.TextColor);
@@ -204,7 +157,7 @@ namespace CDBox.RealEstate.Cad
                 LineWeight lineweight = ResolveLineweight(
                     settings.AuxiliaryLineweight);
                 foreach (BuildingPlannedSegment segment in
-                    plan.AuxiliarySegments)
+                    plan.AuxiliarySegments.Where(s=>s.Draw))
                 {
                     var line = new Line(ToPoint(segment.Start, elevation),
                         ToPoint(segment.End, elevation))
@@ -217,8 +170,6 @@ namespace CDBox.RealEstate.Cad
                     space.AppendEntity(line);
                     transaction.AddNewlyCreatedDBObject(line, true);
                 }
-                transaction.Commit();
-            }
         }
 
         private static void AppendText(Database database,

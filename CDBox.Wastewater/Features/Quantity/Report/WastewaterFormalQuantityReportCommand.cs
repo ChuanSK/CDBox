@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Windows.Forms;
+using CDBox.Shared.UI;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -41,17 +41,11 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
             if (string.IsNullOrWhiteSpace(drawingName))
                 drawingName = "当前图纸";
 
-            using (var dialog = new SaveFileDialog
+            string outputPath = CDBoxUiGateway.Call<string>("base.dialogs", "SaveFile",
+                "保存工程量计算表", "Excel 97-2003 工作簿 (*.xls)|*.xls|所有文件 (*.*)|*.*",
+                SanitizeFileName(drawingName + "工程量计算表") + ".xls", "xls");
+            if (string.IsNullOrWhiteSpace(outputPath)) return;
             {
-                Title = "保存工程量计算表",
-                Filter = "Excel 97-2003 工作簿 (*.xls)|*.xls|所有文件 (*.*)|*.*",
-                FileName = SanitizeFileName(drawingName
-                    + "工程量计算表") + ".xls",
-                AddExtension = true,
-                DefaultExt = "xls"
-            })
-            {
-                if (dialog.ShowDialog() != DialogResult.OK) return;
                 ObjectId[] ids = selected.Value.GetObjectIds()
                     .Where(x => !x.IsNull).Distinct().ToArray();
                 editor.WriteMessage("\n[GCL] 正在计算工程量……");
@@ -63,7 +57,7 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                             if (!string.IsNullOrWhiteSpace(message))
                                 editor.WriteMessage("\n[GCL] " + message);
                         });
-                WastewaterQuantityExcelExporter.Export(dialog.FileName,
+                WastewaterQuantityExcelExporter.Export(outputPath,
                     report);
                 string message = "工程量表格已生成：主管 "
                     + report.MainPipes.Count + " 条，节点/检查井 "
@@ -72,12 +66,10 @@ namespace TCPipeAutoDraw.Modules.QuantityCalculation
                     message += " 提示 " + report.Warnings.Count
                         + " 条，请查看命令行信息。";
                 editor.WriteMessage("\n[GCL] " + message + "\n"
-                    + dialog.FileName);
+                    + outputPath);
                 if (logger != null)
-                    logger.Info(message + " 文件：" + dialog.FileName);
-                MessageBox.Show(message + "\r\n\r\n" + dialog.FileName,
-                    "工程量表格生成", MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    logger.Info(message + " 文件：" + outputPath);
+                CDBoxUiGateway.Call("base.dialogs", "Notify", message + "\r\n\r\n" + outputPath, "工程量表格生成");
             }
         }
 

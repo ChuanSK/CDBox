@@ -16,7 +16,6 @@ using CDBox.Wastewater.Features.LongitudinalProfile;
 using CDBox.Wastewater.Features.SectionDrawing;
 using CDBox.Wastewater.Features.Inspection;
 using CDBox.Wastewater.Features.Sync;
-using CDBox.Wastewater.UI;
 using TCPipeAutoDraw.Modules.PipeLengthAnnotation;
 using TCPipeAutoDraw.Modules.NodeAnnotation;
 using TCPipeAutoDraw.Modules.SurfaceAreaAnnotation;
@@ -27,9 +26,8 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 namespace CDBox.Wastewater.Module
 {
     /// <summary>
-    /// 污水业务模块。独立承载污水工作台、属性编辑器、工程量属性
-    /// 业务核心、CAD 属性存储及污水管成果表；基础组件只提供 CAD
-    /// 会话、页面宿主和图层能力适配。
+    /// 污水业务模块。独立承载工程量属性业务核心、CAD 属性存储
+    /// 及污水管成果表；页面、浮窗和外观由基础 UI 服务统一提供。
     /// </summary>
     public sealed class WastewaterModule : ICDBoxWorkspaceModule,
         ICDBoxCommandModule, IQuantityAttributeEditorModule,
@@ -47,9 +45,9 @@ namespace CDBox.Wastewater.Module
         private WastewaterQuantityAttributeCadStore _quantityCadStore;
         private IQuantityAttributeEditorCadService _attributeEditorCad;
         private ICDBoxPageAppearanceService _pageAppearance;
-        private WastewaterQuantityAttributeEditorController
+        private CDBoxUiSession
             _attributeEditor;
-        private WastewaterQuantityDashboardController _quantityDashboard;
+        private CDBoxUiSession _quantityDashboard;
         private WastewaterQuantityDashboardScopeAdapter _scopeAdapter;
         private WastewaterInspectionService _inspection;
         private WastewaterSyncService _sync;
@@ -57,9 +55,9 @@ namespace CDBox.Wastewater.Module
         private WastewaterLongitudinalProfileEngine _longitudinalProfile;
         private WastewaterSectionDrawingEngine _sectionDrawing;
         private IWastewaterCadInteractionService _cadInteraction;
-        private WastewaterAnnotationSettingsPage _annotationSettingsPage;
-        private WastewaterSectionDrawingPageController _sectionDrawingPage;
-        private WastewaterLongitudinalProfileSettingsController
+        private CDBoxUiSession _annotationSettingsPage;
+        private CDBoxUiSession _sectionDrawingPage;
+        private CDBoxUiSession
             _longitudinalProfileSettingsPage;
 
         public string Id { get { return ModuleId; } }
@@ -105,9 +103,9 @@ namespace CDBox.Wastewater.Module
             QuantityAttributeEngineRegistry.Register(
                 _quantityAttributeEngine);
             _attributeEditor =
-                new WastewaterQuantityAttributeEditorController(
+                new CDBoxUiSession("wastewater.attributes",
                     _attributeEditorCad, _pageAppearance, _logger);
-            _quantityDashboard = new WastewaterQuantityDashboardController(
+            _quantityDashboard = new CDBoxUiSession("wastewater.dashboard",
                 _pages, _pageAppearance, monitor, _logger);
             _scopeAdapter = new WastewaterQuantityDashboardScopeAdapter();
             QuantityDashboardScopeRegistry.Register(_scopeAdapter);
@@ -128,9 +126,9 @@ namespace CDBox.Wastewater.Module
                 InitializeCadInteraction();
                 InitializeCadPages(colorPicker);
             }
-            _annotationSettingsPage = new WastewaterAnnotationSettingsPage(
-                _pageAppearance, colorPicker, RunSurfaceAreaAnnotation,
-                RunPipeLengthAnnotation, RunNodeAnnotation);
+            _annotationSettingsPage = new CDBoxUiSession("wastewater.annotations",
+                _pageAppearance, colorPicker, new Action(RunSurfaceAreaAnnotation),
+                new Action(RunPipeLengthAnnotation), new Action(RunNodeAnnotation));
             _logger.Info("Wastewater 模块边界初始化完成，版本 "
                 + Version + "。工作台、工程量计算、检查同步、污水标注、"
                 + "纵断面与批量断面核心已由独立程序集承载。");
@@ -148,10 +146,10 @@ namespace CDBox.Wastewater.Module
         private void InitializeCadPages(ICDBoxColorPickerService colorPicker)
         {
             _sectionDrawingPage =
-                new WastewaterSectionDrawingPageController(_pageAppearance,
+                new CDBoxUiSession("wastewater.sections", _pageAppearance,
                     _logger);
             _longitudinalProfileSettingsPage =
-                new WastewaterLongitudinalProfileSettingsController(
+                new CDBoxUiSession("wastewater.longitudinal",
                     _pageAppearance, colorPicker, _logger);
             WastewaterRuntimeServices.OpenLongitudinalSettings =
                 OpenLongitudinalProfileSettings;
@@ -385,6 +383,11 @@ namespace CDBox.Wastewater.Module
 
         public void Shutdown()
         {
+            if (_attributeEditor != null) _attributeEditor.Dispose();
+            if (_quantityDashboard != null) _quantityDashboard.Dispose();
+            if (_annotationSettingsPage != null) _annotationSettingsPage.Dispose();
+            if (_sectionDrawingPage != null) _sectionDrawingPage.Dispose();
+            if (_longitudinalProfileSettingsPage != null) _longitudinalProfileSettingsPage.Dispose();
             if (_cadInteraction != null)
                 ShutdownCadRuntime();
             WastewaterSectionDrawingRegistry.Unregister(_sectionDrawing);

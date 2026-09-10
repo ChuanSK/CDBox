@@ -1,5 +1,4 @@
 using System;
-using CDBox.Common.UI;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 using TCPipeAutoDraw.Modules.FrameLayout;
@@ -34,7 +33,7 @@ namespace CDBox.Common.Services
 
         public void OpenSettings()
         {
-            _pages.Show(FrameSettingsPage.Create(this, _logger));
+            _pages.Show(CDBoxUiGateway.Call<CDBoxPageDefinition>("common.frame", "Create", this, _logger));
         }
 
         public Action ResolveAction(string action)

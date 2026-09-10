@@ -363,7 +363,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 tr.Commit();
             }
             doc.Editor.Regen();
-            PipeLengthAnnotationInteractionService.RefreshCard(doc, refreshId);
+            PipeAnnotationPresentation.RefreshCard(doc, refreshId);
         }
 
         internal static void AutoBindLeaderGrip(Document doc, ObjectId leaderId, Point3d originalBindingPoint)
@@ -453,7 +453,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                 }
             }
             doc.Editor.Regen();
-            PipeLengthAnnotationInteractionService.RefreshCard(doc, leaderId);
+            PipeAnnotationPresentation.RefreshCard(doc, leaderId);
             if (!completed)
             {
                 doc.Editor.WriteHudMessage("\n[CDBox 标注绑定] "
@@ -500,7 +500,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             }
             try { doc.Database.TransactionManager.QueueForGraphicsFlush(); } catch { }
             try { Autodesk.AutoCAD.ApplicationServices.Core.Application.UpdateScreen(); } catch { }
-            PipeLengthAnnotationInteractionService.RefreshCard(doc, refreshObjectId);
+            PipeAnnotationPresentation.RefreshCard(doc, refreshObjectId);
         }
 
         internal static bool SetAnnotationVisibility(Document doc, string annotationId, bool visible)
@@ -576,8 +576,8 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                     LayerName = topText.Layer,
                     TextColorIndex = NormalizeColorIndex(topText.ColorIndex),
                     LeaderColorIndex = NormalizeColorIndex(leader == null ? (short)7 : leader.ColorIndex),
-                    TextColor = CDBoxColorService.FromCadColor(topText.Color),
-                    LeaderColor = CDBoxColorService.FromCadColor(leader == null ? null : leader.Color),
+                    TextColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(topText.Color),
+                    LeaderColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(leader == null ? null : leader.Color),
                     LinetypeName = leader == null ? "ByLayer" : leader.Linetype,
                     LineWeight = leader == null ? LineWeight.ByLayer : leader.LineWeight,
                     SourceObjectId = selectedMetadata.SourceObjectId,
@@ -1014,7 +1014,7 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
                             {
                                 BottomText = nextBottomText.Trim(),
                                 TextHeight = top.Height,
-                                TextColor = CDBoxColorService.FromCadColor(top.Color),
+                                TextColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(top.Color),
                                 TextColorIndex = NormalizeColorIndex(top.ColorIndex),
                                 LayerName = top.Layer
                             };
@@ -1352,10 +1352,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
         {
             if (entity == null) return;
             if (!string.IsNullOrWhiteSpace(layerName)) entity.Layer = layerName;
-            CDBoxColor original = CDBoxColorService.FromCadColor(entity.Color);
-            CDBoxColor output = CDBoxColorService.PrepareForWrite(
+            CDBoxColor original = CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(entity.Color);
+            CDBoxColor output = CDBox.Wastewater.Infrastructure.WastewaterColorPort.PrepareForWrite(
                 color ?? CDBoxColor.FromIndex(fallbackColorIndex), original);
-            entity.Color = CDBoxColorService.ToCadColor(output);
+            entity.Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.ToCadColor(output);
         }
 
         private static void ApplyLineAppearance(Database db, Transaction tr, Entity entity, PipeLengthAnnotationEditModel model)
@@ -1447,10 +1447,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             bottom.TextString = lineText;
             bottom.TextStyleId = topText.TextStyleId;
             bottom.LayerId = topText.LayerId;
-            CDBoxColor bottomColor = CDBoxColorService.PrepareForWrite(
+            CDBoxColor bottomColor = CDBox.Wastewater.Infrastructure.WastewaterColorPort.PrepareForWrite(
                 model.TextColor ?? CDBoxColor.FromIndex(model.TextColorIndex),
-                CDBoxColorService.FromCadColor(topText.Color));
-            bottom.Color = CDBoxColorService.ToCadColor(bottomColor);
+                CDBox.Wastewater.Infrastructure.WastewaterColorPort.FromCadColor(topText.Color));
+            bottom.Color = CDBox.Wastewater.Infrastructure.WastewaterColorPort.ToCadColor(bottomColor);
             ObjectId id = owner.AppendEntity(bottom);
             tr.AddNewlyCreatedDBObject(bottom, true);
             try { bottom.AdjustAlignment(db); } catch { }
@@ -1581,10 +1581,10 @@ namespace TCPipeAutoDraw.Modules.PipeLengthAnnotation
             Document doc = null;
             try { doc = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.GetDocument(db); }
             catch { }
-            if (doc != null) OverlappingPipeSelectionService.EnrichDisplay(doc, candidates);
+            if (doc != null) OverlappingPipePresentation.EnrichDisplay(doc, candidates);
             PipeSelectionCandidate selected = candidates.Count == 1
                 ? candidates[0]
-                : OverlappingPipeSelectionService.Select(doc, candidates, tr);
+                : OverlappingPipePresentation.Select(doc, candidates, tr);
             if (selected == null)
             {
                 message = "已取消重叠对象选择，原绑定保持不变。";

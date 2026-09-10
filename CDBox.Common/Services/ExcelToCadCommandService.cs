@@ -1,5 +1,4 @@
 using System;
-using CDBox.Common.UI;
 using CDBox.Shared.Services;
 using CDBox.Shared.UI;
 
@@ -9,14 +8,14 @@ namespace CDBox.Common.Services
     {
         private readonly ICDBoxPageService _pages;
         private readonly ICDBoxLogger _logger;
-        private readonly ExcelToCadPageController _controller;
+        private readonly CDBoxUiSession _controller;
 
         public ExcelToCadCommandService(ICDBoxPageService pages,
             ICDBoxLogger logger)
         {
             _pages = pages ?? throw new ArgumentNullException("pages");
             _logger = logger ?? throw new ArgumentNullException("logger");
-            _controller = new ExcelToCadPageController(logger);
+            _controller = new CDBoxUiSession("common.excel", logger);
         }
 
         public void Open()

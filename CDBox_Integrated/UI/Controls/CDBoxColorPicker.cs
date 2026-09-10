@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -108,6 +108,8 @@ namespace TCPipeAutoDraw.UI.Controls
 
         private static SolidColorBrush Brush(string hex)
         {
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush;
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentSoftHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush;
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             brush.Freeze();
             return brush;

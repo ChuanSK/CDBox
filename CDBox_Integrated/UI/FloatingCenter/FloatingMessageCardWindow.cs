@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -203,7 +203,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
             var glyph = new TextBlock
             {
                 Text = FloatingCenterPresentation.KindGlyph(message.Kind),
-                Foreground = Brushes.White,
+                Foreground = TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentHex(MessageColor(message.Kind)) ? TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.OnAccentBrush : Brushes.White,
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -314,7 +314,7 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
                     BlurRadius = 16,
                     ShadowDepth = 0,
                     Opacity = 0.20,
-                    Color = Color.FromRgb(60, 118, 210)
+                    Color = ((SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush).Color
                 }
             };
             card.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e)
@@ -516,6 +516,8 @@ namespace TCPipeAutoDraw.UI.FloatingCenter
 
         private static SolidColorBrush Brush(string hex)
         {
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.AccentBrush;
+            if (TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.IsAccentSoftHex(hex)) return (SolidColorBrush)TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.SoftBrush;
             var brush = new SolidColorBrush(
                 (Color)ColorConverter.ConvertFromString(hex));
             brush.Freeze();

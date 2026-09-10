@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -29,6 +29,7 @@ namespace TCPipeAutoDraw.UI
             MaximizeBox = false;
 
             BuildUi();
+            TCPipeAutoDraw.UI.Studio.CDBoxAccentAppearance.ApplyNative(this);
         }
 
         private void BuildUi()

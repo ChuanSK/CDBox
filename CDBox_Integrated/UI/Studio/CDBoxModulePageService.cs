@@ -31,10 +31,15 @@ namespace TCPipeAutoDraw.UI.Studio
             if (_pages.TryGetValue(page.Id, out existing)
                 && existing != null && !existing.IsDisposed)
             {
-                existing.WindowState = FormWindowState.Normal;
-                existing.Activate();
-                existing.RefreshPage();
-                return;
+                if (page.ReplaceExistingPage) existing.Close();
+                else
+                {
+                    existing.Show();
+                    existing.WindowState = FormWindowState.Normal;
+                    existing.Activate();
+                    existing.RefreshPage();
+                    return;
+                }
             }
 
             CDBoxStudioWebPageForm form = null;

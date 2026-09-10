@@ -89,7 +89,7 @@ namespace CDBox.Setup
                 using (var client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.UserAgent] =
-                        "CDBox-Installer/5.1.0";
+                        "CDBox-Installer/5.1.9";
                     client.DownloadFile(url, installerPath);
                 }
                 VerifyMicrosoftSignature(installerPath);

@@ -57,6 +57,7 @@ namespace TCPipeAutoDraw.Commands
             EnsureMenuBar();
             CDBoxBusinessModeService.Initialize();
             FloatingCenterController.Initialize(FloatingCenter.Current);
+            CDBoxUiDispatcher.Initialize();
             BaseLayerManagerHost.Initialize();
             try { CommonModuleHost.Initialize(); }
             catch (System.Exception ex)
@@ -501,7 +502,9 @@ namespace TCPipeAutoDraw.Commands
                             if (AcadApp.DocumentManager.MdiActiveDocument == null) return;
                             string message = "发现 CDBox 新版本 " + result.LatestVersion
                                 + "（当前版本 " + result.CurrentVersion + "）。\r\n\r\n"
-                                + "启动检查只进行提示，不会自动下载或安装。是否打开 CDBox 设置查看并手动更新？";
+                                + "是否前往 CDBox 发布网站查看并下载新版本？插件不会自动下载或安装。";
+                            if (!string.IsNullOrWhiteSpace(result.Summary))
+                                message += "\r\n\r\n更新摘要：\r\n" + result.Summary.Trim();
                             if (!string.IsNullOrWhiteSpace(result.Notes))
                                 message += "\r\n\r\n更新说明：\r\n" + result.Notes.Trim();
                             DialogResult choice = TCPipeAutoDraw.UI.CDBoxMessageBox.Show(
@@ -509,7 +512,7 @@ namespace TCPipeAutoDraw.Commands
                                 MessageBoxButtons.YesNo, MessageBoxIcon.Information,
                                 MessageBoxDefaultButton.Button2);
                             if (choice == DialogResult.Yes)
-                                CDBoxStudioSettingsWindow.ShowWindow(new AcadMainWindow());
+                                CDBoxReleaseWebsite.Open();
                         }
                         catch (System.Exception ex)
                         {

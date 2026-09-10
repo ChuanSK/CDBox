@@ -17,6 +17,7 @@ namespace CDBox.RealEstate.Module
 
         private ICDBoxLogger _logger;
         private BuildingLengthAnnotationCadService _buildingAnnotations;
+        private BuildingCaptureCadService _buildingCapture;
         private BuildingLengthAnnotationSettingsService _buildingSettings;
         private ParcelSurveyEditorService _parcelSurveyEditor;
 
@@ -45,6 +46,9 @@ namespace CDBox.RealEstate.Module
                 pageService, colors, _buildingAnnotations);
             _parcelSurveyEditor = new ParcelSurveyEditorService(pageService,
                 prompts, notifications, logger);
+            _buildingCapture = new BuildingCaptureCadService(prompts, notifications, logger,
+                pageService, _parcelSurveyEditor.Open);
+            _parcelSurveyEditor.AddBuilding = _buildingCapture.Execute;
             _logger.Info("RealEstate 模块初始化完成，版本 " + Version + "。");
         }
 
@@ -67,7 +71,7 @@ namespace CDBox.RealEstate.Module
                 RealEstateCommandCatalog.AnnotateBuildingLength,
                 StringComparison.OrdinalIgnoreCase))
             {
-                _buildingAnnotations.Execute();
+                _buildingCapture.Execute();
                 return;
             }
             if (string.Equals(commandId,
@@ -121,6 +125,7 @@ namespace CDBox.RealEstate.Module
             if (_logger != null)
                 _logger.Info("RealEstate 模块已关闭。");
             _buildingAnnotations = null;
+            _buildingCapture = null;
             _buildingSettings = null;
             _parcelSurveyEditor = null;
             _logger = null;

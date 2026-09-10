@@ -1,4 +1,5 @@
 using System;
+using CDBox.Wastewater.Infrastructure;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -7,8 +8,6 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using TCPipeAutoDraw.Modules.QuantityCalculation;
-using TCPipeAutoDraw.UI;
-using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace TCPipeAutoDraw.Modules.LongitudinalProfile
@@ -207,10 +206,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
                 }
                 if (!built.Success)
                 {
-                    CDBoxMessageBox.Show(new AcadMainWindow(),
-                        built.Message, "纵断面生成",
-                        System.Windows.Forms.MessageBoxButtons.OK,
-                        System.Windows.Forms.MessageBoxIcon.Warning);
+                    CDBox.Shared.UI.CDBoxUiGateway.Call("base.dialogs", "Notify", built.Message, "纵断面生成");
                     return;
                 }
 
@@ -244,10 +240,7 @@ namespace TCPipeAutoDraw.Modules.LongitudinalProfile
             }
             catch (System.Exception ex)
             {
-                CDBoxMessageBox.Show(new AcadMainWindow(), ex.Message,
-                    "纵断面设置",
-                    System.Windows.Forms.MessageBoxButtons.OK,
-                    System.Windows.Forms.MessageBoxIcon.Warning);
+                CDBox.Shared.UI.CDBoxUiGateway.Call("base.dialogs", "Notify", ex.Message, "纵断面设置");
             }
         }
 

@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using TCPipeAutoDraw.UI;
+using CDBox.Common.Infrastructure;
 using TCPipeAutoDraw.UI.Studio;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -110,7 +110,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 if (template == null) return;
 
                 string mode;
-                if (!CDBoxStudioFrameChoiceWindow.TryChoose(
+                if (!FrameChoiceInput.TryChoose(
                     "选择裁图形状", "选择后进入绘图区布置裁图区域。",
                     new List<CDBoxStudioFrameChoiceItem>
                     {
@@ -127,7 +127,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                             Title = "已有闭合曲线",
                             Detail = "选择一个或多个小于图幅可用区域的闭合曲线。"
                         }
-                    }, "Rectangle", out mode, new AcadMainWindow())) return;
+                    }, "Rectangle", out mode)) return;
 
                 if (string.Equals(mode, "Curve",
                     StringComparison.OrdinalIgnoreCase))
@@ -313,7 +313,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
 
         public void OpenFrameSettings()
         {
-            CDBoxStudioFrameSettingsWindow.ShowWindow(new AcadMainWindow());
+            CDBoxStudioFrameSettingsWindow.ShowWindow();
         }
 
         private static void ResolveDirectPlacementPreviewResources(
@@ -505,9 +505,8 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             editor.WriteHudMessage("\n[裁图区域] 已设置 {0} 个闭合曲线。", count);
             if (oversized.Count > 0)
             {
-                CDBoxStudioFrameNoticeWindow.ShowNotice(
-                    "裁图区域尺寸超过图框", oversized,
-                    new AcadMainWindow());
+                FrameNoticeInput.ShowNotice(
+                    "裁图区域尺寸超过图框", oversized);
             }
             foreach (string message in rejected.Take(5))
                 editor.WriteHudMessage("\n  跳过：{0}", message);
@@ -573,7 +572,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                 ?? matches.FirstOrDefault(x => x.IsDefault)
                 ?? matches[0];
             string selectedId;
-            if (!CDBoxStudioFrameChoiceWindow.TryChoose(
+            if (!FrameChoiceInput.TryChoose(
                 "选择图框模板",
                 string.IsNullOrWhiteSpace(requiredPaperSize)
                     ? "选择本次操作使用的图幅和图框模板。"
@@ -586,8 +585,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                         + x.ValidWidth.ToString("0.##") + " × "
                         + x.ValidHeight.ToString("0.##"),
                     Badge = x.IsDefault ? "默认" : x.PaperSize
-                }).ToList(), preferred.Id, out selectedId,
-                new AcadMainWindow())) return null;
+                }).ToList(), preferred.Id, out selectedId)) return null;
             return matches.FirstOrDefault(x => string.Equals(x.Id, selectedId,
                 StringComparison.OrdinalIgnoreCase));
         }
@@ -598,7 +596,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
             if (string.Equals(fallback, "自定义",
                 StringComparison.OrdinalIgnoreCase)) fallback = "A3";
             string selected;
-            return CDBoxStudioFrameChoiceWindow.TryChoose(
+            return FrameChoiceInput.TryChoose(
                 "选择图幅", "为新图框模板指定所属图幅。",
                 FramePaperSizes.GetAll().Select(x =>
                     new CDBoxStudioFrameChoiceItem
@@ -608,7 +606,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                         Detail = x.Width.ToString("0") + " × "
                             + x.Height.ToString("0"),
                         Badge = "mm"
-                    }).ToList(), fallback, out selected, new AcadMainWindow())
+                    }).ToList(), fallback, out selected)
                 ? selected : null;
         }
 
@@ -654,7 +652,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
         {
             Editor editor = doc.Editor;
             string mode;
-            if (!CDBoxStudioFrameChoiceWindow.TryChoose(
+            if (!FrameChoiceInput.TryChoose(
                 "添加图框模板", "选择模板来源，随后进入相应的对象或文件选择。",
                 new List<CDBoxStudioFrameChoiceItem>
                 {
@@ -671,7 +669,7 @@ namespace TCPipeAutoDraw.Modules.FrameLayout
                         Title = "从模板图纸导入",
                         Detail = "选择外部 DWG 文件作为图框模板来源。"
                     }
-                }, "Selection", out mode, new AcadMainWindow()))
+                }, "Selection", out mode))
                 return ObjectId.Null;
 
             if (string.Equals(mode, "Selection",

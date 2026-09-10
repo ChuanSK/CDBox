@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -37,7 +37,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
         public bool HasInitializedPosition { get; private set; }
         public bool IsClosingAnimation { get { return _closeAnimationInProgress; } }
 
-        protected AnnotationHudWindowBase(string title, double width)
+        protected AnnotationHudWindowBase(string title, double width, bool wastewaterWorkbench = false)
         {
             Title = title ?? "CDBox 标注浮窗";
             Width = width;
@@ -62,11 +62,11 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                 Opacity = 0.28,
                 Color = Color.FromRgb(66, 139, 255)
             };
-            _normalBorderBrush = Brush("#B8C8DAEE");
-            _hoverBorderBrush = Brush("#FF73A9F5");
+            _normalBorderBrush = wastewaterWorkbench ? TCPipeAutoDraw.UI.Studio.WastewaterNativeAppearance.Brush("#B8C8DAEE") : Brush("#B8C8DAEE");
+            _hoverBorderBrush = wastewaterWorkbench ? TCPipeAutoDraw.UI.Studio.WastewaterNativeAppearance.Brush("#FF73A9F5") : Brush("#FF73A9F5");
             _animationRoot = new Border
             {
-                Background = Brush("#FFFFFFFF"),
+                Background = wastewaterWorkbench ? TCPipeAutoDraw.UI.Studio.WastewaterNativeAppearance.Brush("#FFFFFFFF") : Brush("#FFFFFFFF"),
                 BorderBrush = _normalBorderBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
@@ -76,6 +76,7 @@ namespace TCPipeAutoDraw.Modules.AnnotationHud
                 UseLayoutRounding = true
             };
             Content = _animationRoot;
+            if (wastewaterWorkbench) TCPipeAutoDraw.UI.Studio.WastewaterNativeAppearance.Register(this);
             Body = new StackPanel();
             _animationRoot.Child = Body;
             _popupAnimation = new AnnotationHudPopupAnimationController(this, _animationRoot);
